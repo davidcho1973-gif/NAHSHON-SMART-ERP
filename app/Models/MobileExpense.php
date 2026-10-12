@@ -45,6 +45,15 @@ class MobileExpense extends Model
         'receipt_file',
     ];
 
+    protected static function booted(): void
+    {
+        static::deleting(function (MobileExpense $expense): void {
+            if (\App\Services\Finance\ClaimEvidenceService::sourceIsProtected('expense', $expense->id)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['expense' => '기성 증빙으로 연결된 영수증은 삭제할 수 없습니다. 먼저 연결을 검토하세요.']);
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [

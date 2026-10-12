@@ -148,8 +148,11 @@ Schedule::command('queue:work meeting-analysis --queue=meetings --stop-when-empt
 Schedule::command('erp:harvest-knowledge')->hourly();
 
 // Durable purchase analysis and notifications survive closing the personal app.
-Schedule::command('queue:work document-analysis --queue=purchase-notifications,purchases --stop-when-empty --max-time=50 --tries=1 --timeout=600')
+Schedule::command('queue:work document-analysis --queue=purchase-notifications,purchases,claim-evidence --stop-when-empty --max-time=50 --tries=1 --timeout=600')
     ->everyMinute()->withoutOverlapping(15)->runInBackground();
+
+// Reuse the existing bounded worker; enabled contracts retain the authorizing manager.
+Schedule::command('claims:sync-evidence')->everyTenMinutes()->withoutOverlapping(15);
 
 // Deployment alone never activates checks; the server gate and each owner's approval are both required.
 Schedule::command('assistant:check')->everyFifteenMinutes()->withoutOverlapping()

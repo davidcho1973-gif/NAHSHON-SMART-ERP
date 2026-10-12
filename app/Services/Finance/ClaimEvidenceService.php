@@ -535,6 +535,9 @@ class ClaimEvidenceService
     /** Guard before existing model hooks delete the actual file. */
     public static function sourceIsProtected(string $type, int $id): bool
     {
+        if (ClaimEvidenceInboxService::sourceIsProtected($type, $id)) {
+            return true;
+        }
         if (! Schema::hasTable('claim_work_records')) {
             return false;
         }
@@ -543,6 +546,21 @@ class ClaimEvidenceService
         }
 
         return ClaimWorkRecord::whereJsonContains('evidence', [['type' => $type, 'id' => $id]])->exists();
+    }
+
+    /** Export only the selected field record, never unrelated conversation or batch photos. */
+    public function submissionIntakeProof(ProjectContract $contract, int $id, bool $archived = false): array
+    {
+        $contract = $this->contract($contract->id, false);
+        $proof = $this->resolveEvidence($contract, [['type' => 'intake', 'id' => $id, 'locator' => '현장 기록 원문']])[0];
+        $record = OpsIntakeItem::findOrFail($id);
+        $text = (string) ($proof['rawText'] ?? '');
+        if (! $archived && trim($text) === '') {
+            throw new InvalidArgumentException('사진만 있는 현장 기록은 제출할 사진을 공정 사진 또는 문서로 연결하세요.');
+        }
+        return ['type' => 'intake', 'id' => $id, 'title' => $proof['title'], 'rawText' => $text,
+            'date' => $record->occurred_on?->toDateString(), 'dateBasis' => 'occurred_on',
+            'sha256' => hash('sha256', $text), 'name' => 'intake-'.$id.'.txt', 'mime' => 'text/plain', 'url' => null];
     }
 
     private function contract(int $id, bool $write = true): ProjectContract
