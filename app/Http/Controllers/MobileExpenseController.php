@@ -321,6 +321,10 @@ class MobileExpenseController extends Controller
     {
         abort_unless($this->canModifyExpense($expense), 403);
 
+        if (\App\Services\Finance\ClaimEvidenceService::sourceIsProtected('expense', $expense->id)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['expense' => '기성 증빙으로 연결된 영수증은 삭제할 수 없습니다. 먼저 연결을 검토하세요.']);
+        }
+
         $path = $this->publicReceiptPath($expense->receipt_path);
         if ($path && Storage::disk('public')->exists($path)) {
             Storage::disk('public')->delete($path);

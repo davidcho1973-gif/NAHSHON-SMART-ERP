@@ -95,6 +95,9 @@ return [
         'api_getBoq' => ['progress', 'view'],
         'api_getCardPermits' => ['safety', 'view'],
         'api_getClaimEvidence' => ['contracts', 'view'],
+        'api_getClaimEvidenceInbox' => ['contracts', 'view'],
+        'api_matchClaimEvidence' => ['contracts', 'edit'],
+        'api_reviewClaimEvidence' => ['contracts', 'edit'],
         'api_getClaimPacket' => ['contracts', 'view'],
         'api_getCommunicationAdmin' => ['system', 'view'],
         'api_getCommunicationAdminOptions' => ['system', 'view'],
@@ -322,6 +325,7 @@ return [
     ],
     'controllers' => [
         'ClaimSubmissionController' => ['_module' => 'contracts', 'response' => ['contracts', 'export']],
+        'ClaimEvidenceFileController' => ['_module' => 'contracts', 'show' => ['contracts', 'export']],
         'WorkerEnrollmentController' => ['_module' => 'people', 'index' => ['people', 'view'], 'approve' => ['people', 'edit'], 'reject' => ['people', 'edit']],
         'MobileOpsRoomController' => ['_module' => 'reports'],
         'MobileDocumentController' => ['_module' => 'documents'],
