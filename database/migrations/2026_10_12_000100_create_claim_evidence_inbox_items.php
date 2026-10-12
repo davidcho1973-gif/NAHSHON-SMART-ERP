@@ -18,7 +18,9 @@ return new class extends Migration
             $table->json('line_ids')->nullable();
             $table->json('locators')->nullable();
             $table->date('source_date')->nullable();
-            $table->timestampTz('source_updated_at')->nullable();
+            // Mirror the four legacy sources' timezone-free updated_at values for the scan cursor.
+            // A timestamptz here makes comparison depend on the DB session timezone.
+            $table->timestamp('source_updated_at')->nullable();
             $table->string('source_fingerprint', 64)->nullable();
             $table->string('source_sha256', 64)->nullable();
             $table->text('reason')->nullable();

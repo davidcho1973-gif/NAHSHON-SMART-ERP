@@ -21,6 +21,7 @@ use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Services\Ocr\OcrEngine;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -105,6 +106,7 @@ class ClaimEvidenceInboxTest extends TestCase
 
     public function test_daily_scan_accumulates_all_four_source_types_without_financial_writes_or_inline_bytes(): void
     {
+        DB::statement("SET LOCAL TIME ZONE 'UTC'");
         $section = WorkSection::create(['project_contract_id' => $this->contract->id, 'company_id' => $this->contract->company_id,
             'site_id' => $this->contract->site_id, 'division' => 'Mechanical', 'code' => 'M1', 'name' => 'Piping']);
         $this->line->update(['spec' => '25mm', 'group_label' => 'Process supply', 'work_section_id' => $section->id]);
@@ -121,7 +123,9 @@ class ClaimEvidenceInboxTest extends TestCase
         $scan = $this->service()->syncContract($this->contract->id, 4);
         $this->assertTrue($scan['success']);
         $this->assertSame(4, $scan['created']);
-        $this->assertSame(0, $this->service()->syncContract($this->contract->id, 4)['created']);
+        $unchanged = $this->service()->syncContract($this->contract->id, 4);
+        $this->assertSame(0, $unchanged['created']);
+        $this->assertSame(0, $unchanged['scanned']);
         $inbox = $this->service()->getInbox($this->contract->id);
         $this->assertCount(4, $inbox['rows']);
         $this->assertCount(2, $inbox['lines']);
@@ -145,6 +149,8 @@ class ClaimEvidenceInboxTest extends TestCase
 
     public function test_review_supports_multiple_lines_common_ignore_and_changed_source_requires_review(): void
     {
+        // Production uses a UTC DB session while legacy source timestamps use the app wall clock.
+        DB::statement("SET LOCAL TIME ZONE 'UTC'");
         $document = $this->document();
         $this->service()->syncContract($this->contract->id);
         $item = $this->item('document', $document->id);
