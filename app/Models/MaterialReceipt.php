@@ -28,6 +28,15 @@ class MaterialReceipt extends Model
         'created_by_id', 'confirmed_by_id', 'confirmed_at', 'request_key',
     ];
 
+    protected static function booted(): void
+    {
+        static::deleting(function (MaterialReceipt $receipt): void {
+            if (\App\Services\Finance\ClaimEvidenceService::sourceIsProtected('receipt', $receipt->id)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['receipt' => '기성 증빙으로 연결된 입고 내역은 삭제할 수 없습니다. 먼저 연결을 검토하세요.']);
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [

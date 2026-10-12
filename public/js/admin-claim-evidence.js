@@ -6,7 +6,10 @@
 (function (global) {
   'use strict';
 
-  var state = { contractId: null, ledger: null, lineId: null, filter: 'all', packet: null, request: 0 };
+  var state = { contractId: null, ledger: null, lineId: null, filter: 'all', packet: null, request: 0,
+    tab: 'ledger', inbox: null, inboxStatus: 'review', inboxPage: 1, inboxLineId: null, inboxRequest: 0, inboxLoading: false, inboxError: '', matching: false };
+  var inboxStatuses = { linked: '연결됨', review: '확인 필요', common: '공통비', ignored: '제외' };
+  var sourceTypes = { document: '문서', expense: '영수증', receipt: '자재 입고', material_receipt: '자재 입고', intake: '현장 접수', photo: '사진', daily_report: '작업 보고' };
   var kinds = { source_claim: '원본 청구 · 미확인', actual: '실제 작업 보고', forecast: '예상 작업' };
   var stages = { installed: '시공 완료', fabrication: '제작', stored: '반입 자재', installation: '설치' };
   var statuses = { pending: '검토 대기', verified: '수량 확인', rejected: '반려', draft: '계약 조건 검토 중', accepted: '계약 조건 확정' };
@@ -90,6 +93,7 @@
       if (token !== state.request) return;
       state.ledger = r;
       draw();
+      if (state.tab === 'inbox') return loadInbox();
     });
   }
   function save(method, payload, message) {
@@ -150,7 +154,7 @@
     var rows = state.ledger.lines || [];
     if (state.filter === 'issues') rows = rows.filter(function (r) { return (state.ledger.issues || []).some(function (i) { return Number(i.lineId) === Number(r.id); }); });
     if (state.filter === 'available') rows = rows.filter(function (r) { return Number(r.availableAmount) > 0; });
-    var actions = manage() ? u.primaryButton('계약 항목 등록', 'window.AdminClaimEvidence.editLine()', 'plus') + button('원본 청구 가져오기', 'importSource()') + button('확인 근거로 초안 만들기', 'draft()') : '';
+    var actions = button('매일 증빙', 'openInbox()') + (manage() ? u.primaryButton('계약 항목 등록', 'window.AdminClaimEvidence.editLine()', 'plus') + button('원본 청구 가져오기', 'importSource()') + button('확인 근거로 초안 만들기', 'draft()') : '');
     return button('← 기성·수금 원장', 'backToBilling()') + '<div style="height:12px"></div>' +
       u.pageHeader('기성 근거 대장 — ' + state.ledger.contract.title, '원본 청구와 확인 실적을 구분하고, 계약 항목별로 작업 위치·수량·증빙을 연결합니다.', actions) +
       sourceImports() + summary() + issuePanel() +
@@ -196,7 +200,7 @@
       return '<div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;margin-bottom:12px"><strong style="font-size:12px">원본 청구 기록의 확인 사항</strong>' + hint(r.notes) + '</div>';
     }).join('');
     var weights = Object.keys(l.stageWeights || {}).map(function (s) { return (stages[s] || s) + ' ' + l.stageWeights[s] + '%'; }).join(' · ');
-    return button('← 전체 계약 항목', 'openLine(null)') + '<div style="height:12px"></div>' +
+    return button('← 전체 계약 항목', 'openLine(null)') + ' ' + button('매일 증빙', 'openInbox(' + Number(l.id) + ')') + '<div style="height:12px"></div>' +
       u.pageHeader('BOQ ' + l.lineNo + ' — ' + title, '보고수량은 현장의 주장, 확인수량은 검토 결과입니다. 원본 청구와 예상 작업을 실제 실적으로 바꾸지 않습니다.', manage() ? button('계약 조건 검토', 'editLine(' + Number(l.id) + ')') + u.primaryButton('현장 기록 연결', 'window.AdminClaimEvidence.editRecord(' + Number(l.id) + ')', 'plus') : '') +
       '<div style="padding:16px;border:1px solid var(--border-default);border-radius:12px;margin-bottom:16px">' + badge(l.status) +
       '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px">계약 항목 전체 규격 보기</summary>' + hint(l.description) + '</details>' +
@@ -208,8 +212,139 @@
   }
   function draw() {
     if (!state.ledger) return;
+    if (state.tab === 'inbox') { paint(inboxView()); return; }
     paint(state.lineId ? detailView() : ledgerView());
     ui().bindSearch(state.lineId ? 'ce-records' : 'ce-lines');
+  }
+  function inboxRow(id) { return ((state.inbox && state.inbox.rows) || []).find(function (r) { return Number(r.id) === Number(id); }); }
+  function inboxBadge(status) { return ui().badge(inboxStatuses[status] || status, status === 'linked' ? 'ok' : status === 'review' ? 'warn' : ''); }
+  function inboxView() {
+    var data = state.inbox || {}, counts = data.summary || {}, p = data.pagination || {};
+    var page = Number(p.currentPage || p.current_page || p.page || state.inboxPage) || 1;
+    var pages = Math.max(1, Number(p.lastPage || p.last_page || 1));
+    var actions = manage() ? button(state.matching ? '분석 요청 중…' : data.automationEnabled ? '새 자료 찾기' : '자동 연결 시작', 'matchInbox()') + button('자료 올리기', 'uploadSources()') : '';
+    var currentLine = state.inboxLineId ? lineById(state.inboxLineId) : null;
+    var lineFilter = currentLine ? '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><strong>' + esc('BOQ ' + currentLine.lineNo + ' · ' + currentLine.description) + '</strong>' + button('전체 공정 증빙', 'openInbox()') + '</div>' : '';
+    var filters = ['review', 'linked', 'common'].map(function (status) {
+      return button((state.inboxStatus === status ? '✓ ' : '') + inboxStatuses[status] + ' ' + (Number(counts[status]) || 0), "filterInbox('" + status + "')");
+    }).join(' ') + ' ' + button((state.inboxStatus === 'all' ? '✓ ' : '') + '전체', "filterInbox('all')") + ' ' + button((state.inboxStatus === 'ignored' ? '✓ ' : '') + '제외', "filterInbox('ignored')");
+    var progress = data.processing ? '<div role="status" style="margin-bottom:12px">' + ui().badge('분석 대기 / 진행 중', 'warn') + hint(data.processingMessage || '서버에서 처리합니다. 잠시 후 새로고침해 주세요.') + '</div>' :
+      (data.processingMessage ? ui().notice(data.processingMessage, 'danger') : '');
+    return button('← 기성 근거 대장', 'showLedger()') + '<div style="height:12px"></div>' +
+      ui().pageHeader('매일 증빙 — ' + state.ledger.contract.title, '영수증·입고 내역·사진을 계약 공정에 모읍니다.', actions) +
+      (data.automationEnabled ? '<div style="margin-bottom:12px">' + ui().badge('자동 연결 · 10분마다', 'ok') + '</div>' : '') + progress + lineFilter +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" role="group" aria-label="증빙 상태">' + filters + ' ' + button('새로고침', 'reloadInbox()') + '</div>' +
+      (state.inboxError ? ui().notice(state.inboxError, 'danger') : '') +
+      (state.inboxLoading ? '<div role="status" style="padding:16px">증빙 목록을 불러오는 중…</div>' : '') +
+      ui().table({ id: 'ce-inbox', rows: data.rows || [], search: false, emptyText: state.inboxLoading ? '조회 중입니다.' : '해당 증빙이 없습니다.', columns: [
+        { key: 'title', label: '자료', render: function (r) { return '<div style="max-width:340px;overflow-wrap:anywhere">' + button(r.title || '자료 #' + r.sourceId, 'inboxDetail(' + Number(r.id) + ')') + hint(sourceTypes[r.sourceType] || r.sourceType) + '</div>'; } },
+        { key: 'date', label: '날짜', render: function (r) { return esc(r.date || '미확인'); } },
+        { key: 'status', label: '상태', render: function (r) { return inboxBadge(r.status); } },
+        { key: 'lineLabels', label: '연결 공정', render: function (r) { return '<div style="max-width:380px;overflow-wrap:anywhere">' + esc((r.lineLabels || []).join(' · ') || (r.status === 'common' ? '현장 공통비' : '미연결')) + '</div>'; } },
+        { key: 'action', label: '', render: function (r) { return button('상세', 'inboxDetail(' + Number(r.id) + ')'); } }
+      ] }) + '<div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap">' +
+      (page > 1 ? button('이전', 'pageInbox(' + (page - 1) + ')') : '') + '<span>' + esc(page + ' / ' + pages + '쪽 · ' + (Number(p.total) || 0) + '건') + '</span>' +
+      (page < pages ? button('다음', 'pageInbox(' + (page + 1) + ')') : '') + '</div>' + hint('증빙 연결과 기성 수량 확인은 별도입니다. 연결만으로 청구 금액이 늘어나지 않습니다.');
+  }
+  function loadInbox() {
+    if (!state.contractId || state.tab !== 'inbox') return Promise.resolve();
+    var contractId = state.contractId, token = ++state.inboxRequest;
+    state.inboxLoading = true; state.inboxError = ''; draw();
+    var filters = { page: state.inboxPage, status: state.inboxStatus };
+    if (state.inboxLineId) filters.lineId = state.inboxLineId;
+    var args = [contractId, filters];
+    // A queued job can finish without a browser mutation; refresh this inbox query from the server.
+    if (global.apiCache) delete global.apiCache['api_getClaimEvidenceInbox' + JSON.stringify(args)];
+    return call('api_getClaimEvidenceInbox', args).then(requireSuccess).then(function (r) {
+      if (token !== state.inboxRequest || contractId !== state.contractId || state.tab !== 'inbox') return;
+      state.inbox = r; state.inboxLoading = false; draw();
+    }).catch(function (e) {
+      if (token !== state.inboxRequest || contractId !== state.contractId || state.tab !== 'inbox') return;
+      state.inboxLoading = false; state.inboxError = e.message || '증빙 목록을 불러오지 못했습니다.'; draw();
+    });
+  }
+  function openInbox(lineId) { state.tab = 'inbox'; state.inbox = null; state.inboxStatus = lineId ? 'all' : 'review'; state.inboxPage = 1; state.inboxLineId = lineId ? Number(lineId) : null; return loadInbox(); }
+  function showLedger() { ++state.inboxRequest; state.tab = 'ledger'; state.inboxLoading = false; draw(); }
+  function filterInbox(status) {
+    if (!inboxStatuses[status] && status !== 'all') return Promise.resolve();
+    state.inboxStatus = status; state.inboxPage = 1; state.inbox = null; return loadInbox();
+  }
+  function pageInbox(page) { state.inboxPage = Math.max(1, Math.floor(Number(page) || 1)); state.inbox = null; return loadInbox(); }
+  function matchInbox() {
+    if (!manage() || state.matching) return Promise.resolve();
+    var contractId = state.contractId;
+    state.matching = true; draw();
+    return call('api_matchClaimEvidence', [contractId]).then(requireSuccess).then(function (r) {
+      global.apiCache = {};
+      ui().toast(r.message || '기존 자료 연결을 요청했습니다. 서버에서 처리합니다.');
+      if (state.contractId === contractId) return loadInbox();
+    }).catch(fail).finally(function () { state.matching = false; draw(); });
+  }
+  function inboxDetail(id) {
+    var row = inboxRow(id); if (!row) return;
+    var contractId = state.contractId;
+    var source = { type: row.sourceType, id: row.sourceId, url: row.url };
+    var modal = ui().modal({ title: row.title || '증빙 상세', subtitle: (sourceTypes[row.sourceType] || row.sourceType) + ' · ' + (row.date || '날짜 미확인'),
+      body: '<p>' + inboxBadge(row.status) + '</p><p><strong>연결 공정</strong><br>' + esc((row.lineLabels || []).join(' · ') || (row.status === 'common' ? '현장 공통비' : '미연결')) + '</p>' +
+        (row.reason ? '<p>' + esc(row.reason) + '</p>' : '') + '<p>' + sourceLink(source) + '</p>' + hint('구매·입고·설치 수량은 별도로 확인합니다. 이 연결은 원청 승인이나 청구 금액 확정이 아닙니다.'),
+      actions: [{ label: '닫기', value: null }].concat(manage() ? [{ label: '연결 / 분류 변경', value: 'edit', kind: 'primary' }] : []) });
+    return modal.result.then(function (action) { if (action === 'edit' && state.contractId === contractId) editInbox(id); });
+  }
+  function editInbox(id) {
+    if (!manage()) return;
+    var row = inboxRow(id); if (!row) return;
+    var contractId = state.contractId, saving = false;
+    var lines = ((state.inbox && state.inbox.lines) || []).filter(function (l) { return Number.isSafeInteger(Number(l.id)) && Number(l.id) > 0; });
+    var selected = (row.lineIds || []).map(Number);
+    var action = ({ linked: 'link', common: 'common', ignored: 'ignore' }[row.status]) || 'link';
+    var controlStyle = 'width:100%;padding:10px;border:1px solid var(--border-default);border-radius:8px;background:var(--bg-surface);color:var(--text-primary)';
+    var modal = ui().modal({ title: '증빙 연결 / 분류', subtitle: row.title || '', width: 760,
+      body: '<label for="ce-review-action">처리</label><select id="ce-review-action" style="' + controlStyle + '">' +
+        [['link', '선택 공정에 연결'], ['common', '현장 공통비'], ['ignore', '기성 증빙에서 제외'], ['reopen', '확인 필요로 되돌리기']].map(function (entry) { return '<option value="' + entry[0] + '"' + (action === entry[0] ? ' selected' : '') + '>' + esc(entry[1]) + '</option>'; }).join('') + '</select>' +
+        '<div data-ce-line-section style="margin-top:14px"><label for="ce-line-search">공정 선택 (복수 선택 가능)</label><input id="ce-line-search" type="search" placeholder="공정 번호 · 품명 · 규격 검색" style="' + controlStyle + '">' +
+        '<div style="max-height:300px;overflow:auto;margin-top:8px;border:1px solid var(--border-default);border-radius:8px">' +
+        (lines.map(function (l) {
+          var specification = [l.spec, l.unit ? '단위 ' + l.unit : ''].filter(Boolean).join(' · ');
+          return '<label data-ce-line-row style="display:flex;gap:10px;align-items:flex-start;padding:10px;border-bottom:1px solid var(--border-default)"><input type="checkbox" data-ce-line value="' + Number(l.id) + '"' + (selected.indexOf(Number(l.id)) >= 0 ? ' checked' : '') + '><span>' + esc(l.lineNo + ' · ' + l.description) +
+            (specification ? '<small style="display:block;margin-top:4px;color:var(--text-secondary)">' + esc(specification) + '</small>' : '') + '</span></label>';
+        }).join('') || '<p style="padding:10px">계약 공정을 먼저 등록해 주세요.</p>') + '</div></div>' +
+        '<p data-ce-error role="alert" style="color:var(--status-danger)"></p>',
+      actions: [{ label: '취소', value: null }, { label: '저장', value: 'keep', kind: 'primary' }],
+      onReady: function (el) {
+        var select = el.querySelector('#ce-review-action'), section = el.querySelector('[data-ce-line-section]');
+        function toggle() { section.hidden = select.value !== 'link'; }
+        select.addEventListener('change', toggle); toggle();
+        el.querySelector('#ce-line-search').addEventListener('input', function (event) {
+          var search = event.target.value.trim().toLocaleLowerCase();
+          el.querySelectorAll('[data-ce-line-row]').forEach(function (label) { label.hidden = label.textContent.toLocaleLowerCase().indexOf(search) === -1; label.style.display = label.hidden ? 'none' : 'flex'; });
+        });
+      },
+      onAction: function (_, el) {
+        if (saving) return;
+        var error = el.querySelector('[data-ce-error]');
+        if (!manage() || state.contractId !== contractId) { error.textContent = '계약 화면을 다시 열고 처리해 주세요.'; return; }
+        var selectedAction = el.querySelector('#ce-review-action').value;
+        var lineIds = Array.from(el.querySelectorAll('[data-ce-line]:checked')).map(function (input) { return Number(input.value); });
+        if (selectedAction === 'link' && !lineIds.length) { error.textContent = '연결할 공정을 선택해 주세요.'; return; }
+        saving = true; error.textContent = '저장 중…';
+        return call('api_reviewClaimEvidence', [{ id: Number(id), action: selectedAction, lineIds: selectedAction === 'link' ? lineIds : [] }]).then(requireSuccess).then(function () {
+          global.apiCache = {}; modal.close('saved'); ui().toast('증빙 연결을 저장했습니다.');
+          if (state.contractId === contractId) return loadInbox();
+        }).catch(function (e) { error.textContent = e.message || '저장하지 못했습니다.'; }).finally(function () { saving = false; });
+      }
+    });
+    return modal;
+  }
+  function uploadSources() {
+    if (!manage()) return;
+    var modal = ui().modal({ title: '자료 올리기', body: '<p>기존 등록 화면에 올리면 매일 증빙에서 연결합니다.</p>',
+      actions: [{ label: '문서 · 사진', value: 'document-hub' }, { label: '영수증', value: 'expense' }, { label: '자재 입고', value: 'material-receipts' }, { label: '닫기', value: null }] });
+    return modal.result.then(function (target) {
+      if (!target) return;
+      ++state.inboxRequest;
+      if (target === 'expense') global.location.assign('/mobile-expense/index');
+      else if (global.goToView) global.goToView(target);
+    });
   }
   function field(name, label, value, extra) { return Object.assign({ name: name, label: label, value: value === undefined || value === null ? '' : value }, extra || {}); }
   function editLine(id) {
@@ -327,7 +462,9 @@
   }
   // lineId: 공정별 도면 화면의 «줄 보기» 에서 한 줄을 바로 열 때.
   function open(contractId, lineId) {
+    ++state.inboxRequest;
     state.contractId = Number(contractId); state.ledger = null; state.lineId = lineId ? Number(lineId) : null; state.packet = null; state.filter = 'all';
+    state.tab = 'ledger'; state.inbox = null; state.inboxLineId = null; state.inboxLoading = false; state.inboxError = '';
     if (global.goToView) global.goToView('claim-evidence-admin'); else render();
   }
   function render() {
@@ -338,6 +475,7 @@
   }
   function backToBilling() {
     ++state.request;
+    ++state.inboxRequest;
     if (global.AdminBilling) global.AdminBilling._pendingContractId = state.contractId;
     if (global.goToView) global.goToView('billing-admin');
   }
@@ -414,9 +552,11 @@
   global.AdminClaimEvidence = {
     render: render, open: open, backToBilling: backToBilling,
     reload: function () { return refresh().catch(fail); },
-    openLine: function (id) { state.lineId = id; draw(); },
+    openLine: function (id) { state.tab = 'ledger'; ++state.inboxRequest; state.lineId = id; draw(); },
     filter: function (value) { state.filter = value; draw(); },
     editLine: editLine, editRecord: editRecord, review: review, draft: draft, importSource: importSource,
-    packet: packet, openDocument: openDocument, _state: state
+    packet: packet, openDocument: openDocument, _state: state,
+    openInbox: openInbox, showLedger: showLedger, reloadInbox: loadInbox, filterInbox: filterInbox, pageInbox: pageInbox,
+    matchInbox: matchInbox, inboxDetail: inboxDetail, editInbox: editInbox, uploadSources: uploadSources
   };
 })(window);

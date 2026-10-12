@@ -144,20 +144,8 @@ class ClaimSubmissionService
                             $key = $source['display']['value'];
                             if (! isset($files[$key])) {
                                 $bytes = $this->readVerified($source['disk'], $source['path'], $source['hash']);
-                                $totalBytes += strlen($bytes);
-                                if ($totalBytes > self::MAX_PACKET_BYTES || count($files) >= 100) {
-                                    throw new InvalidArgumentException('제출본은 원본 100개, 합계 100MB 이내로 준비하세요.');
-                                }
                                 $name = 'documents/'.$source['display']['type'].'-'.$source['display']['id'].'-'.$this->safeName($source['name']);
-                                $temporary = tempnam(sys_get_temp_dir(), 'claim-source-');
-                                if ($temporary === false || file_put_contents($temporary, $bytes) !== strlen($bytes)) {
-                                    if ($temporary !== false) {
-                                        @unlink($temporary);
-                                    }
-                                    throw new InvalidArgumentException('제출 원본을 임시 보존할 수 없습니다.');
-                                }
-                                $temporaryFiles[] = $temporary;
-                                $files[$key] = ['name' => $name, 'path' => $temporary, 'bytes' => strlen($bytes), 'sha256' => hash('sha256', $bytes)];
+                                $this->retainSource($key, $name, $bytes, $files, $totalBytes, $temporaryFiles);
                                 unset($bytes);
                             }
                             $manifest[] = [
@@ -169,13 +157,29 @@ class ClaimSubmissionService
                             ];
                         }
                     }
+                    $daily = app(ClaimDailyEvidencePacketService::class);
+                    $dailyManifest = [];
+                    foreach ($daily->sources($application, $contract) as $source) {
+                        $key = $source['sourceType'].':'.$source['sourceId'];
+                        // Read every reviewed reference: deduplication must not hide a stale hash.
+                        $bytes = $daily->read($source);
+                        if (isset($files[$key]) && ! hash_equals($files[$key]['sha256'], hash('sha256', $bytes))) {
+                            throw new InvalidArgumentException('같은 증빙 원본에 서로 다른 내용이 연결되어 있습니다.');
+                        }
+                        if (! isset($files[$key])) {
+                            $name = 'daily-evidence/'.$source['sourceType'].'-'.$source['sourceId'].'-'.$this->safeName($source['name']);
+                            $this->retainSource($key, $name, $bytes, $files, $totalBytes, $temporaryFiles);
+                        }
+                        $dailyManifest[] = $daily->manifest($source, $files[$key]);
+                        unset($bytes);
+                    }
                     $snapshot = $this->financialSnapshot($application);
                     $revision = 1 + (int) ClaimSubmission::where('pay_application_id', $application->id)->max('revision');
                     $package = [
                         'contract' => ['id' => $contract->id, 'number' => $contract->contract_number, 'title' => $contract->title, 'currency' => $contract->currency],
                         'application' => $snapshot, 'revision' => $revision,
                         'profileVersion' => $profile['version'], 'profile' => $profile,
-                        'preparedAt' => now()->toIso8601String(), 'documents' => $manifest,
+                        'preparedAt' => now()->toIso8601String(), 'documents' => $manifest, 'dailyEvidence' => $dailyManifest,
                         'historicalSubmittedOn' => $historicalDate,
                         'documentsValidatedOn' => $historicalDate ?? Carbon::today($contract->site?->timezone ?: config('app.timezone'))->toDateString(),
                         'lines' => $this->claimLines($application),
@@ -354,13 +358,14 @@ class ClaimSubmissionService
         [, $contract] = $this->context($submission->pay_application_id, false);
         foreach ($submission->manifest['documents'] ?? [] as $item) {
             $ref = $item['source'];
-            $exists = ($ref['type'] === 'document' ? IntelligentDocument::query() : ProjectContractDocument::query())->whereKey($ref['id'])->exists();
+            $exists = ($ref['type'] === 'document' ? IntelligentDocument::withoutGlobalScopes() : ProjectContractDocument::withoutGlobalScopes())->whereKey($ref['id'])->exists();
             if ($exists) {
                 // A retained original survives expiry/deletion, but a later privacy restriction
                 // must not turn an older archive into a route around current access control.
                 $this->source($contract, $ref, false);
             }
         }
+        app(ClaimDailyEvidencePacketService::class)->assertArchiveAccess($contract, $submission->manifest['dailyEvidence'] ?? []);
         $this->verifyArchive($submission->disk, $submission->file_path, $submission->sha256);
         return $submission;
     }
@@ -376,7 +381,7 @@ class ClaimSubmissionService
         if (! is_array($proof) || empty($proof['path']) || empty($proof['sha256'])) {
             throw new InvalidArgumentException('이 처리 이력에는 보존한 응답 파일이 없습니다.');
         }
-        $exists = ($proof['type'] === 'document' ? IntelligentDocument::query() : ProjectContractDocument::query())->whereKey($proof['id'])->exists();
+        $exists = ($proof['type'] === 'document' ? IntelligentDocument::withoutGlobalScopes() : ProjectContractDocument::withoutGlobalScopes())->whereKey($proof['id'])->exists();
         if ($exists) {
             $this->source($contract, $proof, false);
         }
@@ -561,6 +566,9 @@ class ClaimSubmissionService
             $source = $this->source($contract, $item['source'], true, null, $submission->manifest['historicalSubmittedOn'] ?? null);
             $this->readVerified($source['disk'], $source['path'], $item['sha256']);
         }
+        if (array_key_exists('dailyEvidence', $submission->manifest)) {
+            app(ClaimDailyEvidencePacketService::class)->assertCurrent($application, $contract, $submission->manifest['dailyEvidence']);
+        }
         $this->verifyArchive($submission->disk, $submission->file_path, $submission->sha256);
     }
 
@@ -632,6 +640,26 @@ class ClaimSubmissionService
         $this->readVerified($diskName, $path, hash('sha256', $bytes), self::MAX_PACKET_BYTES + 10485760);
     }
 
+    private function retainSource(string $key, string $name, string $bytes, array &$files, int &$totalBytes, array &$temporaryFiles): void
+    {
+        if ($bytes === '' || strlen($bytes) > self::MAX_FILE_BYTES) {
+            throw new InvalidArgumentException('파일은 비어 있지 않아야 하며 25MB 이하여야 합니다.');
+        }
+        if ($totalBytes + strlen($bytes) > self::MAX_PACKET_BYTES || count($files) >= 100) {
+            throw new InvalidArgumentException('제출본은 원본 100개, 합계 100MB 이내로 준비하세요.');
+        }
+        $temporary = tempnam(sys_get_temp_dir(), 'claim-source-');
+        if ($temporary === false || file_put_contents($temporary, $bytes) !== strlen($bytes)) {
+            if ($temporary !== false) {
+                @unlink($temporary);
+            }
+            throw new InvalidArgumentException('제출 원본을 임시 보존할 수 없습니다.');
+        }
+        $temporaryFiles[] = $temporary;
+        $files[$key] = ['name' => $name, 'path' => $temporary, 'bytes' => strlen($bytes), 'sha256' => hash('sha256', $bytes)];
+        $totalBytes += strlen($bytes);
+    }
+
     private function claimLines(PayApplication $application): array
     {
         return PayApplicationAllocation::where('pay_application_id', $application->id)->orderBy('id')->get()->map(fn ($allocation) => [
@@ -692,7 +720,14 @@ class ClaimSubmissionService
         foreach ($package['documents'] as $document) {
             $html .= '<li>'.$escape($document['title']).': '.$escape($document['file']).'</li>';
         }
-        return $html.'</ul><p>Prepared package. Submission, acceptance and payment are recorded separately. This summary supplements any prescribed contract form.</p></html>';
+        $html .= '</ul><h2>Daily evidence by claim line / 공정별 일일 증빙</h2><table><tr><th>공정 / Line</th><th>근거 위치 / Locator</th><th>자료 / Evidence</th><th>일자 / Date</th><th>파일 / File</th></tr>';
+        foreach ($package['dailyEvidence'] ?? [] as $proof) {
+            $labels = implode('; ', $proof['lineLabels'] ?? []);
+            $locators = implode('; ', array_map(static fn ($locator) => (string) ($locator['locator'] ?? ''), $proof['locators'] ?? []));
+            $date = (string) ($proof['date'] ?? '').(($proof['dateBasis'] ?? '') === 'reviewed_work_date' ? ' (작업일 기준 / Work date; document date unknown)' : '');
+            $html .= '<tr><td>'.$escape($labels ?: '현장 공통 / Site common').'</td><td>'.$escape($locators).'</td><td>'.$escape($proof['title']).'</td><td>'.$escape($date).'</td><td>'.$escape($proof['file']).'</td></tr>';
+        }
+        return $html.'</table><p>Prepared package. Submission, acceptance and payment are recorded separately. Purchase and delivery evidence does not certify installation or an approved claim. This summary supplements any prescribed contract form.</p></html>';
     }
 
     private function row(ClaimSubmission $submission): array
