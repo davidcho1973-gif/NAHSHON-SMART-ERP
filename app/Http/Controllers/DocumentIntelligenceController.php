@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
+use App\Services\Admin\BillingAdminService;
 use App\Services\Documents\DocumentIntake;
 use App\Services\Documents\DocumentIntelligenceService;
 use App\Services\Documents\DocumentScope;
@@ -24,8 +25,10 @@ use App\Support\UploadLimits;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -66,6 +69,7 @@ class DocumentIntelligenceController extends Controller
             'sites' => $this->siteOptions($request->user()),
             'projects' => $this->projectOptions($request->user()),
             'canManage' => $this->canManage($request->user()),
+            'canEvidenceManage' => $this->canManage($request->user()) && app(BillingAdminService::class)->canManage($request->user()),
             'maxUploadMb' => round(self::maxUploadBytes() / 1048576),
             // 화면이 보내기 전에 스스로 걸러야 한다 — 22MB 를 다 올린 뒤에 «너무 큽니다»
             // 라고 듣는 것은 회선이 느린 현장에서 몇 분을 버리는 일이다.
@@ -213,6 +217,7 @@ class DocumentIntelligenceController extends Controller
                     ? '분석 결과를 저장하지 못했습니다. 기존 동일 문서 및 프로젝트 소속을 확인해 주세요.'
                     : $document->ai_error,
                 'aiPayload' => $payload,
+                'evidenceReviewVersion' => $document->source === 'evidence_batch' ? $document->evidenceReviewVersion() : null,
                 'downloadUrl' => route('document-intelligence.download', $document),
                 'previewUrl' => route('document-intelligence.preview', $document),
                 'actions' => $document->actionItems->map(fn (DocumentActionItem $item): array => [
@@ -471,6 +476,9 @@ class DocumentIntelligenceController extends Controller
             'site_id' => ['nullable', 'integer', 'exists:sites,id'],
             // 폴더는 규칙대로 다시 만드는 것이 기본이고, 규칙으로 안 되는 자리만 직접 적는다.
             'virtual_path' => ['nullable', 'string', 'max:400'],
+            'evidence_reviewed' => ['sometimes', 'boolean'],
+            'evidence_review_note' => ['nullable', 'string', 'max:2000'],
+            'evidence_review_version' => ['nullable', 'string', 'size:64'],
         ]);
 
         // 회사는 여기서 «고르는» 값이 아니라 PROJECT·현장을 따라오는 값이다 — 이 화면에는
@@ -494,22 +502,57 @@ class DocumentIntelligenceController extends Controller
         );
 
         $manualPath = trim((string) ($data['virtual_path'] ?? ''));
-        unset($data['virtual_path'], $data['project_id'], $data['site_id']);
+        $evidenceReviewed = $request->boolean('evidence_reviewed');
+        $evidenceNote = trim((string) ($data['evidence_review_note'] ?? ''));
+        $evidenceVersion = (string) ($data['evidence_review_version'] ?? '');
+        unset($data['virtual_path'], $data['project_id'], $data['site_id'], $data['evidence_reviewed'], $data['evidence_review_note'], $data['evidence_review_version']);
 
-        $document = app(DocumentScope::class)->saveResolved($document, [
-            // 아무것도 안 고른 저장(제목만 고치는 경우)에는 지금 회사를 그대로 둔다.
-            // 회사는 PROJECT·현장에서 따라오는데, 둘 다 안 골랐으면 따라올 곳이 없어
-            // null 이 되고, 그대로 쓰면 문서가 회사를 잃는다. saveResolved 는 받은 범위를
-            // 그대로 쓰므로(중복 판정도 이 범위를 본다) 그 대비를 여기서 해야 한다.
-            'company_id' => $companyId ?: $document->company_id,
-            'site_id' => $siteId,
-            'project_id' => $projectId,
-        ], [
-            ...$data,
-            'ai_status' => 'ready',
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
-        ]);
+        $document = DB::transaction(function () use ($request, $document, $data, $companyId, $siteId, $projectId, $evidenceReviewed, $evidenceNote, $evidenceVersion): IntelligentDocument {
+            $document = $this->scopedDocument($request->user(), $document->id)->lockForUpdate()->firstOrFail();
+            abort_if($document->ai_status === 'analyzing', 409, '분석이 진행 중입니다. 완료 후 문서 정보를 수정해 주세요.');
+            $attributes = [...$data, 'ai_status' => 'ready', 'reviewed_by' => $request->user()->id, 'reviewed_at' => now()];
+            if ($document->source === 'evidence_batch') {
+                $attributes['ai_status'] = $document->ai_status;
+                if ($evidenceReviewed) {
+                    abort_if(! $document->analyzed_at || in_array($document->ai_status, ['uploaded', 'queued', 'analyzing', 'failed'], true), 409,
+                        '분석이 완료된 후 원본을 확인하고 검토를 완료해 주세요.');
+                    abort_unless(hash_equals($document->evidenceReviewVersion(), $evidenceVersion), 409,
+                        '분석 내용이 바뀌었거나 검토 화면이 오래되었습니다. 새로 열어 확인해 주세요.');
+                    abort_unless($this->fileStillThere((string) $document->disk, (string) $document->file_path), 409, '원본 파일을 확인할 수 없어 검토를 완료할 수 없습니다.');
+                    $payload = (array) $document->ai_payload;
+                    $reason = (string) ($payload['source_review_reason'] ?? '');
+                    if ($reason !== '' && $evidenceNote === '') {
+                        throw ValidationException::withMessages(['evidence_review_note' => '원본에서 확인한 내용과 사용할 값을 적어 주세요.']);
+                    }
+                    $history = is_array($payload['evidence_review']['history'] ?? null) ? $payload['evidence_review']['history'] : [];
+                    $event = ['reviewed_by' => $request->user()->id, 'reviewed_at' => now()->toIso8601String(),
+                        'source_sha256' => $document->sha256, 'analysis_at' => $document->analyzed_at->toIso8601String(),
+                        'review_version' => $evidenceVersion, 'reason' => $reason, 'note' => $evidenceNote];
+                    $last = $history === [] ? null : $history[array_key_last($history)];
+                    if (! is_array($last) || $reason !== '' || array_diff_assoc(
+                        array_intersect_key($event, array_flip(['reviewed_by', 'source_sha256', 'analysis_at', 'note'])), $last
+                    ) !== []) {
+                        $history[] = $event;
+                    }
+                    $payload['evidence_review'] = ['history' => $history];
+                    unset($payload['source_review_reason']);
+                    $attributes['ai_payload'] = $payload;
+                    $attributes['ai_status'] = 'ready';
+                } elseif (! empty($document->ai_payload['source_review_reason'])) {
+                    $attributes['ai_status'] = 'review_required';
+                }
+            }
+
+            return app(DocumentScope::class)->saveResolved($document, [
+                // 아무것도 안 고른 저장(제목만 고치는 경우)에는 지금 회사를 그대로 둔다.
+                // 회사는 PROJECT·현장에서 따라오는데, 둘 다 안 골랐으면 따라올 곳이 없어
+                // null 이 되고, 그대로 쓰면 문서가 회사를 잃는다. saveResolved 는 받은 범위를
+                // 그대로 쓰므로(중복 판정도 이 범위를 본다) 그 대비를 여기서 해야 한다.
+                'company_id' => $companyId ?: $document->company_id,
+                'site_id' => $siteId,
+                'project_id' => $projectId,
+            ], $attributes);
+        });
 
         if ($document->ai_payload['duplicate_document_id'] ?? null) {
             return response()->json(['success' => true, 'document' => $this->documentRow($document)]);
@@ -539,38 +582,36 @@ class DocumentIntelligenceController extends Controller
     public function destroy(Request $request, IntelligentDocument $document): JsonResponse
     {
         $this->authorizeManage($request->user());
-        $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
 
-        $name = $document->original_file_name;
+        return DB::transaction(function () use ($request, $document): JsonResponse {
+            $document = $this->scopedDocument($request->user(), $document->id)->lockForUpdate()->firstOrFail();
 
-        if (filled($document->file_path)) {
-            try {
-                Storage::disk($document->disk)->delete($document->file_path);
-            } catch (\Throwable $e) {
-                report($e);
-            }
-        }
+            $name = $document->original_file_name;
+            // Check before deleting files, actions or alerts. The model repeats the
+            // guard for non-HTTP callers and owns both original and derivative cleanup.
+            $document->assertEvidenceDeletable();
 
-        // 이 문서에서 나온 후속조치·알림도 함께 정리한다 — 원본이 없어진 조치는
-        // 처리할 방법이 없는데 목록에만 남아 "미처리"로 계속 센다.
-        UnifiedAlert::query()
-            ->where('source_type', IntelligentDocument::class)
-            ->where('source_id', (string) $document->id)
-            ->delete();
-        $actionIds = DocumentActionItem::query()
-            ->where('intelligent_document_id', $document->id)
-            ->pluck('id');
-        if ($actionIds->isNotEmpty()) {
+            // 이 문서에서 나온 후속조치·알림도 함께 정리한다 — 원본이 없어진 조치는
+            // 처리할 방법이 없는데 목록에만 남아 "미처리"로 계속 센다.
             UnifiedAlert::query()
-                ->where('source_type', DocumentActionItem::class)
-                ->whereIn('source_id', $actionIds->map(fn ($id) => (string) $id))
+                ->where('source_type', IntelligentDocument::class)
+                ->where('source_id', (string) $document->id)
                 ->delete();
-            DocumentActionItem::query()->whereIn('id', $actionIds)->delete();
-        }
+            $actionIds = DocumentActionItem::query()
+                ->where('intelligent_document_id', $document->id)
+                ->pluck('id');
+            if ($actionIds->isNotEmpty()) {
+                UnifiedAlert::query()
+                    ->where('source_type', DocumentActionItem::class)
+                    ->whereIn('source_id', $actionIds->map(fn ($id) => (string) $id))
+                    ->delete();
+                DocumentActionItem::query()->whereIn('id', $actionIds)->delete();
+            }
 
-        $document->delete();
+            $document->delete();
 
-        return response()->json(['success' => true, 'message' => "'{$name}' 을(를) 삭제했습니다."]);
+            return response()->json(['success' => true, 'message' => "'{$name}' 을(를) 삭제했습니다."]);
+        });
     }
 
     public function updateAction(Request $request, DocumentActionItem $action): JsonResponse
@@ -626,6 +667,27 @@ class DocumentIntelligenceController extends Controller
             '원본 파일이 서버에 없습니다. 같은 파일을 문서함에 다시 올리면 이 문서에 복원됩니다.'
         );
         $disk = Storage::disk($document->disk);
+
+        if ($preview = $document->evidencePreview()) {
+            try {
+                $stream = $disk->readStream($preview['path']);
+                if (is_resource($stream)) {
+                    $hash = hash_init('sha256');
+                    try {
+                        hash_update_stream($hash, $stream);
+                    } finally {
+                        fclose($stream);
+                    }
+                    if (hash_equals($preview['sha256'], hash_final($hash))) {
+                        return $disk->response($preview['path'], pathinfo($document->original_file_name, PATHINFO_FILENAME).'-preview.jpg', [
+                            'Content-Type' => 'image/jpeg', 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         // 엑셀은 표로, 워드는 문서로 — 브라우저가 못 그리는 형식은 서버가 HTML 로
         // 바꿔 보여준다. 예전에는 여기서 415 로 밀어내서 화면이 추출 텍스트로 후퇴했다.
@@ -806,6 +868,7 @@ class DocumentIntelligenceController extends Controller
         return [
             'id' => $document->id,
             'uuid' => $document->uuid,
+            'source' => $document->source,
             'title' => $document->displayTitle(),
             'fileName' => $document->original_file_name,
             'mimeType' => $document->mime_type,

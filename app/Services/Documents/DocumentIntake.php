@@ -4,6 +4,7 @@ namespace App\Services\Documents;
 
 use App\Jobs\AnalyzeIntelligentDocumentJob;
 use App\Models\IntelligentDocument;
+use App\Support\DocumentPhoto;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -35,13 +36,18 @@ class DocumentIntake
      */
     public function ingest(UploadedFile $file, array $scope = [], array $meta = []): array
     {
+        $evidence = ($meta['source'] ?? null) === 'evidence_batch';
         $originalName = $file->getClientOriginalName();
         $extension = strtolower((string) $file->getClientOriginalExtension());
 
         if (! in_array($extension, (array) config('document-intelligence.allowed_extensions', []), true)) {
             return $this->result('failed', null, '지원하지 않는 파일 형식입니다.');
         }
-        $file = \App\Support\DocumentPhoto::prepare($file);
+        // Claim evidence keeps the uploaded source byte-for-byte. Preview/AI derivatives
+        // are separate files; hashing a recompressed photo would lose original identity.
+        if (! $evidence) {
+            $file = DocumentPhoto::prepare($file);
+        }
         $originalName = $file->getClientOriginalName();
         $extension = strtolower($file->getClientOriginalExtension());
 
@@ -57,11 +63,15 @@ class DocumentIntake
         $duplicate = $scopes->findDuplicate($sha256, $scope);
 
         if ($duplicate) {
+            if ($evidence) {
+                return $this->reuseEvidenceDuplicate($duplicate, $file, $safeName, $diskName);
+            }
+
             return $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
         }
 
         $uuid = (string) Str::uuid();
-        [$path, $usedDisk, $error] = $this->store($file, $uuid, $safeName, $diskName);
+        [$path, $usedDisk, $error] = $this->store($file, $uuid, $safeName, $diskName, $evidence);
 
         if ($path === null) {
             return $this->result('failed', null, $error ?: '파일 저장에 실패했습니다.');
@@ -73,6 +83,7 @@ class DocumentIntake
                 ...$scope,
                 'uploaded_by' => $meta['uploaded_by'] ?? null,
                 'source' => $meta['source'] ?? 'dropzone',
+                'project_contract_id' => $evidence ? ($meta['project_contract_id'] ?? null) : null,
                 'disk' => $usedDisk,
                 'file_path' => $path,
                 'original_file_name' => $originalName,
@@ -83,7 +94,7 @@ class DocumentIntake
                 'sha256' => $sha256,
                 'title' => pathinfo($originalName, PATHINFO_FILENAME),
                 'received_at' => now(),
-                'ai_status' => 'queued',
+                'ai_status' => $evidence ? 'uploaded' : 'queued',
             ]));
         } catch (UniqueConstraintViolationException $e) {
             $duplicate = $scopes->findDuplicate($sha256, $scope);
@@ -94,15 +105,37 @@ class DocumentIntake
             // record and all of its original/linked files remain untouched.
             Storage::disk($usedDisk)->delete($path);
 
-            return $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
+            return $evidence
+                ? $this->reuseEvidenceDuplicate($duplicate, $file, $safeName, $diskName)
+                : $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
         }
 
-        AnalyzeIntelligentDocumentJob::dispatch($document->id)->afterCommit();
+        if (! $evidence) {
+            AnalyzeIntelligentDocumentJob::dispatch($document->id)->afterCommit();
+        }
 
         return $this->result('created', $document);
     }
 
     // ── 중복·유실 처리 ─────────────────────────────────────────────────
+
+    private function reuseEvidenceDuplicate(IntelligentDocument $duplicate, UploadedFile $file, string $safeName, string $diskName): array
+    {
+        return DB::transaction(function () use ($duplicate, $file, $safeName, $diskName): array {
+            $duplicate = IntelligentDocument::whereKey($duplicate->id)->lockForUpdate()->firstOrFail();
+            if (! $this->fileStillThere($duplicate->disk ?: $diskName, (string) $duplicate->file_path)) {
+                // Exact raw SHA was already matched. Restore only those bytes; keep the
+                // canonical source, scope, analysis, approvals and processing state intact.
+                [$path, $usedDisk, $error] = $this->store($file, $duplicate->uuid, $safeName, $diskName, true);
+                if (! $path) {
+                    return $this->result('failed', null, $error);
+                }
+                $duplicate->update(['disk' => $usedDisk, 'file_path' => $path, 'stored_file_name' => $safeName]);
+            }
+
+            return $this->result('duplicate', $duplicate, '이미 등록된 원본을 연결했습니다.');
+        });
+    }
 
     /**
      * @return array{status: string, document: IntelligentDocument|null, reason: string|null, requeued: bool}
@@ -166,12 +199,17 @@ class DocumentIntake
     // ── 저장 ───────────────────────────────────────────────────────────
 
     /** @return array{0: string|null, 1: string, 2: string|null} */
-    private function store(UploadedFile $file, string $uuid, string $safeName, string $diskName): array
+    private function store(UploadedFile $file, string $uuid, string $safeName, string $diskName, bool $strict = false): array
     {
         $dir = "document-intelligence/inbox/{$uuid}";
 
+        if ($strict && (config("filesystems.disks.{$diskName}.visibility", 'private') !== 'private'
+            || (! app()->environment(['local', 'testing']) && config("filesystems.disks.{$diskName}.driver") !== 's3'))) {
+            return [null, $diskName, '비공개 영구 저장소를 확인해 주세요. 원본은 아직 접수되지 않았습니다.'];
+        }
+
         try {
-            $path = Storage::disk($diskName)->putFileAs($dir, $file, $safeName);
+            $path = Storage::disk($diskName)->putFileAs($dir, $file, $safeName, ['visibility' => 'private']);
             if ($path) {
                 return [$path, $diskName, null];
             }
@@ -179,6 +217,10 @@ class DocumentIntake
         } catch (\Throwable $e) {
             report($e);
             $reason = "저장소('{$diskName}') 오류: ".$e->getMessage();
+        }
+
+        if ($strict) {
+            return [null, $diskName, '원본 저장에 실패했습니다. 파일을 보관하고 다시 올려 주세요.'];
         }
 
         Log::warning('문서 업로드 저장 실패 — 로컬로 대체합니다: '.$reason);

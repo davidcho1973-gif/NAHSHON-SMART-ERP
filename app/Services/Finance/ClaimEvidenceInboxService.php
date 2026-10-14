@@ -95,20 +95,22 @@ class ClaimEvidenceInboxService
     }
 
     /** Bounded anti-join scan: new and changed sources progress across calls without rescanning a whole site. */
-    public function syncContract(int $contractId, int $limit = 100): array
+    public function syncContract(int $contractId, int $limit = 100, ?array $documentIds = null): array
     {
-        return $this->respond(function () use ($contractId, $limit): array {
+        return $this->respond(function () use ($contractId, $limit, $documentIds): array {
             $contract = $this->contract($contractId, true);
+            $documentIds = $this->documentIds($documentIds);
             $perType = max(1, min(100, (int) ceil(max(1, min(400, $limit)) / count(self::TYPES))));
             $remaining = max(1, min(400, $limit));
             $scanned = $created = 0;
             $hasMore = false;
-            foreach (self::TYPES as $type) {
+            // Explicit intake batches must never sweep unrelated historical records.
+            foreach ($documentIds === null ? self::TYPES : ['document'] as $type) {
                 if ($remaining <= 0) {
                     $hasMore = true;
                     break;
                 }
-                $take = min($perType, $remaining);
+                $take = $documentIds === null ? min($perType, $remaining) : count($documentIds);
                 $table = $this->table($type);
                 $query = $this->sourceQuery($contract, $type)->whereNotExists(function ($q) use ($contract, $type, $table): void {
                     $q->selectRaw('1')->from('claim_evidence_inbox_items as inbox')
@@ -116,6 +118,9 @@ class ClaimEvidenceInboxService
                         ->whereColumn('inbox.source_id', $table.'.id')
                         ->whereColumn('inbox.source_updated_at', '>=', $table.'.updated_at');
                 });
+                if ($documentIds !== null) {
+                    $query->whereIn($table.'.id', $documentIds);
+                }
                 $sources = $query->orderBy($table.'.id')->limit($take + 1)->get([$table.'.id', $table.'.updated_at']);
                 $hasMore = $hasMore || $sources->count() > $take;
                 foreach ($sources->take($take) as $source) {
@@ -151,11 +156,12 @@ class ClaimEvidenceInboxService
     }
 
     /** One bounded AI batch. Text is evidence data, never authority to change records or permissions. */
-    public function match(int $contractId): array
+    public function match(int $contractId, ?array $documentIds = null): array
     {
-        return $this->respond(function () use ($contractId): array {
+        return $this->respond(function () use ($contractId, $documentIds): array {
             $contract = $this->contract($contractId, true);
-            $sync = $this->syncContract($contractId);
+            $documentIds = $this->documentIds($documentIds);
+            $sync = $this->syncContract($contractId, 100, $documentIds);
             if (! $sync['success']) {
                 return $sync;
             }
@@ -164,10 +170,14 @@ class ClaimEvidenceInboxService
                 return ['success' => true, 'linked' => 0, 'message' => '확정된 계약 공정이 없습니다.'];
             }
             $candidates = [];
-            $items = ClaimEvidenceInboxItem::where('project_contract_id', $contract->id)->where('status', 'review')
+            $query = ClaimEvidenceInboxItem::where('project_contract_id', $contract->id)->where('status', 'review')
                 // Carbon query bindings drop offsets; this column stores timestamptz instants.
-                ->whereNull('reviewed_at')->where(fn ($q) => $q->whereNull('last_matched_at')->orWhere('last_matched_at', '<', now()->subHours(6)->toIso8601String()))
-                ->orderByRaw('last_matched_at ASC NULLS FIRST')->orderBy('id')->limit(20)->get();
+                ->whereNull('reviewed_at')->where(fn ($q) => $q->whereNull('last_matched_at')->orWhere('last_matched_at', '<', now()->subHours(6)->toIso8601String()));
+            if ($documentIds !== null) {
+                $query->where('source_type', 'document')->whereIn('source_id',
+                    $this->sourceQuery($contract, 'document')->whereIn('intelligent_documents.id', $documentIds)->select('intelligent_documents.id'));
+            }
+            $items = $query->orderByRaw('last_matched_at ASC NULLS FIRST')->orderBy('id')->limit(20)->get();
             foreach ($items as $item) {
                 $item->forceFill(['last_matched_at' => now()])->save();
                 try {
@@ -406,6 +416,7 @@ class ClaimEvidenceInboxService
             $mime = $source->mime_type;
             $sha = $source->sha256;
             $text = trim(implode("\n", array_filter([$source->title, $source->extracted_text, $source->summary])));
+            $items = $this->documentItems($payload);
             $explicitContract = (int) $source->project_contract_id === (int) $contract->id;
             $aiQuery = AiInformationAccess::documents(auth()->user(), $contract->site);
             if (JobAccess::managed(auth()->user())) {
@@ -781,6 +792,24 @@ class ClaimEvidenceInboxService
         return null;
     }
 
+    /** Null retains the scheduled scan; even an empty array is an explicit, empty batch. */
+    private function documentIds(?array $ids): ?array
+    {
+        if ($ids === null) {
+            return null;
+        }
+        if (count($ids) > 20) {
+            throw new InvalidArgumentException('한 번에 연결할 문서는 최대 20개입니다.');
+        }
+        foreach ($ids as $id) {
+            if (filter_var($id, FILTER_VALIDATE_INT) === false || (int) $id <= 0) {
+                throw new InvalidArgumentException('연결할 문서 번호가 올바르지 않습니다.');
+            }
+        }
+
+        return array_values(array_unique(array_map('intval', $ids)));
+    }
+
     private function expenseItems(array $payload): array
     {
         $items = [];
@@ -790,6 +819,23 @@ class ClaimEvidenceInboxService
                 if (trim($name) !== '') {
                     $items[] = ['locator' => 'expense-item:'.($index + 1), 'text' => mb_substr($name, 0, 1000)];
                 }
+            }
+        }
+
+        return $items;
+    }
+
+    private function documentItems(array $payload): array
+    {
+        $items = [];
+        foreach (array_slice((array) ($payload['evidence']['printed_facts'] ?? []), 0, 100) as $index => $fact) {
+            if (is_array($fact) && is_string($fact['source_excerpt'] ?? null) && trim($fact['source_excerpt']) !== '') {
+                $items[] = ['locator' => 'printed-fact:'.($index + 1), 'text' => mb_substr($fact['source_excerpt'], 0, 1000)];
+            }
+        }
+        foreach (array_slice((array) ($payload['evidence']['handwritten_notes'] ?? []), 0, 100) as $index => $note) {
+            if (is_array($note) && empty($note['uncertain']) && is_string($note['text'] ?? null) && trim($note['text']) !== '') {
+                $items[] = ['locator' => 'handwritten-note:'.($index + 1), 'text' => mb_substr($note['text'], 0, 1000)];
             }
         }
 

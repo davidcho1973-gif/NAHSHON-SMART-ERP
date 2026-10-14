@@ -1,5 +1,15 @@
 # WORK LOG
 
+## CODEX — 2026-10-13 Manual project evidence intake
+
+Historical project files previously started analysis on upload and flowed into operational connectors; this made bulk catch-up hard to control and mixed claim evidence with financial posting. Added a staged intake in the existing document hub: select project, upload original files/folders serially, then explicitly start a durable background batch. Canonical documents remain the single source; batch tables hold execution state only. Stable upload keys, source hashes, private durable storage and bounded status pages support retries without uploading/analysing completed files twice. No external folder polling is introduced.
+
+Evidence-only sources retain their immutable purpose across reanalysis and do not create expenses, equipment, actions or chat/knowledge links. Analysis distinguishes printed facts, handwriting, source limitations and conflicting readings. Safe smaller image derivatives serve analysis and preview while original bytes remain available. Explicit original review is version-bound and recorded; an ordinary metadata edit cannot clear an unresolved evidence warning. Existing claim-protected originals are checked before any deletion.
+
+Explicitly started batches process one file at a time and match only their sources to accessible accepted contract BOQ in bounded chunks. Existing claim evidence permissions, quotation checks, source fingerprints and uncertain-item review remain authoritative. Scope and initiating-user permissions are rechecked by background jobs. No monetary totals, verified work or claim approvals are created by intake. Shared routes and endpoint catalog entries expose the existing document module; the existing document-hub UI is extended instead of adding a separate application. Usage is integrated into docs/CLAIM_WORKFLOW_KO.md.
+
+Validation includes targeted PostgreSQL document/claim/security tests, 153 JavaScript checks, and real-code browser checks for partial upload/retry, explicit start, late contract selection, resume and mobile layout. The full Windows run exposed image tests sharing the long-running runner's memory allocation; memory-sensitive cases now use fresh processes without changing the production safety guard. Bash-dependent deployment checks pass with the local runtime configured. One unchanged Windows path-reader incompatibility requires the authoritative Linux regression gate. Build, Blade, Pint and diff checks pass. Final CI/deployment results are recorded privately at release; this entry alone is not confirmation of deployment or of real source OCR accuracy.
+
 ## CODEX — 2026-10-11 Decode Outlook Korean email charset
 
 Live recovery found Outlook email bodies labelled `ks_c_5601-1987`, a Microsoft code-page 949 alias which PHP mbstring does not recognize directly. Normalize only that alias to UHC for bodies, encoded headers and filenames; do not guess unknown charsets or decode it as the smaller EUC-KR set. Microsoft's code-page-identifiers documentation identifies the alias as Unified Hangul Code. Existing unread-attachment review and financial safeguards remain in force.

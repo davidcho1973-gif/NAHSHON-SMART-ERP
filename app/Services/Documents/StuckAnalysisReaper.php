@@ -72,6 +72,8 @@ class StuckAnalysisReaper
             $failed += $result === 'failed' ? 1 : 0;
         }
 
+        app(DocumentEvidenceBatchService::class)->recoverStartedBatches();
+
         return ['total' => $requeued + $failed, 'requeued' => $requeued, 'failed' => $failed];
     }
 

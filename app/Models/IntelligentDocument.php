@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class IntelligentDocument extends Model
@@ -76,14 +78,64 @@ class IntelligentDocument extends Model
 
     protected static function booted(): void
     {
+        static::updating(function (IntelligentDocument $document): void {
+            if ($document->getRawOriginal('source') === 'evidence_batch' && $document->isDirty('source')) {
+                throw ValidationException::withMessages(['source' => '기성 증빙 접수 원본의 등록 경로는 변경할 수 없습니다.']);
+            }
+        });
         static::deleting(function (IntelligentDocument $document): void {
-            if (app(ClaimEvidenceService::class)->sourceIsProtected('document', $document->id)) {
-                throw ValidationException::withMessages(['document' => '기성 근거로 연결된 원본 문서는 삭제할 수 없습니다.']);
+            $document->assertEvidenceDeletable();
+            if ($preview = $document->evidencePreview()) {
+                try {
+                    Storage::disk($preview['disk'])->delete($preview['path']);
+                } catch (\Throwable $e) {
+                    // An optional viewing copy must not leave a row pointing to a
+                    // deleted original merely because derivative cleanup failed.
+                    report($e);
+                }
             }
             if (filled($document->file_path)) {
                 Storage::disk($document->disk ?: config('document-intelligence.disk'))->delete($document->file_path);
             }
         });
+    }
+
+    /** Check database references before deleting any files or dependent records. */
+    public function assertEvidenceDeletable(): void
+    {
+        if (app(ClaimEvidenceService::class)->sourceIsProtected('document', $this->id)) {
+            throw ValidationException::withMessages(['document' => '기성 근거로 연결된 원본 문서는 삭제할 수 없습니다.']);
+        }
+        if (Schema::hasTable('document_evidence_batch_items')
+            && DocumentEvidenceBatchItem::query()->where('document_id', $this->id)->exists()) {
+            throw ValidationException::withMessages(['document' => '기성 자료 접수 내역에 포함된 원본 문서는 삭제할 수 없습니다.']);
+        }
+    }
+
+    /** Server-created derivative only; never follow arbitrary paths from AI metadata. */
+    public function evidencePreview(): ?array
+    {
+        $preview = $this->ai_payload['image_derivative'] ?? null;
+        if ($this->source !== 'evidence_batch' || ! str_starts_with((string) $this->mime_type, 'image/')
+            || ! is_array($preview) || ! Str::isUuid((string) $this->uuid)
+            || ! preg_match('/^[a-f0-9]{64}$/D', (string) $this->sha256)
+            || ! preg_match('/^[a-f0-9]{64}$/D', (string) ($preview['derivative_sha256'] ?? ''))
+            || ($preview['original_sha256'] ?? null) !== $this->sha256
+            || ($preview['disk'] ?? null) !== $this->disk || ($preview['mime'] ?? null) !== 'image/jpeg') {
+            return null;
+        }
+        $path = 'document-intelligence/derivatives/'.$this->uuid.'/'.$preview['derivative_sha256'].'.jpg';
+        if (($preview['path'] ?? null) !== $path) {
+            return null;
+        }
+
+        return ['disk' => $this->disk, 'path' => $path, 'sha256' => $preview['derivative_sha256']];
+    }
+
+    public function evidenceReviewVersion(): string
+    {
+        return hash('sha256', json_encode([$this->sha256, $this->analyzed_at?->toIso8601String(),
+            $this->ai_payload['evidence'] ?? null], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     protected function casts(): array
