@@ -332,6 +332,7 @@ return [
         'MaterialReceiptController' => ['_module' => 'materials', 'confirmMobile' => ['materials', 'edit']],
         'IntegratedDocumentController' => ['_module' => 'documents', 'show' => ['documents', 'export']],
         'DocumentIntelligenceController' => ['_module' => 'documents', 'extractSubmittals' => ['progress', 'edit']],
+        'DocumentEvidenceBatchController' => ['_module' => 'documents'],
         'ProjectContractDocumentController' => ['_module' => 'contracts'],
         'PayrollController' => ['_module' => 'payroll'],
         'GcClaimExportController' => ['_module' => 'contracts'],

@@ -80,8 +80,15 @@ jobs:
           $diagnosticReserve = str_repeat('x', 1048576);
           register_shutdown_function(static function () use (&$diagnosticReserve): void {
               $diagnosticReserve = null;
+              $error = error_get_last();
+              // PHPUnit's isolated children require clean stderr on success. Only
+              // fatal shutdowns need this extra diagnostic; ordinary output and
+              // suppressed non-seekable-stream warnings are not test failures.
+              if (! $error || ! in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+                  return;
+              }
               fwrite(STDERR, "\nPHP shutdown: ".json_encode([
-                  'last_error' => error_get_last(),
+                  'last_error' => $error,
                   'peak_bytes' => memory_get_peak_usage(true),
                   'limit' => ini_get('memory_limit'),
               ], JSON_UNESCAPED_SLASHES)."\n");
