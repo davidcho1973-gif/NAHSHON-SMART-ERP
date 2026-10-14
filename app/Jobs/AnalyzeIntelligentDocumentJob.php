@@ -2,9 +2,11 @@
 
 namespace App\Jobs;
 
+use App\Models\DocumentEvidenceBatch;
 use App\Models\IntelligentDocument;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Services\Documents\DocumentAnalysisFailure;
+use App\Services\Documents\DocumentEvidenceBatchService;
 use App\Services\Documents\DocumentIntelligenceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,6 +15,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\TimeoutExceededException;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -36,9 +39,18 @@ class AnalyzeIntelligentDocumentJob implements ShouldQueue
     // The default also lets document jobs queued before this property existed deserialize.
     public ?string $analysisToken = null;
 
-    public function __construct(public int $documentId)
+    public ?int $evidenceBatchId = null;
+
+    public ?string $batchRunToken = null;
+
+    public ?int $analysisActorId = null;
+
+    public function __construct(public int $documentId, ?int $evidenceBatchId = null, ?string $batchRunToken = null)
     {
         $this->analysisToken = (string) Str::uuid();
+        $this->evidenceBatchId = $evidenceBatchId;
+        $this->batchRunToken = $batchRunToken;
+        $this->analysisActorId = Auth::id();
         $this->onConnection('document-analysis')->onQueue('documents');
     }
 
@@ -46,7 +58,8 @@ class AnalyzeIntelligentDocumentJob implements ShouldQueue
     {
         return DB::transaction(function () use ($documentId): bool {
             $document = IntelligentDocument::query()->whereKey($documentId)->lockForUpdate()->first();
-            if (! $document || ! in_array($document->ai_status, ['ready', 'review_required', 'failed'], true)
+            if (! $document || (! in_array($document->ai_status, ['ready', 'review_required', 'failed'], true)
+                && ! ($document->source === 'evidence_batch' && $document->ai_status === 'uploaded'))
                 || ! empty($document->ai_payload['duplicate_document_id'])) {
                 return false;
             }
@@ -63,6 +76,46 @@ class AnalyzeIntelligentDocumentJob implements ShouldQueue
     }
 
     public function handle(DocumentIntelligenceService $service, UnifiedAlertService $alerts): void
+    {
+        $previous = Auth::user();
+        $batchService = app(DocumentEvidenceBatchService::class);
+        try {
+            $document = IntelligentDocument::find($this->documentId);
+            if ($document?->source === 'evidence_batch') {
+                $this->recoverBatchContext();
+                if ($this->evidenceBatchId) {
+                    $batch = DocumentEvidenceBatch::find($this->evidenceBatchId);
+                    if (! $batch || $batch->status !== 'running' || $batch->run_token !== $this->batchRunToken
+                        || ! $batch->items()->whereKey($batch->active_item_id)->where('document_id', $this->documentId)->exists()) {
+                        return;
+                    }
+                    $actor = $batchService->actorForJob($batch->id, $this->batchRunToken, $this->documentId);
+                } else {
+                    $actor = $batchService->actorForDocument($document, $this->analysisActorId);
+                }
+                Auth::setUser($actor);
+                if ($this->evidenceBatchId) {
+                    $batchService->accessible($actor, $this->evidenceBatchId);
+                }
+            }
+            $this->processDocument($service, $alerts);
+        } catch (\Throwable $e) {
+            report($e);
+            if ($this->evidenceBatchId && $this->batchRunToken) {
+                $batchService->fail($this->evidenceBatchId, $this->batchRunToken, '등록자의 현재 권한과 프로젝트 범위를 확인해 주세요. 원본은 보존했습니다.');
+            } else {
+                IntelligentDocument::whereKey($this->documentId)->where('source', 'evidence_batch')->where('ai_status', 'queued')
+                    ->update(['ai_status' => 'failed', 'ai_error' => '현재 문서 처리 권한을 확인해 주세요.']);
+            }
+        } finally {
+            if ($this->evidenceBatchId && $this->batchRunToken) {
+                $batchService->completed($this->evidenceBatchId, $this->batchRunToken, $this->documentId);
+            }
+            $previous ? Auth::setUser($previous) : Auth::forgetUser();
+        }
+    }
+
+    private function processDocument(DocumentIntelligenceService $service, UnifiedAlertService $alerts): void
     {
         $document = $this->claim();
         if (! $document) {
@@ -108,7 +161,27 @@ class AnalyzeIntelligentDocumentJob implements ShouldQueue
 
     public function failed(\Throwable $e): void
     {
-        $this->markFailed($e);
+        if ($this->markFailed($e)) {
+            $this->recoverBatchContext();
+            if ($this->evidenceBatchId && $this->batchRunToken) {
+                app(DocumentEvidenceBatchService::class)->completed($this->evidenceBatchId, $this->batchRunToken, $this->documentId);
+            }
+        }
+    }
+
+    private function recoverBatchContext(): void
+    {
+        if ($this->evidenceBatchId || IntelligentDocument::find($this->documentId)?->source !== 'evidence_batch') {
+            return;
+        }
+        // Reaper jobs created after a worker interruption reuse the same requested batch.
+        $batch = DocumentEvidenceBatch::where('status', 'running')->whereHas('items', fn ($q) => $q
+            ->whereColumn('document_evidence_batch_items.id', 'document_evidence_batches.active_item_id')
+            ->where('document_id', $this->documentId))->first();
+        if ($batch) {
+            $this->evidenceBatchId = $batch->id;
+            $this->batchRunToken = $batch->run_token;
+        }
     }
 
     private function claim(): ?IntelligentDocument

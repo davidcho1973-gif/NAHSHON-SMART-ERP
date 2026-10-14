@@ -38,10 +38,14 @@ class DocumentIntelligenceService
             $document->update(['ai_status' => 'analyzing', 'ai_error' => null]);
         }
         $bytes = (string) $disk->get($document->file_path);
+        $originalHash = hash('sha256', $bytes);
+        if ($document->source === 'evidence_batch' && ! hash_equals((string) $document->sha256, $originalHash)) {
+            throw new \RuntimeException('기성 증빙 원본의 내용이 접수 당시와 다릅니다. 원본을 확인해 주세요.');
+        }
         $analysis = $this->analyzer->analyze($document, $bytes);
         $data = $analysis['data'];
         // These are application state, never instructions supplied by the AI response.
-        unset($data['duplicate_document_id'], $data['duplicate_target_scope'], $data['duplicate_reason'], $data['scope_review_reason'], $data['analysis_run_token'], $data['stuck_requeues']);
+        unset($data['duplicate_document_id'], $data['duplicate_target_scope'], $data['duplicate_reason'], $data['scope_review_reason'], $data['analysis_run_token'], $data['stuck_requeues'], $data['evidence_review']);
         foreach (['analysis_run_token', 'stuck_requeues'] as $key) {
             if (array_key_exists($key, (array) $document->ai_payload)) {
                 $data[$key] = $document->ai_payload[$key];
@@ -55,15 +59,37 @@ class DocumentIntelligenceService
         $verification = app(DocumentCrossCheck::class)->check($document, $data, $bytes, $analysis);
         if ($verification !== null) {
             $data['verification'] = $verification;
+            if ($document->source === 'evidence_batch' && ($verification['status'] ?? '') === 'disagreed') {
+                $data['source_review_reason'] = trim(($data['source_review_reason'] ?? '').' 독립 교차검증의 판독 값이 다릅니다. 원본을 확인해 주세요.');
+            }
         }
 
         $superseded = false;
-        $fresh = DB::transaction(function () use ($document, $analysis, $data, $confidence, $runToken, &$superseded): IntelligentDocument {
+        $fresh = DB::transaction(function () use ($document, $analysis, $data, $confidence, $runToken, $originalHash, &$superseded): IntelligentDocument {
             $document = IntelligentDocument::query()->lockForUpdate()->findOrFail($document->id);
             if ($runToken !== null && ($document->ai_status !== 'analyzing' || ($document->ai_payload['analysis_run_token'] ?? null) !== $runToken)) {
                 $superseded = true;
 
                 return $document;
+            }
+            // A durable source marker defines intake purpose even after later reanalysis.
+            // Evidence collection must never create payable expenses, receipts or tasks.
+            $evidenceOnly = $document->source === 'evidence_batch';
+            if ($evidenceOnly) {
+                if (! hash_equals((string) $document->sha256, $originalHash)) {
+                    throw new \RuntimeException('분석 중 증빙 원본이 변경되었습니다. 다시 확인해 주세요.');
+                }
+                if (! empty($document->ai_payload['source_review_reason']) && empty($data['source_review_reason'])) {
+                    $data['source_review_reason'] = $document->ai_payload['source_review_reason'];
+                }
+                if (isset($document->ai_payload['evidence_review'])) {
+                    $data['evidence_review'] = $document->ai_payload['evidence_review'];
+                }
+                // Storage identities come only from verified local derivative bytes, never AI JSON.
+                unset($data['image_derivative']);
+                if ($derivative = $this->storeEvidenceDerivative($document, $analysis['image_derivative'] ?? null, $originalHash)) {
+                    $data['image_derivative'] = $derivative;
+                }
             }
             $scopes = app(DocumentScope::class);
             $resolution = $scopes->resolveForAnalysis($document, (string) ($data['project_code'] ?? ''));
@@ -82,12 +108,15 @@ class DocumentIntelligenceService
             $keyFacts = $this->stringList($data['key_facts'] ?? []);
             $summary = $this->cleanText($data['summary'] ?? null);
             $extractedText = $analysis['extracted_text'];
+            if ($evidenceOnly) {
+                $extractedText = trim(implode("\n", array_filter([$extractedText, $this->evidenceText($data)])));
+            }
 
             $attributes = [
                 // 계약 문서 ↔ 계약 모듈 자동 링크 — 죽은 칼럼(project_contract_id)을 살린다.
                 // 그 프로젝트의 계약이 하나일 때만: 애매하면 잇지 않는다(연계 점검: 계약서 자동 링크 없음).
                 'project_contract_id' => $document->project_contract_id
-                    ?: $this->resolveContractId($documentType, $projectId),
+                    ?: ($evidenceOnly ? null : $this->resolveContractId($documentType, $projectId)),
                 'title' => $title,
                 'category' => $category,
                 'document_type' => $documentType,
@@ -129,10 +158,19 @@ class DocumentIntelligenceService
                 implode(' ', $tags),
                 implode("\n", $keyFacts),
                 $extractedText,
+                $evidenceOnly ? $this->evidenceHints($data) : null,
             ]));
             $document = $scopes->saveResolved($document, $scope, $attributes);
             $folderParts = $this->rebuildFolder($document);
             $document->update(['folder_structure' => $folderParts, 'virtual_path' => implode(' / ', $folderParts)]);
+
+            if ($evidenceOnly) {
+                if (empty($document->ai_payload['duplicate_document_id'])) {
+                    $this->organizeFile($document, $folderParts);
+                }
+
+                return $document->fresh(['company', 'site', 'project', 'actionItems']);
+            }
 
             // Preserve both originals and existing links. A duplicate/uncertain scope must
             // not replace action items, create expenses, send replies or harvest knowledge.
@@ -175,7 +213,7 @@ class DocumentIntelligenceService
             return $document->fresh(['company', 'site', 'project', 'actionItems']);
         });
 
-        if ($superseded || ! empty($fresh->ai_payload['duplicate_document_id']) || ! empty($fresh->ai_payload['scope_review_reason']) || ! empty($fresh->ai_payload['source_review_reason'])) {
+        if ($superseded || $fresh->source === 'evidence_batch' || ! empty($fresh->ai_payload['duplicate_document_id']) || ! empty($fresh->ai_payload['scope_review_reason']) || ! empty($fresh->ai_payload['source_review_reason'])) {
             return $fresh;
         }
 
@@ -188,6 +226,68 @@ class DocumentIntelligenceService
         }
 
         return $fresh;
+    }
+
+    /** Keep printed facts and handwritten annotations separate, with their source locations. */
+    private function evidenceText(array $data): string
+    {
+        $evidence = is_array($data['evidence'] ?? null) ? $data['evidence'] : [];
+        $rows = [];
+        foreach (array_slice((array) ($evidence['printed_facts'] ?? []), 0, 100) as $fact) {
+            if (is_array($fact)) {
+                $rows[] = '[인쇄 내용] '.implode(' | ', array_filter(array_map(fn ($value) => $this->cleanText($value), [
+                    $fact['field'] ?? null, $fact['value'] ?? null, $fact['source_excerpt'] ?? null, $fact['location'] ?? null,
+                ])));
+            }
+        }
+        foreach (array_slice((array) ($evidence['handwritten_notes'] ?? []), 0, 100) as $note) {
+            if (is_array($note) && filled($note['text'] ?? null)) {
+                $rows[] = (! empty($note['uncertain']) ? '[수기 메모 · 판독 확인 필요] ' : '[수기 메모 · 인쇄 내용과 구분] ')
+                    .$this->cleanText($note['text']).(filled($note['location'] ?? null) ? ' | '.$this->cleanText($note['location']) : '');
+            }
+        }
+        foreach (array_slice((array) ($evidence['conflicts'] ?? []), 0, 100) as $conflict) {
+            if (is_array($conflict)) {
+                $rows[] = '[불일치 · 확인 필요] '.implode(' | ', array_filter(array_map(fn ($value) => $this->cleanText($value), [
+                    $conflict['field'] ?? null, $conflict['printed_value'] ?? null,
+                    $conflict['handwritten_value'] ?? null, $conflict['reason'] ?? null,
+                ])));
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /** AI process hints aid search but are not original evidence quotes for automatic matching. */
+    private function evidenceHints(array $data): string
+    {
+        $hints = $this->stringList($data['evidence']['process_hints'] ?? []);
+
+        return $hints === [] ? '' : '[공정 후보 · 확정 아님] '.implode(' | ', $hints);
+    }
+
+    private function storeEvidenceDerivative(IntelligentDocument $document, mixed $image, string $originalHash): ?array
+    {
+        if (! is_array($image) || empty($image['resized']) || ! is_string($image['data'] ?? null)) {
+            return null;
+        }
+        $bytes = $image['data'];
+        $hash = hash('sha256', $bytes);
+        if (! hash_equals($originalHash, (string) ($image['original_sha256'] ?? ''))
+            || ! hash_equals($hash, (string) ($image['derivative_sha256'] ?? ''))
+            || $bytes === '' || strlen($bytes) >= (int) $document->file_size
+            || (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes) !== 'image/jpeg') {
+            throw new \RuntimeException('증빙 사진 사본의 무결성을 확인하지 못했습니다.');
+        }
+        $disk = $document->disk ?: config('document-intelligence.disk');
+        $path = 'document-intelligence/derivatives/'.$document->uuid.'/'.$hash.'.jpg';
+        if (! Storage::disk($disk)->put($path, $bytes, ['visibility' => 'private'])) {
+            throw new \RuntimeException('증빙 사진의 읽기용 사본을 저장하지 못했습니다.');
+        }
+
+        return ['disk' => $disk, 'path' => $path, 'mime' => 'image/jpeg', 'resized' => true,
+            'width' => (int) ($image['width'] ?? 0), 'height' => (int) ($image['height'] ?? 0),
+            'size' => strlen($bytes), 'original_sha256' => $originalHash, 'derivative_sha256' => $hash];
     }
 
     /** @param array<int, mixed> $items */

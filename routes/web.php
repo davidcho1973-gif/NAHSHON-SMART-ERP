@@ -4,8 +4,10 @@ use App\Http\Controllers\AdminUploadController;
 use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\AttendanceNoticeController;
+use App\Http\Controllers\ClaimSubmissionController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
+use App\Http\Controllers\DocumentEvidenceBatchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\DrawingSheetController;
 use App\Http\Controllers\EmailAiInboxController;
@@ -16,7 +18,6 @@ use App\Http\Controllers\ExpenseAppController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
 use App\Http\Controllers\GcClaimExportController;
-use App\Http\Controllers\ClaimSubmissionController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
@@ -71,6 +72,7 @@ Route::get('/manager-invitation/{token}', [ManagerInvitationController::class, '
 Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::class, 'verify'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.verify');
 Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
 use App\Http\Controllers\AssistantWorkspaceController;
+use App\Http\Controllers\ClaimEvidenceFileController;
 use App\Http\Controllers\JobApprovalController;
 use App\Http\Controllers\JobWorkspaceController;
 use App\Http\Controllers\PersonalPayslipController;
@@ -324,6 +326,12 @@ Route::middleware('auth')->group(function (): void {
 
     // AI construction document intelligence hub — private originals, search index and preventive actions.
     Route::get('/document-hub', [DocumentIntelligenceController::class, 'index'])->name('document-intelligence.index');
+    // Historical evidence is stored first; analysis starts only on an explicit user request.
+    Route::get('/document-hub/api/evidence-batches', [DocumentEvidenceBatchController::class, 'index'])->name('evidence-batches.index');
+    Route::post('/document-hub/api/evidence-batches', [DocumentEvidenceBatchController::class, 'create'])->name('evidence-batches.create');
+    Route::post('/document-hub/api/evidence-batches/{batch}/files', [DocumentEvidenceBatchController::class, 'upload'])->name('evidence-batches.upload');
+    Route::post('/document-hub/api/evidence-batches/{batch}/start', [DocumentEvidenceBatchController::class, 'start'])->name('evidence-batches.start');
+    Route::get('/document-hub/api/evidence-batches/{batch}', [DocumentEvidenceBatchController::class, 'show'])->name('evidence-batches.show');
     Route::get('/document-hub/api/documents', [DocumentIntelligenceController::class, 'documents'])->name('document-intelligence.documents');
     Route::post('/document-hub/api/upload', [DocumentIntelligenceController::class, 'upload'])->name('document-intelligence.upload');
     Route::get('/document-hub/api/index.csv', [DocumentIntelligenceController::class, 'exportIndex'])->name('document-intelligence.export-index');
@@ -387,7 +395,7 @@ Route::middleware('auth')->group(function (): void {
     // 공정별 도면 — 브라우저가 도면 PDF 를 한 쪽씩 그려 보내고, 사진 쪽은 AI 가 글자를 읽어 붙인다.
     Route::get('/billing-export/submissions/{submission}/responses/{event}/file', [ClaimSubmissionController::class, 'response'])->whereNumber(['submission', 'event'])->name('billing-export.submission-response');
     Route::get('/billing-export/submissions/{submission}/packet.zip', [ClaimSubmissionController::class, 'download'])->whereNumber('submission')->name('billing-export.submission');
-    Route::get('/billing-export/contracts/{contract}/daily-evidence/{type}/{id}', [\App\Http\Controllers\ClaimEvidenceFileController::class, 'show'])
+    Route::get('/billing-export/contracts/{contract}/daily-evidence/{type}/{id}', [ClaimEvidenceFileController::class, 'show'])
         ->whereNumber(['contract', 'id'])->whereIn('type', ['document', 'expense', 'receipt', 'photo'])->name('billing-export.daily-evidence');
     Route::get('/billing-export/applications/{application}/gc-claim.xlsx', [GcClaimExportController::class, 'download'])->whereNumber('application')->name('billing-export.gc-claim');
     Route::post('/drawing-api/documents/{document}/start', [DrawingSheetController::class, 'start'])->whereNumber('document')->name('drawing-sheets.start');

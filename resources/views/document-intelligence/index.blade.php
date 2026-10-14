@@ -118,7 +118,7 @@
         <div class="content">
             <div class="hero">
                 <div><div class="desk-eyebrow">DOCUMENT REVIEW DESK</div><h1>공사 문서함</h1><p>문서를 선택하고, 원본과 AI 분석을 나란히 검토하세요.</p></div>
-                @if($canManage)<button class="btn primary" id="upload-open">＋ 문서 올리기</button>@endif
+                @if($canEvidenceManage)<button class="btn primary" id="evidence-open">＋ 기성 자료 넣기</button>@endif
             </div>
             <div class="stats">
                 <div class="stat"><span>전체 문서</span><strong><b id="stat-total">0</b><span class="stat-unit">건</span></strong></div>
@@ -140,6 +140,7 @@
                     </div>
                 <details class="desk-management"><summary>문서 관리 도구</summary><div class="tools">
                     @if($canManage)
+                    <button class="btn small" id="upload-open">일반 문서 올리기</button>
                     <button class="btn small" id="tidy-btn" style="display:none">현장 미지정 정리</button>
                     <button class="btn small" id="unstick-btn">멈춘 분석 재시도</button>
                     <button class="btn small" id="ko-btn">한글 붙이기</button>
@@ -158,6 +159,7 @@
                     <details class="panel desk-memory"><summary>선택 문서의 미완료 후속조치</summary><div class="memory-list" id="memory-list"><div class="empty">문서를 선택하세요.</div></div></details>
                 </aside>
             </div>
+            @include('document-intelligence.evidence-batch')
             @if($canManage)<dialog class="upload-dialog" id="upload-dialog" aria-labelledby="upload-title">
                     <section class="panel">
                         <div class="panel-head"><div><h2 id="upload-title">문서 올리기</h2><p>최대 50개 파일을 한 번에 올릴 수 있습니다.</p></div><button class="btn small" id="upload-close">닫기</button></div>
@@ -288,9 +290,9 @@ window.ERPDocumentNavigation={restore:restoreDocumentNavigation};
 window.addEventListener('scroll',()=>{if(window.parent!==window && typeof window.parent.ERPDocumentSave==='function')window.parent.ERPDocumentSave();},{passive:true});
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtBytes = bytes => !bytes ? '-' : bytes >= 1048576 ? (bytes/1048576).toFixed(1)+' MB' : (bytes/1024).toFixed(1)+' KB';
-const statusLabel = status => ({queued:'접수됨',analyzing:'AI 분석 중',ready:'정리 완료',review_required:'검토 필요',failed:'분석 실패'}[status] || status);
+const statusLabel = status => ({uploaded:'처리 전',queued:'접수됨',analyzing:'AI 분석 중',ready:'정리 완료',review_required:'검토 필요',failed:'분석 실패'}[status] || status);
 function toast(message, error=false){const el=document.getElementById('toast');const upload=document.getElementById('upload-dialog');(upload?.open?upload:document.body).appendChild(el);el.textContent=message;el.className='toast show'+(error?' error':'');setTimeout(()=>el.className='toast',3500)}
-async function jsonFetch(url, options={}){const response=await fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf,...(options.headers||{})},...options});const data=await response.json().catch(()=>({success:false,error:'응답을 읽을 수 없습니다.'}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||'요청 실패');return data}
+async function jsonFetch(url, options={}){const response=await fetch(url,{credentials:'same-origin',...options,headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf,...(options.headers||{})}});const data=await response.json().catch(()=>({success:false,error:'응답을 읽을 수 없습니다.'}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||'요청 실패');return data}
 
 async function loadDocuments(){
     const requestId=++listRequest;
@@ -398,7 +400,7 @@ function renderMemory(actions){
     box.innerHTML=open.slice(0,8).map(a=>`<div class="memory-item ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.recommendedAction||a.details||'')}</p><div class="memory-meta"><span>${esc(a.severity)}</span><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'기한 확인 필요'}</span></div></div>`).join('');
 }
 function renderDetail(d){
-    currentDoc={id:d.id,fileName:d.fileName,extension:(d.extension||'').toLowerCase(),previewUrl:d.previewUrl,downloadUrl:d.downloadUrl,mimeType:d.mimeType};
+    currentDoc={id:d.id,fileName:d.fileName,extension:(d.extension||'').toLowerCase(),previewUrl:d.previewUrl,downloadUrl:d.downloadUrl,mimeType:d.mimeType,evidenceReviewVersion:d.evidenceReviewVersion};
     document.getElementById('detail-title').textContent=d.title;document.getElementById('detail-file').textContent=d.fileName+' · '+fmtBytes(d.fileSize);
     const facts=(d.keyFacts||[]).map(f=>`<div class="fact">${esc(f)}</div>`).join('')||'<p>추출된 핵심 사실이 없습니다.</p>';
     const tags=[...(d.keywords||[]),...(d.tags||[])].slice(0,50).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
@@ -422,13 +424,16 @@ function renderDetail(d){
           <div class="field"><label>현장</label><select id="ed-site"><option value="">PROJECT 따라감</option>${SITE_OPTIONS.map(o=>`<option value="${esc(o.value)}"${String(d.siteId||'')===o.value?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
           <div class="field" style="grid-column:1/-1"><label>폴더 경로 <span style="font-weight:400;color:var(--muted)">— 비워 두면 PROJECT·분류에 맞춰 자동으로 다시 만듭니다</span></label><input id="ed-path" placeholder="자동 (예: 회사 / PROJECT / 도면·시방서 / 시방서 / 2026)" value=""><small style="color:var(--muted)">현재: ${esc(d.virtualPath||'분류 대기')}</small></div>
         </div>
+        ${d.source==='evidence_batch'?`<div class="field" style="margin-top:12px"><label><input type="checkbox" id="ed-evidence-reviewed" style="width:auto"> 원본과 추출 내용을 대조했습니다</label><label for="ed-evidence-note">확인 메모${d.aiPayload?.source_review_reason?' (필수)':''}</label><input id="ed-evidence-note" maxlength="2000" placeholder="수기 내용 · 불명확한 항목을 확인한 결과"></div>`:''}
         <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveEdit(${d.id})">저장</button><button class="btn" onclick="document.getElementById('edit-form').style.display='none'">취소</button></div>
-        <p style="font-size:11px;color:var(--muted);margin:9px 0 0">저장하면 이 문서는 "정리 완료(사람 검수)"로 표시됩니다 — AI 추정이 아니라 사람이 확정한 값이라는 뜻입니다.</p>
+        <p style="font-size:11px;color:var(--muted);margin:9px 0 0">${d.source==='evidence_batch'?'원본 대조에 체크한 자료만 검토 완료로 표시합니다.':'저장하면 이 문서는 정리 완료(사람 검수)로 표시됩니다.'}</p>
       </div>`:''}
       ${d.duplicateDocumentId?`<div class="section" style="border-color:#93c5fd;background:#eff6ff"><h3>이미 등록된 동일 파일</h3><p>기존 문서에서 분석 결과를 확인할 수 있습니다. 이번 접수 원본과 기록은 보존했습니다.</p><button class="btn primary" onclick="openDocument(${Number(d.duplicateDocumentId)})">기존 문서 열기</button></div>`:''}
       ${d.aiError?`<div class="section" style="border-color:#fecaca;background:#fff4f4"><h3>분석 오류</h3><p>${esc(d.aiError)}</p></div>`:''}
       ${d.aiStatus==='review_required'&&d.aiPayload?.scope_review_reason?`<div class="section" style="border-color:#fcd34d;background:#fffbeb"><h3>소속 확인 필요</h3><p>${esc(d.aiPayload.scope_review_reason)}</p><p>문서 내용과 현재 PROJECT·현장을 확인해 주세요. 수정 권한이 있으면 ‘정보 수정’에서 확인한 값을 저장할 수 있습니다.</p></div>`:''}
       ${d.aiPayload?.source_review_reason?`<div class="section"><h3>본문 범위 확인 필요</h3><p>${esc(d.aiPayload.source_review_reason)}</p></div>`:''}
+      ${(d.aiPayload?.evidence?.handwritten_notes||[]).length?`<div class="section"><h3>수기 메모</h3>${d.aiPayload.evidence.handwritten_notes.map(n=>`<div class="fact">${esc(n.text)}<div class="doc-sub">${esc(n.location||'')}${n.uncertain?' · 판독 확인 필요':''}</div></div>`).join('')}</div>`:''}
+      ${(d.aiPayload?.evidence?.conflicts||[]).length?`<div class="section"><h3>인쇄 내용과 다른 부분</h3>${d.aiPayload.evidence.conflicts.map(c=>`<p><b>${esc(c.field)}</b> · 인쇄: ${esc(c.printed_value)} / 수기: ${esc(c.handwritten_value)}<br>${esc(c.reason)}</p>`).join('')}</div>`:''}
       <div class="section"><h3>AI 요약</h3><p>${esc(d.summary||'AI 분석 대기 중입니다.')}</p></div>
       <div class="section"><h3>반드시 기억할 사실</h3>${facts}</div>
       <div class="section"><h3>위험·기한·후속조치</h3>${actions}</div>
@@ -502,7 +507,8 @@ async function saveEdit(id){
             discipline:v('ed-discipline')||null,document_number:v('ed-number')||null,revision:v('ed-revision')||null,
             document_date:v('ed-date')||null,response_due_on:v('ed-due')||null,expires_on:v('ed-expires')||null,
             project_id:v('ed-project')?Number(v('ed-project')):null,site_id:v('ed-site')?Number(v('ed-site')):null,
-            virtual_path:v('ed-path')||null
+            virtual_path:v('ed-path')||null,
+            ...(document.getElementById('ed-evidence-reviewed')?{evidence_reviewed:document.getElementById('ed-evidence-reviewed').checked,evidence_review_note:v('ed-evidence-note')||null,evidence_review_version:currentDoc?.evidenceReviewVersion}: {})
         })});
         toast('문서 정보를 저장했습니다.');openDocument(id);loadDocuments()
     }catch(e){toast(e.message,true)}
@@ -730,5 +736,13 @@ if(window.parent===window || typeof window.parent.ERPDocumentNavigate!=='functio
     restoreDocumentNavigation({document:requested}).then(()=>rememberDocumentNavigation(true));
 }
 </script>
+@if($canEvidenceManage)
+<script src="{{ asset('js/document-evidence-batch.js') }}?v={{ filemtime(public_path('js/document-evidence-batch.js')) }}"></script>
+<script>
+DocumentEvidenceBatch.mount({url:@json(route('evidence-batches.index')),csrf:csrf,maxBytes:MAX_UPLOAD_BYTES,projectId:@json($defaultProjectId),
+    claimUrl:'/?view=billing-admin',onChanged:loadDocuments,openDocument:openDocument,
+    openClaim:function(id){if(window.parent!==window && window.parent.AdminClaimEvidence){window.parent.AdminClaimEvidence.open(id);return true;}return false;}});
+</script>
+@endif
 </body>
 </html>
