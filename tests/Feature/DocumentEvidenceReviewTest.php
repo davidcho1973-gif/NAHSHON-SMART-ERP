@@ -13,6 +13,7 @@ use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -92,6 +93,8 @@ class DocumentEvidenceReviewTest extends TestCase
 
     public function test_only_explicit_review_with_original_resolution_note_clears_source_warning_and_preserves_history(): void
     {
+        // Match CI's database timezone even when the app uses America/Phoenix.
+        DB::statement("SET LOCAL TIME ZONE 'UTC'");
         $document = $this->document();
         $this->patchJson(route('document-intelligence.review', $document), $this->reviewData($document, ['title' => 'Renamed only']))
             ->assertOk()->assertJsonPath('document.aiStatus', 'review_required');
@@ -118,13 +121,34 @@ class DocumentEvidenceReviewTest extends TestCase
     {
         $document = $this->document();
         $payload = $this->reviewData($document, ['evidence_reviewed' => true, 'evidence_review_note' => 'Read original']);
-        $document->update(['analyzed_at' => now()->addMinute()]);
-        $this->patchJson(route('document-intelligence.review', $document), $payload)->assertConflict();
+        $document->update(['analyzed_at' => $document->fresh()->analyzed_at->addMinute()]);
+        $this->patchJson(route('document-intelligence.review', $document), $payload)->assertConflict()
+            ->assertJsonPath('message', '분석 내용이 바뀌었거나 검토 화면이 오래되었습니다. 새로 열어 확인해 주세요.');
         $payload = $this->reviewData($document, ['evidence_reviewed' => true, 'evidence_review_note' => 'Read original']);
         Storage::disk('local')->delete($document->file_path);
-        $this->patchJson(route('document-intelligence.review', $document), $payload)->assertConflict();
+        $this->patchJson(route('document-intelligence.review', $document), $payload)->assertConflict()
+            ->assertJsonPath('message', '원본 파일을 확인할 수 없어 검토를 완료할 수 없습니다.');
         $this->assertNotEmpty($document->fresh()->ai_payload['source_review_reason']);
         $this->assertArrayNotHasKey('evidence_review', $document->fresh()->ai_payload);
+    }
+
+    public function test_review_version_tracks_analysis_changes_not_database_timezone_representation(): void
+    {
+        DB::statement("SET LOCAL TIME ZONE 'UTC'");
+        $document = $this->document();
+        $payload = $this->reviewData($document, ['evidence_reviewed' => true, 'evidence_review_note' => 'Read original']);
+        $utcVersion = $document->fresh()->evidenceReviewVersion();
+        DB::statement("SET LOCAL TIME ZONE 'America/New_York'");
+        $this->assertSame($utcVersion, $document->fresh()->evidenceReviewVersion());
+        $this->patchJson(route('document-intelligence.review', $document), $payload)->assertOk()->assertJsonPath('document.aiStatus', 'ready');
+
+        // A changed result in the same second is also a genuinely stale form.
+        $document->refresh();
+        $analysis = $document->ai_payload;
+        $analysis['evidence']['conflicts'][0]['handwritten_value'] = '90';
+        $document->update(['ai_payload' => $analysis]);
+        $this->patchJson(route('document-intelligence.review', $document), $payload)->assertConflict()
+            ->assertJsonPath('message', '분석 내용이 바뀌었거나 검토 화면이 오래되었습니다. 새로 열어 확인해 주세요.');
     }
 
     public function test_unanalyzed_batch_cannot_be_marked_ready_and_its_source_cannot_be_changed(): void
@@ -212,7 +236,11 @@ class DocumentEvidenceReviewTest extends TestCase
 
     private function reviewData(IntelligentDocument $document, array $extra = []): array
     {
+        // Browsers receive this opaque version from show(), never manufacture it
+        // from the pre-database model whose timestamp has not round-tripped yet.
+        $version = $this->getJson(route('document-intelligence.show', $document))->assertOk()->json('document.evidenceReviewVersion');
+
         return array_replace(['title' => $document->title, 'category' => $document->category, 'document_type' => $document->document_type,
-            'site_id' => $document->site_id, 'project_id' => $document->project_id, 'evidence_review_version' => $document->evidenceReviewVersion()], $extra);
+            'site_id' => $document->site_id, 'project_id' => $document->project_id, 'evidence_review_version' => $version], $extra);
     }
 }

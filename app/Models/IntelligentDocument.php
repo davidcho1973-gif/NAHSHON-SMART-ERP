@@ -134,7 +134,9 @@ class IntelligentDocument extends Model
 
     public function evidenceReviewVersion(): string
     {
-        return hash('sha256', json_encode([$this->sha256, $this->analyzed_at?->toIso8601String(),
+        // PostgreSQL may present the same timestamptz instant in different session
+        // timezones. Its representation must not invalidate an unchanged review.
+        return hash('sha256', json_encode([$this->sha256, $this->analyzed_at?->getTimestamp(),
             $this->ai_payload['evidence'] ?? null], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
