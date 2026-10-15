@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\ManagerInvitationException;
 use App\Models\Employee;
 use App\Models\ManagerInvitation;
 use App\Models\Site;
@@ -10,6 +11,7 @@ use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Auth\ManagerInvitationService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -295,6 +297,26 @@ class ManagerInvitationTest extends TestCase
         $this->assertNull(ManagerInvitation::findOrFail($invite['id'])->accepted_at);
         $this->assertDatabaseCount('manager_invitations', 1);
         $this->assertSame('worker', $this->worker->fresh()->access_role);
+    }
+
+    public function test_recovery_links_ignore_external_redirect_inputs_and_reject_malformed_tokens(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        $external = 'https://untrusted.example/collect';
+        $this->post($invite['url'].'/complete?return_to='.urlencode($external), [])->assertGone()
+            ->assertSee('href="'.$invite['url'].'"', false)->assertDontSee($external);
+        $this->get(route('manager-invitation.show', ['token' => str_repeat('x', 64), 'return_to' => $external]))
+            ->assertGone()->assertSee('새 초대 링크')->assertDontSee($external)
+            ->assertDontSee('Existing Worker')->assertDontSee($this->owner->email)
+            ->assertDontSee('2025550147')->assertDontSee('account_fingerprint')->assertDontSee('token_hash');
+
+        $response = ManagerInvitationException::verificationExpired('https://untrusted.example/" onclick="alert(1)')
+            ->render(Request::create('/manager-invitation/invalid'));
+        $this->assertSame(410, $response->getStatusCode());
+        $this->assertStringNotContainsString('untrusted.example', $response->getContent());
+        $this->assertStringNotContainsString('onclick=', $response->getContent());
+        $this->assertStringNotContainsString('href="http://localhost/manager-invitation/', $response->getContent());
     }
 
     public function test_invalid_scope_and_credentialed_worker_are_rejected(): void
