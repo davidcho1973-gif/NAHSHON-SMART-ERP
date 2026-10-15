@@ -1,5 +1,11 @@
 # WORK LOG
 
+## CODEX — 2026-10-15 Manager invitation recovery guidance
+
+Expected invitation denials and expired phone verification both fell through to the generic English HTTP 410 error page. Keep all existing denial conditions, the seven-day single-use lifetime, the 15-minute verification lifetime, fingerprint checks, assigned grants and account creation rules unchanged. Render a private Korean recovery page: expired/missing verification can reopen the normal invitation verification route, while unusable links explain login after completed registration or requesting a replacement from the original inviter. JSON clients retain 410 and receive a safe error code. Public errors never contain account details or the private reason a link became unusable; only a verification-restart link carries its original token, with no-store and no-referrer headers.
+
+Regression coverage includes preview/repeated GETs with unchanged invitation records, password and Google callback timeout denial, successful re-verification, new-employee enrollment without duplicate records, invalid/revoked/account-changed/used links remaining blocked, and JSON responses without token or submitted-credential echoes. The observed production 410 alone cannot establish which validity condition rejected that particular invitation; this change does not claim to restore it or alter real accounts. PHP/PostgreSQL are unavailable in the workspace, so the regression-first and final PHP 8.5/PostgreSQL 17 runs are checked in GitHub Actions before release. No production invitation is consumed or reissued during validation.
+
 ## CODEX — 2026-10-15 Read-only mobile home unread counts
 
 Mobile home calculated its unread badge through a room-list method that also provisioned standing chat rooms and memberships. For a linked employee with a scoped job grant, shared rooms can be outside the generic business-data scope; attempting to write a membership of that hidden parent raised a 403 before the home rendered. Repeated reads could also leave duplicate standing rooms.

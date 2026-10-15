@@ -162,6 +162,24 @@ class NewManagerInvitationTest extends TestCase
         $this->assertDatabaseCount('users', 1);
     }
 
+    public function test_new_employee_can_restart_expired_verification_without_creating_duplicate_accounts(): void
+    {
+        $invite = $this->issue();
+        $this->details($invite);
+        $this->travel(16)->minutes();
+        $this->finish($invite)->assertGone()->assertSee('전화번호 다시 확인')->assertSee($invite['url'], false);
+        $this->assertGuest();
+        $this->assertDatabaseCount('employees', 0);
+        $this->assertDatabaseCount('users', 1);
+        $this->get($invite['url'])->assertOk()->assertSee('전화번호 전체')->assertDontSee('로그인 방법을 선택하세요.');
+        $this->post($invite['url'].'/verify', ['name' => 'New Manager', 'phone' => '2025550147'])->assertRedirect();
+        $this->finish($invite)->assertRedirect(route('manager-invitation.welcome'));
+        $this->assertDatabaseCount('employees', 1);
+        $this->assertDatabaseCount('users', 2);
+        $this->assertDatabaseCount('manager_invitations', 1);
+        $this->get($invite['url'])->assertGone()->assertSee('이미 등록을 완료했다면')->assertDontSee('전화번호 다시 확인');
+    }
+
     public function test_new_google_enrollment_and_duplicate_google_identity_are_atomic(): void
     {
         config(['services.google.client_id' => 'client', 'services.google.client_secret' => 'secret']);

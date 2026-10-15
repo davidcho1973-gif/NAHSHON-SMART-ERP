@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\ManagerInvitationException;
 use App\Models\Employee;
 use App\Models\ManagerInvitation;
 use App\Models\Site;
@@ -10,6 +11,7 @@ use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Auth\ManagerInvitationService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -191,6 +193,130 @@ class ManagerInvitationTest extends TestCase
         $this->owner->update(['account_status' => 'suspended']);
         $this->get($invite['url'])->assertGone();
         $this->assertSame('worker', $this->worker->fresh()->access_role);
+    }
+
+    public function test_link_previews_and_repeated_opens_do_not_consume_the_invitation(): void
+    {
+        $invite = $this->issue();
+        $before = ManagerInvitation::findOrFail($invite['id'])->getRawOriginal();
+        $this->guest();
+        foreach (['KakaoTalk Link Preview', 'Mozilla/5.0', 'Mozilla/5.0'] as $agent) {
+            $this->withHeader('User-Agent', $agent)->get($invite['url'])->assertOk()
+                ->assertSee('관리자 초대 등록')->assertDontSee('Existing Worker');
+        }
+        $this->assertSame($before, ManagerInvitation::findOrFail($invite['id'])->getRawOriginal());
+        $this->assertNull(session(ManagerInvitationService::SESSION));
+        $this->assertSame('worker', $this->worker->fresh()->access_role);
+    }
+
+    public function test_expired_phone_verification_has_a_safe_restart_without_granting_access(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        $this->post($invite['url'].'/verify', ['phone' => '2025550147'])->assertRedirect();
+        $this->travel(16)->minutes();
+        $this->post($invite['url'].'/complete', ['email' => 'new@example.com', 'password' => 'NewPassword123', 'password_confirmation' => 'NewPassword123'])
+            ->assertGone()->assertSee('전화번호를 다시 확인해 주세요')->assertSee('전화번호 다시 확인')
+            ->assertSee($invite['url'], false)->assertDontSee('NewPassword123')
+            ->assertHeader('Referrer-Policy', 'no-referrer')->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertGuest();
+        $this->assertNull(ManagerInvitation::findOrFail($invite['id'])->accepted_at);
+        $this->assertSame('worker', $this->worker->fresh()->access_role);
+        $this->get($invite['url'])->assertOk()->assertSee('전화번호 확인')->assertDontSee('로그인 방법을 선택하세요.');
+        $this->post($invite['url'].'/verify', ['phone' => '2025550147'])->assertRedirect();
+        $this->post($invite['url'].'/complete', ['email' => 'new@example.com', 'password' => 'NewPassword123', 'password_confirmation' => 'NewPassword123'])
+            ->assertRedirect(route('manager-invitation.welcome'));
+        $this->assertAuthenticatedAs($this->worker);
+    }
+
+    public function test_google_callback_after_phone_timeout_shows_reverification_and_never_logs_in(): void
+    {
+        config(['services.google.client_id' => 'client', 'services.google.client_secret' => 'secret']);
+        Http::fake([
+            config('services.google.token_url') => Http::response(['access_token' => 'token']),
+            config('services.google.userinfo_url') => Http::response(['sub' => 'new-google', 'email' => 'google@example.com', 'email_verified' => true]),
+        ]);
+        $invite = $this->issue();
+        $this->guest();
+        $this->post($invite['url'].'/verify', ['phone' => '2025550147'])->assertRedirect();
+        $this->get(route('auth.google.redirect'))->assertRedirect();
+        $state = session('google_oauth_state');
+        $this->travel(16)->minutes();
+        $this->get(route('auth.google.callback', ['state' => $state, 'code' => 'code']))
+            ->assertGone()->assertSee('전화번호 다시 확인')->assertSee($invite['url'], false);
+        $this->assertGuest();
+        $this->assertNull(ManagerInvitation::findOrFail($invite['id'])->accepted_at);
+        $this->assertNull($this->worker->fresh()->google_id);
+        $this->get($invite['url'])->assertOk()->assertDontSee('로그인 방법을 선택하세요.');
+    }
+
+    public function test_unavailable_invitations_explain_recovery_without_exposing_identity_or_reviving_the_link(): void
+    {
+        $first = $this->issue();
+        $second = $this->issue();
+        $this->guest();
+        $this->get($first['url'])->assertGone()->assertSee('이 초대 링크로는 등록을 진행할 수 없습니다')
+            ->assertSee('새 초대 링크')->assertSee('이미 등록을 완료했다면')
+            ->assertSee(route('login', ['erp' => 1]), false)->assertDontSee('Existing Worker')
+            ->assertDontSee(basename($first['url']))->assertDontSee('전화번호 다시 확인')
+            ->assertHeader('Referrer-Policy', 'no-referrer')->assertHeader('Cache-Control', 'no-store, private');
+        $this->post($first['url'].'/verify', ['phone' => '2025550147'])->assertGone()->assertSee('새 초대 링크');
+        $this->get($second['url'])->assertOk();
+        $this->worker->update(['access_scope' => 'all_sites']);
+        $this->get($second['url'])->assertGone()->assertSee('새 초대 링크');
+        $this->assertGuest();
+        $this->assertDatabaseCount('manager_invitations', 2);
+        $this->assertNull(ManagerInvitation::findOrFail($second['id'])->accepted_at);
+        $this->assertSame('worker', $this->worker->fresh()->access_role);
+    }
+
+    public function test_json_denials_keep_410_without_echoing_the_token_or_submitted_credentials(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        $this->postJson($invite['url'].'/complete', ['email' => 'private@example.com', 'password' => 'NewPassword123'])
+            ->assertGone()->assertJsonPath('code', 'invitation_verification_required')
+            ->assertDontSee(basename($invite['url']))->assertDontSee('private@example.com')->assertDontSee('NewPassword123')
+            ->assertHeader('Referrer-Policy', 'no-referrer')->assertHeader('Cache-Control', 'no-store, private');
+        ManagerInvitation::findOrFail($invite['id'])->update(['revoked_at' => now()]);
+        $this->getJson($invite['url'])->assertGone()->assertJsonPath('code', 'invitation_unavailable')
+            ->assertDontSee('Existing Worker')->assertDontSee(basename($invite['url']));
+        $this->assertNull($this->worker->fresh()->email);
+        $this->assertGuest();
+    }
+
+    public function test_a_restart_link_does_not_restore_a_revoked_or_unknown_invitation(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        ManagerInvitation::findOrFail($invite['id'])->update(['revoked_at' => now()]);
+        $this->post($invite['url'].'/complete', [])->assertGone()->assertSee('전화번호 다시 확인');
+        $this->get($invite['url'])->assertGone()->assertSee('새 초대 링크')->assertDontSee('전화번호 다시 확인');
+        $this->get(route('manager-invitation.show', ['token' => str_repeat('x', 64)]))
+            ->assertGone()->assertSee('새 초대 링크')->assertDontSee('Existing Worker');
+        $this->assertNull(ManagerInvitation::findOrFail($invite['id'])->accepted_at);
+        $this->assertDatabaseCount('manager_invitations', 1);
+        $this->assertSame('worker', $this->worker->fresh()->access_role);
+    }
+
+    public function test_recovery_links_ignore_external_redirect_inputs_and_reject_malformed_tokens(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        $external = 'https://untrusted.example/collect';
+        $this->post($invite['url'].'/complete?return_to='.urlencode($external), [])->assertGone()
+            ->assertSee('href="'.$invite['url'].'"', false)->assertDontSee($external);
+        $this->get(route('manager-invitation.show', ['token' => str_repeat('x', 64), 'return_to' => $external]))
+            ->assertGone()->assertSee('새 초대 링크')->assertDontSee($external)
+            ->assertDontSee('Existing Worker')->assertDontSee($this->owner->email)
+            ->assertDontSee('2025550147')->assertDontSee('account_fingerprint')->assertDontSee('token_hash');
+
+        $response = ManagerInvitationException::verificationExpired('https://untrusted.example/" onclick="alert(1)')
+            ->render(Request::create('/manager-invitation/invalid'));
+        $this->assertSame(410, $response->getStatusCode());
+        $this->assertStringNotContainsString('untrusted.example', $response->getContent());
+        $this->assertStringNotContainsString('onclick=', $response->getContent());
+        $this->assertStringNotContainsString('href="http://localhost/manager-invitation/', $response->getContent());
     }
 
     public function test_invalid_scope_and_credentialed_worker_are_rejected(): void

@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\Exceptions\ManagerInvitationException;
 use App\Models\AuthEvent;
 use App\Models\Company;
 use App\Models\Employee;
@@ -149,7 +150,9 @@ class ManagerInvitationService
     public function find(string $token): ManagerInvitation
     {
         $invite = ManagerInvitation::where('token_hash', hash('sha256', $token))->first();
-        abort_unless($invite && $this->valid($invite), 410, '초대가 만료·취소되었거나 이미 사용되었습니다. 관리자에게 새 초대를 요청하세요.');
+        if (! $invite || ! $this->valid($invite)) {
+            throw ManagerInvitationException::unavailable();
+        }
 
         return $invite;
     }
@@ -244,14 +247,18 @@ class ManagerInvitationService
     public function accept(Request $request, string $email, ?string $password = null, ?string $googleId = null): User
     {
         $token = $this->sessionToken($request);
-        abort_unless($token, 410, '전화번호 확인부터 다시 진행하세요.');
+        if (! $token) {
+            throw ManagerInvitationException::verificationExpired();
+        }
         $email = Str::lower(trim($email));
         $user = DB::transaction(function () use ($token, $email, $password, $googleId, $request) {
             $invite = $this->find($token);
             // Existing identity mutations lock the account first; new enrollments lock their invitation.
             $user = $invite->kind === 'existing_worker' ? User::query()->lockForUpdate()->findOrFail($invite->user_id) : null;
             $invite = ManagerInvitation::query()->lockForUpdate()->findOrFail($invite->id);
-            abort_unless($this->valid($invite), 410, '사용할 수 없는 초대입니다.');
+            if (! $this->valid($invite)) {
+                throw ManagerInvitationException::unavailable();
+            }
             // Distinct invitations can present the same login identity concurrently.
             DB::select('select pg_advisory_xact_lock(hashtext(?))', ['manager-email:'.$email]);
             if ($googleId) {
@@ -265,7 +272,9 @@ class ManagerInvitationService
             if (! $user) {
                 $session = $request->session()->get(self::SESSION);
                 $phone = WorkerPhone::normalize((string) ($session['phone'] ?? ''));
-                abort_unless($phone && filled($session['name'] ?? null), 410, '직원 정보 입력부터 다시 진행하세요.');
+                if (! $phone || blank($session['name'] ?? null)) {
+                    throw ManagerInvitationException::verificationExpired($token);
+                }
                 // Share the public registration/HR phone locks; one invitation can create only one identity.
                 DB::select('select pg_advisory_xact_lock(hashtext(?))', ['worker-register:'.$phone]);
                 DB::select('select pg_advisory_xact_lock(hashtext(?))', ['worker-phone:+'.$phone]);
