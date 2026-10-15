@@ -1,5 +1,13 @@
 # WORK LOG
 
+## CODEX — 2026-10-15 Select US site timezones
+
+Site registration previously required typing an IANA identifier and silently defaulted new sites to Phoenix, while local-day jobs only scheduled configured GA/AZ zones. The shared site create/edit form now offers a required region/city dropdown with 11 US regional choices (including separate Arizona/Hawaii and US territories), backed by one `Site::US_TIMEZONE_OPTIONS` catalog. New sites have no implicit timezone; saved non-catalog zones remain selectable during edits. Existing server timezone validation and access controls remain intact, with no data migration or existing-site rewrite.
+
+`config/site-schedule.php` now represents additional zones: `SiteSchedule` always includes the shared US catalog and application zone, plus trimmed/deduplicated configured extras. This shared-config change ensures every offered region receives the existing local attendance/daily-report jobs without querying the database every scheduler tick. Exact-zone filtering is preserved, including regions with matching UTC offsets.
+
+Local PHP 8.5 targeted registration/permissions/work rules/site clock/scheduling: 43 tests, 232 assertions passed. All 155 JavaScript tests pass after correcting the local Bash PATH for the environment test; static build, Pint and diff checks pass. Actual-code synthetic Chrome checks cover required selection, chosen IANA save payload, existing US/non-US/legacy zones and a 390px screen without horizontal overflow or JS errors. No production business records modified. Full Linux regression, staging and production verification remain release gates.
+
 ## CODEX — 2026-10-15 Manager invitation recovery guidance
 
 Expected invitation denials and expired phone verification both fell through to the generic English HTTP 410 error page. Keep all existing denial conditions, the seven-day single-use lifetime, the 15-minute verification lifetime, fingerprint checks, assigned grants and account creation rules unchanged. Render a private Korean recovery page: expired/missing verification can reopen the normal invitation verification route, while unusable links explain login after completed registration or requesting a replacement from the original inviter. JSON clients retain 410 and receive a safe error code. Public errors never contain account details or the private reason a link became unusable; only a verification-restart link carries its original token, with no-store and no-referrer headers.

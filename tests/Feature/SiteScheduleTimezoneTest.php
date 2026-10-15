@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Support\SiteSchedule;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -18,22 +19,57 @@ class SiteScheduleTimezoneTest extends TestCase
     {
         foreach (['2026-09-12 20:05:00', '2026-12-12 21:05:00'] as $instant) {
             Carbon::setTestNow(Carbon::parse($instant, 'UTC'));
-            $events = collect(app(Schedule::class)->events())->filter(fn ($e) => str_contains($e->command ?? '', 'attendance:auto-clockout') && $e->isDue(app()));
+            $events = collect(app(Schedule::class)->events())->filter(fn ($e) => str_contains($e->command ?? '', 'attendance:auto-clockout') && $e->timezone === 'America/New_York' && $e->isDue(app()));
             $this->assertCount(1, $events);
             $this->assertStringContainsString('America/New_York', $events->first()->command);
         }
         Carbon::setTestNow(Carbon::parse('2026-09-12 23:05:00', 'UTC'));
-        $events = collect(app(Schedule::class)->events())->filter(fn ($e) => str_contains($e->command ?? '', 'attendance:auto-clockout') && $e->isDue(app()));
+        $events = collect(app(Schedule::class)->events())->filter(fn ($e) => str_contains($e->command ?? '', 'attendance:auto-clockout') && $e->timezone === 'America/Phoenix' && $e->isDue(app()));
         $this->assertCount(1, $events);
         $this->assertStringContainsString('America/Phoenix', $events->first()->command);
         Carbon::setTestNow();
+    }
+
+    public function test_every_selectable_us_zone_has_local_jobs_in_winter_and_summer(): void
+    {
+        $scheduled = collect(app(Schedule::class)->events());
+        foreach (array_keys(Site::US_TIMEZONE_OPTIONS) as $timezone) {
+            $jobs = $scheduled->filter(fn ($event) => $event->timezone === $timezone
+                && str_contains($event->command ?? '', '--timezone='.$timezone));
+            // Attendance finalization (evening + safety net), indirect clockout,
+            // digest, plan/report sending and morning brief must all be present.
+            $this->assertCount(7, $jobs, $timezone);
+            $clockout = $jobs->first(fn ($event) => str_contains($event->command, 'attendance:auto-clockout'));
+            $this->assertNotNull($clockout, $timezone);
+
+            foreach (['2026-01-15', '2026-07-15'] as $day) {
+                Carbon::setTestNow(Carbon::parse($day.' 16:05:00', $timezone)->utc());
+                $this->assertTrue($clockout->isDue(app()), $timezone.' '.$day.' local closeout');
+                Carbon::setTestNow(Carbon::parse($day.' 16:04:00', $timezone)->utc());
+                $this->assertFalse($clockout->isDue(app()), $timezone.' '.$day.' must not run early');
+            }
+        }
+        Carbon::setTestNow();
+    }
+
+    public function test_additional_configured_and_application_zones_are_trimmed_and_retained_once(): void
+    {
+        config()->set('site-schedule.timezones', ' Asia/Seoul, America/Chicago, ,Asia/Seoul,America/Detroit ');
+        config()->set('app.timezone', ' America/Toronto ');
+
+        $zones = SiteSchedule::timezones();
+
+        foreach (array_merge(array_keys(Site::US_TIMEZONE_OPTIONS), ['Asia/Seoul', 'America/Detroit', 'America/Toronto']) as $timezone) {
+            $this->assertSame(1, count(array_filter($zones, fn ($zone) => $zone === $timezone)), $timezone);
+        }
+        $this->assertNotContains('', $zones);
     }
 
     public function test_georgia_clockout_does_not_close_arizona_workers(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-12 20:05:00', 'UTC'));
         $employees = [];
-        foreach (['GA' => 'America/New_York', 'AZ' => 'America/Phoenix'] as $code => $tz) {
+        foreach (['GA' => 'America/New_York', 'AZ' => 'America/Phoenix', 'LA' => 'America/Los_Angeles'] as $code => $tz) {
             $site = Site::create(['code' => $code, 'name' => $code, 'timezone' => $tz, 'status' => 'active']);
             $employee = Employee::create(['site_id' => $site->id, 'first_name' => $code, 'employment_status' => 'active', 'employment_type' => Employee::TYPE_INDIRECT]);
             $employees[$code] = $employee;
@@ -44,6 +80,14 @@ class SiteScheduleTimezoneTest extends TestCase
         $this->assertDatabaseMissing('attendance_logs', ['employee_id' => $employees['AZ']->id, 'event_type' => 'clock_out']);
         $this->artisan('attendance:auto-clockout', ['--timezone' => 'America/New_York'])->assertSuccessful();
         $this->assertSame(1, AttendanceLog::where('event_type', 'clock_out')->count());
+
+        // LA and Phoenix share the September UTC offset, but one zone's job
+        // must never close workers belonging to the other zone.
+        Carbon::setTestNow(Carbon::parse('2026-09-12 23:05:00', 'UTC'));
+        $this->artisan('attendance:auto-clockout', ['--timezone' => 'America/Phoenix'])->assertSuccessful();
+        $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employees['AZ']->id, 'event_type' => 'clock_out']);
+        $this->assertDatabaseMissing('attendance_logs', ['employee_id' => $employees['LA']->id, 'event_type' => 'clock_out']);
+        $this->assertSame(2, AttendanceLog::where('event_type', 'clock_out')->count());
         Carbon::setTestNow();
     }
 }
