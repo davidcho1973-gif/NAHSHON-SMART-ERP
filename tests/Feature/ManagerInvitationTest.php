@@ -268,6 +268,35 @@ class ManagerInvitationTest extends TestCase
         $this->assertSame('worker', $this->worker->fresh()->access_role);
     }
 
+    public function test_json_denials_keep_410_without_echoing_the_token_or_submitted_credentials(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        $this->postJson($invite['url'].'/complete', ['email' => 'private@example.com', 'password' => 'NewPassword123'])
+            ->assertGone()->assertJsonPath('code', 'invitation_verification_required')
+            ->assertDontSee(basename($invite['url']))->assertDontSee('private@example.com')->assertDontSee('NewPassword123')
+            ->assertHeader('Referrer-Policy', 'no-referrer')->assertHeader('Cache-Control', 'no-store, private');
+        ManagerInvitation::findOrFail($invite['id'])->update(['revoked_at' => now()]);
+        $this->getJson($invite['url'])->assertGone()->assertJsonPath('code', 'invitation_unavailable')
+            ->assertDontSee('Existing Worker')->assertDontSee(basename($invite['url']));
+        $this->assertNull($this->worker->fresh()->email);
+        $this->assertGuest();
+    }
+
+    public function test_a_restart_link_does_not_restore_a_revoked_or_unknown_invitation(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        ManagerInvitation::findOrFail($invite['id'])->update(['revoked_at' => now()]);
+        $this->post($invite['url'].'/complete', [])->assertGone()->assertSee('전화번호 다시 확인');
+        $this->get($invite['url'])->assertGone()->assertSee('새 초대 링크')->assertDontSee('전화번호 다시 확인');
+        $this->get(route('manager-invitation.show', ['token' => str_repeat('x', 64)]))
+            ->assertGone()->assertSee('새 초대 링크')->assertDontSee('Existing Worker');
+        $this->assertNull(ManagerInvitation::findOrFail($invite['id'])->accepted_at);
+        $this->assertDatabaseCount('manager_invitations', 1);
+        $this->assertSame('worker', $this->worker->fresh()->access_role);
+    }
+
     public function test_invalid_scope_and_credentialed_worker_are_rejected(): void
     {
         $this->actingAsPurchaseUser($this->owner);

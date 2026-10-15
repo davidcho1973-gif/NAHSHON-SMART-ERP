@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ManagerInvitationException;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Auth\ManagerInvitationService;
@@ -175,7 +176,9 @@ class GoogleAuthController extends Controller
 
         $invitationToken = $request->session()->pull('google_oauth_invitation');
         if ($invitationToken !== null) {
-            abort_unless($invitationToken === app(ManagerInvitationService::class)->sessionToken($request), 410, '초대 확인이 만료되었습니다. 초대 링크에서 다시 시작하세요.');
+            if ($invitationToken !== app(ManagerInvitationService::class)->sessionToken($request)) {
+                throw ManagerInvitationException::verificationExpired($invitationToken);
+            }
             try {
                 app(ManagerInvitationService::class)->accept($request, $email, googleId: $googleId);
             } catch (ValidationException $exception) {

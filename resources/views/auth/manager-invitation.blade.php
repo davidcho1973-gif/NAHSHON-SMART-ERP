@@ -12,6 +12,7 @@
 <p>초대를 받은 본인만 진행하세요. 국가번호를 함께 입력하세요. 미국 번호는 10자리로 입력할 수 있습니다.</p><button>{{ $newEmployee ? '로그인 정보 설정으로 계속' : '전화번호 확인' }}</button></form>
 @else
 <p><strong>{{ $newEmployee ? $enrollmentName : $user->name }}</strong> 님, {{ $newEmployee ? '직원 정보가 입력되었습니다.' : '전화번호가 확인되었습니다.' }} 로그인 방법을 선택하세요.</p>
+<p>전화번호 확인 후 15분 안에 등록을 완료해 주세요. 시간이 지나면 전화번호를 다시 확인할 수 있습니다.</p>
 @if($googleConfigured)<a class="button" href="{{ route('auth.google.redirect') }}">Google 계정으로 등록</a>@endif
 <form method="post" action="{{ route('manager-invitation.complete', ['token'=>$token]) }}">@csrf
 <label for="email">로그인에 사용할 이메일</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="255" value="{{ old('email') }}">

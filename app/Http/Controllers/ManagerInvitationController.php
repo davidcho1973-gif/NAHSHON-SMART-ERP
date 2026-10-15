@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ManagerInvitationException;
 use App\Models\User;
 use App\Services\Auth\ManagerInvitationService;
 use Illuminate\Http\Request;
@@ -42,7 +43,9 @@ class ManagerInvitationController extends Controller
 
     public function complete(string $token, Request $request, ManagerInvitationService $service)
     {
-        abort_unless($service->sessionToken($request) === $token, 410, '전화번호 확인부터 다시 진행하세요.');
+        if ($service->sessionToken($request) !== $token) {
+            throw ManagerInvitationException::verificationExpired($token);
+        }
         $input = $request->validate([
             'email' => ['required', 'email', 'max:255'],
             'password' => ['required', 'confirmed', Password::min(10)->letters()->numbers(), 'max:128'],
