@@ -1381,7 +1381,10 @@ class CommunicationService
     {
         $counts = [];
 
-        $this->roomsForUser($user)->each(function (CommunicationRoom $room) use ($user, &$counts): void {
+        // Counting a badge must not provision rooms or memberships. A scoped
+        // employee can read the app while a standing room is outside their job
+        // boundary; attempting that write here used to abort the entire home.
+        $this->roomQueryForUser($user)->get()->each(function (CommunicationRoom $room) use ($user, &$counts): void {
             $membership = $this->membershipForUser($room, $user)->first();
             $lastReadId = (int) ($membership?->last_read_message_id ?? 0);
 
