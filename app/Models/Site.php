@@ -49,6 +49,21 @@ class Site extends Model
         'CA' => '🇨🇦 Canada',
     ];
 
+    /** Shared by the site selector and local-day scheduler; IANA handles DST. */
+    public const US_TIMEZONE_OPTIONS = [
+        'America/New_York' => '동부 (ET) · 뉴욕 / 애틀랜타 / 사바나',
+        'America/Chicago' => '중부 (CT) · 시카고 / 댈러스 / 휴스턴',
+        'America/Denver' => '산악 (MT) · 덴버 / 솔트레이크시티',
+        'America/Phoenix' => '애리조나 · 피닉스 (서머타임 없음)',
+        'America/Los_Angeles' => '태평양 (PT) · 로스앤젤레스 / 시애틀',
+        'America/Anchorage' => '알래스카 · 앵커리지',
+        'America/Adak' => '알류샨 · 아다크',
+        'Pacific/Honolulu' => '하와이 · 호놀룰루 (서머타임 없음)',
+        'America/Puerto_Rico' => '대서양 · 푸에르토리코 / 미국령 버진제도',
+        'Pacific/Guam' => '차모로 · 괌 / 북마리아나',
+        'Pacific/Pago_Pago' => '사모아 · 미국령 사모아',
+    ];
+
     protected $fillable = [
         'company_id',
         'client_company_id',

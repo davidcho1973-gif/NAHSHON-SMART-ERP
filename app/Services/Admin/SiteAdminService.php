@@ -162,6 +162,7 @@ class SiteAdminService
             'success' => true,
             'companies' => $companies,
             'countries' => $this->pairs(Site::COUNTRY_OPTIONS),
+            'timezones' => $this->pairs(Site::US_TIMEZONE_OPTIONS),
             'statuses' => [['value' => 'active', 'label' => 'Active'], ['value' => 'inactive', 'label' => 'Inactive']],
             'sites' => Site::query()->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' · '.$s->name])->all(),
@@ -200,7 +201,7 @@ class SiteAdminService
             return ['success' => false, 'error' => '현장 코드와 현장명은 필수입니다.'];
         }
         if ($timezone === '' || ! in_array($timezone, timezone_identifiers_list(), true)) {
-            return ['success' => false, 'error' => '타임존이 올바르지 않습니다 (예: America/Phoenix). 출퇴근 시각의 기준이라 정확해야 합니다.'];
+            return ['success' => false, 'error' => '현장의 시간대(타임존)를 선택해 주세요. 출퇴근과 일일 마감의 기준입니다.'];
         }
         if (Site::query()->where('code', $code)->when($id > 0, fn ($q) => $q->whereKeyNot($id))->exists()) {
             return ['success' => false, 'error' => "이미 쓰고 있는 현장 코드입니다: {$code}"];
