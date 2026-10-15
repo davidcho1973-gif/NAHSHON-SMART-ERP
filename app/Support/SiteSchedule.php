@@ -9,10 +9,13 @@ final class SiteSchedule
 {
     public static function timezones(): array
     {
-        return array_values(array_unique(array_filter(array_merge(
+        // Every selectable site zone must receive the same local-day jobs. Keeping
+        // the catalog here avoids both missed new regions and a query each minute.
+        return array_values(array_unique(array_filter(array_map('trim', array_merge(
+            array_keys(Site::US_TIMEZONE_OPTIONS),
             explode(',', (string) config('site-schedule.timezones')),
             [(string) config('app.timezone')]
-        ))));
+        )))));
     }
 
     public static function matches(?Site $site, ?string $timezone): bool

@@ -60,6 +60,7 @@ class SiteAdminServiceTest extends TestCase
         $this->actingAs($this->user('worker'));
 
         $this->assertFalse($this->svc()->list()['success']);
+        $this->assertFalse($this->svc()->options()['success']);
     }
 
     public function test_site_manager_can_view_but_not_create(): void
@@ -91,6 +92,37 @@ class SiteAdminServiceTest extends TestCase
         // 코드는 QR·문서에 찍히므로 대문자로 통일한다.
         $this->assertSame('TX-HOU', $site->code);
         $this->assertSame('America/Chicago', $site->timezone);
+
+        $options = $this->svc()->options();
+        $this->assertTrue($options['success']);
+        $zones = array_column($options['timezones'], 'value');
+        $this->assertContains('America/New_York', $zones);
+        $this->assertContains('America/Chicago', $zones);
+        $this->assertContains('America/Los_Angeles', $zones);
+        $this->assertContains('America/Phoenix', $zones);
+        $this->assertContains('Pacific/Honolulu', $zones);
+        $this->assertSame([], array_diff($zones, timezone_identifiers_list()));
+
+        // Selecting a different region must persist and round-trip to the edit form.
+        $this->assertTrue($this->svc()->saveSite([
+            'id' => $site->id, 'code' => $site->code, 'name' => $site->name,
+            'timezone' => 'America/Los_Angeles',
+        ])['success']);
+        $row = collect($this->svc()->list()['sites'])->firstWhere('id', $site->id);
+        $this->assertSame('America/Los_Angeles', $row['timezone']);
+    }
+
+    public function test_existing_non_us_timezone_can_be_preserved_when_editing(): void
+    {
+        $this->actingAs($this->user('admin'));
+        $site = $this->site('SEOUL');
+        $site->update(['country' => 'KR', 'timezone' => 'Asia/Seoul']);
+
+        $this->assertTrue($this->svc()->saveSite([
+            'id' => $site->id, 'code' => $site->code, 'name' => 'Updated Seoul site',
+            'country' => 'KR', 'timezone' => $site->timezone,
+        ])['success']);
+        $this->assertSame('Asia/Seoul', $site->fresh()->timezone);
     }
 
     public function test_bad_timezone_is_refused(): void
@@ -101,6 +133,8 @@ class SiteAdminServiceTest extends TestCase
         $res = $this->svc()->saveSite(['code' => 'X1', 'name' => 'X', 'timezone' => 'Mars/Olympus']);
 
         $this->assertFalse($res['success']);
+        $this->assertDatabaseMissing('sites', ['code' => 'X1']);
+        $this->assertFalse($this->svc()->saveSite(['code' => 'X1', 'name' => 'X', 'timezone' => ''])['success']);
         $this->assertDatabaseMissing('sites', ['code' => 'X1']);
     }
 

@@ -231,6 +231,12 @@
     var row = id ? state.sites.filter(function (r) { return r.id === id; })[0] : null;
 
     loadOptions().then(function (o) {
+      var timezone = row && row.timezone ? row.timezone : '';
+      var timezones = (o.timezones || []).slice();
+      // Preserve a saved non-catalog zone when editing, without adding it to new sites.
+      if (timezone && !timezones.some(function (option) { return option.value === timezone; })) {
+        timezones.push({ value: timezone, label: '기존 설정 · ' + timezone });
+      }
       u.formModal({
         title: row ? '현장 수정' : '현장 등록',
         subtitle: row && row.crewCount
@@ -245,9 +251,9 @@
 
           { name: 'country', label: '국가', type: 'select', group: '시각 · 상태',
             options: o.countries, value: row ? row.country : 'US' },
-          { name: 'timezone', label: '타임존', required: true, group: '시각 · 상태',
-            value: row ? row.timezone : 'America/Phoenix',
-            hint: '출퇴근 시각과 일일 마감의 기준입니다. 틀리면 하루가 밀립니다. 예: America/Phoenix' },
+          { name: 'timezone', label: '시간대 (타임존)', type: 'select', required: true, group: '시각 · 상태',
+            options: timezones, value: timezone,
+            hint: '현장 지역을 선택하세요. 출퇴근·일일 마감에 적용되며 서머타임은 자동 반영됩니다.' },
           { name: 'status', label: '상태', type: 'select', required: true, group: '시각 · 상태',
             options: o.statuses, value: row ? row.status : 'active',
             hint: '끝난 현장은 지우지 말고 Inactive 로 두세요. 출퇴근 기록이 남습니다.' },
