@@ -62,7 +62,8 @@
             --blue: #0877BD; --ink: #10233F; --ink-2: #5A6270; --paper: #F3F6FA;
             background: var(--paper); color: var(--ink);
         }
-        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; box-sizing: border-box; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; }
         .card { width: min(100%, 440px); background: #fff; border-radius: 20px; padding: 28px 22px; text-align: center; box-shadow: 0 12px 30px rgba(16,35,63,.08); }
         h1, p { word-break: keep-all; }
         h1 { margin: 0 0 12px; font-size: 1.4rem; font-weight: 800; }
