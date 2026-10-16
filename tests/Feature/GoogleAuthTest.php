@@ -123,6 +123,47 @@ class GoogleAuthTest extends TestCase
             ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id);
     }
 
+    public function test_personal_app_google_login_returns_home_across_alias_host_sessions(): void
+    {
+        $this->configureGoogle();
+        config(['app.url' => 'https://erp.example.com',
+            'services.google.redirect' => 'https://erp.example.com/auth/google/callback']);
+        $user = User::factory()->create(['email' => 'admin@example.com', 'access_role' => 'admin',
+            'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->get('https://alias.example.com/login?app=1')->assertOk();
+        $response = $this->withSession(['url.intended' => '/manager-invitation/old-token'])
+            ->get('https://alias.example.com/auth/google?return_to=//untrusted.example')
+            ->assertRedirect('https://erp.example.com/auth/google?app=1')
+            ->assertSessionMissing('google_oauth_state')->assertSessionMissing('url.intended');
+
+        $this->app['session.store']->flush();
+        $this->get($response->headers->get('Location'))
+            ->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true);
+        $state = session('google_oauth_state');
+        $this->fakeGoogleProfile($user);
+        $this->get('https://erp.example.com/auth/google/callback?'.http_build_query(['state' => $state, 'code' => 'auth-code']))
+            ->assertRedirect('https://erp.example.com/attendance-app')
+            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION)
+            ->assertSessionMissing('url.intended')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id);
+        $this->assertAuthenticatedAs($user->fresh());
+        $this->assertSame('admin', $user->fresh()->access_role);
+    }
+
+    public function test_cancelled_personal_app_google_login_can_retry_without_registration(): void
+    {
+        $this->configureGoogle();
+        Http::fake();
+        $this->get('/login?app=1')->assertOk();
+        $this->get('/auth/google')->assertRedirect();
+        $this->get('/auth/google/callback?error=access_denied')->assertRedirect('/login')
+            ->assertSessionHasErrors('google')->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true);
+        $this->get('/login')->assertOk()->assertViewHas('appLogin', true)
+            ->assertSee('worker-app.webmanifest')->assertSee('다시 직원등록하지 않아도 됩니다.');
+        $this->assertGuest();
+        Http::assertNothingSent();
+    }
+
     #[DataProvider('unsafeDestinations')]
     public function test_google_entry_does_not_forward_or_accept_an_unsafe_destination(mixed $destination): void
     {

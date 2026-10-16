@@ -22,13 +22,46 @@ class EmailPasswordAuthService
     /** Explicit ERP entry must authenticate rather than follow an old app landing. */
     public const ERP_LOGIN_SESSION = 'erp_login_requested';
 
+    /** An installed personal app returns to its fixed home after reauthentication. */
+    public const APP_LOGIN_SESSION = 'personal_app_login_requested';
+
     public static function rememberErpLogin(Request $request): bool
     {
         if ($request->boolean('erp')) {
             $request->session()->put(self::ERP_LOGIN_SESSION, true);
+        } elseif ($request->boolean('app')) {
+            $request->session()->forget(self::ERP_LOGIN_SESSION);
+        }
+
+        if ($request->session()->get(self::ERP_LOGIN_SESSION) === true) {
+            $request->session()->forget(self::APP_LOGIN_SESSION);
         }
 
         return $request->session()->get(self::ERP_LOGIN_SESSION) === true;
+    }
+
+    public static function rememberAppLogin(Request $request): bool
+    {
+        if (self::rememberErpLogin($request)) {
+            return false;
+        }
+        if ($request->boolean('app')) {
+            $request->session()->put(self::APP_LOGIN_SESSION, true);
+        }
+
+        return $request->session()->get(self::APP_LOGIN_SESSION) === true;
+    }
+
+    public static function takeAppDestination(Request $request): ?string
+    {
+        if ($request->session()->pull(self::APP_LOGIN_SESSION) !== true
+            || $request->session()->get(self::ERP_LOGIN_SESSION) === true) {
+            return null;
+        }
+        // Installation intent is navigation only: never accept a supplied URL or identity.
+        $request->session()->forget('url.intended');
+
+        return '/attendance-app';
     }
 
     /**

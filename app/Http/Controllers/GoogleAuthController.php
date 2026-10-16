@@ -23,6 +23,7 @@ class GoogleAuthController extends Controller
     {
         $user = $request->user();
         $erpLogin = EmailPasswordAuthService::rememberErpLogin($request);
+        $appLogin = EmailPasswordAuthService::rememberAppLogin($request);
 
         if ($user instanceof User && ! WorkerDeviceSession::isDeviceOnly($request)
             && (! $erpLogin || EmailPasswordAuthService::hasStrongAuthentication($request, $user))) {
@@ -32,19 +33,21 @@ class GoogleAuthController extends Controller
                 $request->session()->forget([EmailPasswordAuthService::ERP_LOGIN_SESSION, 'url.intended']);
             }
 
-            return redirect()->to($user->landingPath());
+            return redirect()->to(EmailPasswordAuthService::takeAppDestination($request) ?? $user->landingPath());
         }
 
         return view('auth.google-login', [
             'googleConfigured' => $this->googleIsConfigured(),
             'sessionExpired' => $request->boolean('expired'),
             'erpLogin' => $erpLogin,
+            'appLogin' => $appLogin,
         ]);
     }
 
     public function redirect(Request $request): RedirectResponse
     {
         $erpLogin = EmailPasswordAuthService::rememberErpLogin($request);
+        $appLogin = EmailPasswordAuthService::rememberAppLogin($request);
         if (! $this->googleIsConfigured()) {
             return $this->deny('Google login is not configured yet. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
         }
@@ -57,11 +60,15 @@ class GoogleAuthController extends Controller
         $intended = $this->safeDestinationPath($request->query('return_to'))
             ?? $this->safeDestinationPath($request->session()->get('url.intended'), $request->getSchemeAndHttpHost())
             ?? $this->safeDestinationPath($request->session()->get('url.intended'), $this->originFor((string) config('app.url')));
+        if ($appLogin) {
+            $intended = null;
+            $request->session()->forget('url.intended');
+        }
 
         // Alias-host cookies do not reach the configured callback host. Enter that
         // origin before creating OAuth state; never move a session or state token.
         if ($origin !== $request->getSchemeAndHttpHost()) {
-            $parameters = array_filter(['erp' => $erpLogin ? '1' : null, 'return_to' => $intended], fn ($value) => $value !== null);
+            $parameters = array_filter(['erp' => $erpLogin ? '1' : null, 'app' => $appLogin ? '1' : null, 'return_to' => $intended], fn ($value) => $value !== null);
 
             return redirect()->away($origin.route('auth.google.redirect', [], false)
                 .($parameters ? '?'.http_build_query($parameters) : ''));
@@ -240,12 +247,12 @@ class GoogleAuthController extends Controller
     private function destinationFor(Request $request, User $user): string
     {
         if ($request->session()->pull(EmailPasswordAuthService::ERP_LOGIN_SESSION) === true) {
-            $request->session()->forget('url.intended');
+            $request->session()->forget([EmailPasswordAuthService::APP_LOGIN_SESSION, 'url.intended']);
 
             return $user->landingPath();
         }
 
-        return $this->safeDestinationPath(
+        return EmailPasswordAuthService::takeAppDestination($request) ?? $this->safeDestinationPath(
             $request->session()->pull('url.intended'),
             $this->originFor((string) config('app.url')),
         ) ?? $user->landingPath();

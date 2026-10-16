@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  @if ($appLogin ?? false)
+    @include('partials.personal-app-meta')
+  @else
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,7 +14,8 @@
   <link rel="manifest" href="{{ route('erp.manifest') }}">
   <link rel="icon" href="{{ asset('images/app-icon.svg') }}" type="image/svg+xml">
   <link rel="apple-touch-icon" href="{{ asset('images/app-icon.svg') }}">
-  <title>{{ ($erpLogin ?? false) ? 'ERP 로그인' : 'Sign In' }} - {{ \App\Support\Org::name() }} SMART ERP</title>
+  @endif
+  <title>{{ ($erpLogin ?? false) ? 'ERP 로그인' : (($appLogin ?? false) ? '개인앱 로그인' : 'Sign In') }} - {{ \App\Support\Org::name() }} SMART ERP</title>
   <style>
     :root {
       color-scheme: light;
@@ -489,9 +493,11 @@
       </div>
 
       <div class="auth-actions">
-      <h1>{{ ($erpLogin ?? false) ? 'ERP 로그인' : 'Sign In' }}</h1>
+      <h1>{{ ($erpLogin ?? false) ? 'ERP 로그인' : (($appLogin ?? false) ? '개인앱 로그인' : 'Sign In') }}</h1>
       @if ($erpLogin ?? false)
         <p class="subtitle">본인 비밀번호 또는 Google로 로그인하세요.<br>개인앱 연결은 유지됩니다.</p>
+      @elseif ($appLogin ?? false)
+        <p class="subtitle">기존 계정으로 로그인하면 내 앱이 열립니다.<br>다시 직원등록하지 않아도 됩니다. / Sign in to reopen your app.</p>
       @else
         <p class="subtitle">등록된 이메일 또는 Google로 로그인하세요.<br>Sign in with your registered email or Google.</p>
       @endif
@@ -512,6 +518,8 @@
         @csrf
         @if ($erpLogin ?? false)
           <input type="hidden" name="erp" value="1">
+        @elseif ($appLogin ?? false)
+          <input type="hidden" name="app" value="1">
         @endif
         @if ($errors->has('email_login') || $errors->has('email') || $errors->has('password'))
           <div class="notice error" role="alert">{{ $errors->first('email_login') ?: ($errors->first('email') ?: $errors->first('password')) }}</div>
@@ -524,7 +532,7 @@
           style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
         <button type="submit" style="width:100%;min-height:50px;margin-top:16px;border:0;border-radius:10px;background:#183b62;color:#fff;font:inherit;font-weight:700;cursor:pointer">이메일로 로그인 / Sign in</button>
         <div id="email-login-help" style="font-size:12px;line-height:1.65;color:#526174;margin-top:13px">
-          @if ($erpLogin ?? false)
+          @if (($erpLogin ?? false) || ($appLogin ?? false))
             비밀번호가 없으면 등록된 Google 계정으로 로그인하세요.
             <br>Use your password or your registered Google account.
           @else
@@ -550,7 +558,7 @@
 
       <div class="divider">or</div>
 
-      <a class="google-button" href="{{ route('auth.google.redirect', ($erpLogin ?? false) ? ['erp' => 1] : []) }}" aria-disabled="{{ $googleConfigured ? 'false' : 'true' }}">
+      <a class="google-button" href="{{ route('auth.google.redirect', ($erpLogin ?? false) ? ['erp' => 1] : (($appLogin ?? false) ? ['app' => 1] : [])) }}" aria-disabled="{{ $googleConfigured ? 'false' : 'true' }}">
         <span class="google-mark">G</span>
         <span>Continue with Google</span>
       </a>
@@ -561,6 +569,8 @@
       @endunless
       @if (($erpLogin ?? false) && auth()->check())
         <p class="setup-note"><a href="{{ route('attendance-app.index') }}">개인앱으로 돌아가기 / Back to personal app</a></p>
+      @elseif ($appLogin ?? false)
+        <p class="setup-note"><a href="{{ route('worker-app.entry') }}">작업자 앱으로 돌아가기 / Back to worker app</a></p>
       @endif
       </div>
     </section>

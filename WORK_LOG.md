@@ -1,5 +1,15 @@
 # WORK LOG
 
+## CODEX — 2026-10-15 Stable employee registration and personal-app installation
+
+The enrollment completion and install guide previously invited saving the current page without a permanent app entry. A saved invitation could later expire with HTTP 410; the reported phone URL is unavailable, so that specific incident remains unconfirmed. Registration now reviews name/phone before submitting, preserves unverified employment/company and worker/self grants, and opens the permanent personal app for installation. Shared phones do not receive an install CTA for another worker. Registration itself never records attendance.
+
+All enrollment/recovery pages link the existing worker manifest, whose unchanged identity/start URL opens `/attendance-app`. Its browser scope now includes login and receipts; authorization is unchanged. Explicit `app=1` password/Google recovery returns to that fixed entry, including canonical-host OAuth and stale retired-QR cleanup; explicit ERP intent retains priority. Invalid/consumed invitation browser GETs and retired personal-QR bookmarks route to ordinary login without consuming tokens or selecting users; POST/JSON denial and phone-verification expiration remain enforced. These shared routes are changed only for safe browser recovery, with private/no-referrer responses.
+
+Installation help works when no native install event arrives; a failed/canceled prompt is not reported as installed. The installation entry remains available if attendance data is unavailable. Instructions begin by opening the personal app and end with closing/reopening the home icon and checking the employee name. No DB migration, employee rewrite or provider configuration is needed.
+
+Local PHP 8.5/PostgreSQL targeted integration: 164 cases verified (163 passed together; one new assertion corrected to exclude logout remember-token rotation, then passed with 39 assertions). All 161 JavaScript cases verified; the Windows Bash environment case passed on retry outside the sandbox. Static build, changed-file Pint and diff checks pass. Linux full regression, staged deployment and live verification remain release gates. Physical Android/iOS installation and the affected employee's original icon cannot be certified remotely.
+
 ## CODEX — 2026-10-15 Select US site timezones
 
 Site registration previously required typing an IANA identifier and silently defaulted new sites to Phoenix, while local-day jobs only scheduled configured GA/AZ zones. The shared site create/edit form now offers a required region/city dropdown with 11 US regional choices (including separate Arizona/Hawaii and US territories), backed by one `Site::US_TIMEZONE_OPTIONS` catalog. New sites have no implicit timezone; saved non-catalog zones remain selectable during edits. Existing server timezone validation and access controls remain intact, with no data migration or existing-site rewrite.

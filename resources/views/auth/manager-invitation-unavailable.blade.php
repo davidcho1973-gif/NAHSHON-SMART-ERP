@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="referrer" content="no-referrer">
     <title>관리자 초대 등록 안내</title>
+    @include('partials.personal-app-meta')
     <style>
         body{margin:0;background:#f3f5f8;font:16px system-ui;color:#17233b}
         main{box-sizing:border-box;max-width:486px;margin:40px auto;padding:28px;background:white;border-radius:16px}
@@ -29,7 +30,7 @@
         <p>아직 등록하지 않았다면 초대를 보낸 관리자에게 새 초대 링크를 요청해 주세요.</p>
     @endif
     <p>이미 등록을 완료했다면 초대 링크 대신 등록한 Google 계정 또는 이메일·ERP 비밀번호로 로그인해 주세요.</p>
-    <a class="button" href="{{ route('login', ['erp' => 1]) }}">로그인 화면으로 이동</a>
+    <a class="button" href="{{ route('login', ['app' => 1]) }}">기존 계정으로 개인앱 열기</a>
 </main>
 </body>
 </html>

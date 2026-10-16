@@ -55,6 +55,11 @@
             <a class="di-help" href="{{ route('install-guide') }}" target="_blank" rel="noopener"></a>
             <button type="button" class="di-later" data-di-dismiss></button>
         </div>
+        <div class="di-manual" hidden>
+            <p class="di-note" id="di-manual-note"></p>
+            <a class="di-help" href="{{ route('install-guide') }}" target="_blank" rel="noopener"></a>
+            <button type="button" class="di-later" data-di-dismiss></button>
+        </div>
     </div>
 </div>
 
@@ -129,8 +134,7 @@
         try { localStorage.setItem(KEY, '1'); } catch (e) {}
     }
 
-    // 사파리만 홈 화면 추가가 된다. 아이폰의 크롬·파이어폭스는 껍데기만 사파리라
-    // 판별이 안 되므로, 아이폰이면 일단 안내하고 "사파리에서 열어야 한다"고 덧붙인다.
+    // iOS uses its share menu. Other browsers may also support home-screen installation.
     function isIos() {
         return /iPad|iPhone|iPod/.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -147,6 +151,7 @@
         document.getElementById('di-s2').innerHTML = T.iosStep2;
         document.getElementById('di-s3').innerHTML = T.iosStep3;
         document.getElementById('di-safari').innerHTML = T.iosSafari;
+        document.getElementById('di-manual-note').textContent = T.manual;
         Array.prototype.forEach.call(root.querySelectorAll('.di-help'), function (a) {
             a.textContent = T.help;
             // 안내서도 지금 보고 있는 언어로 연다.
@@ -160,12 +165,13 @@
     function open(force) {
         if (installed()) return false;
         if (!force && dismissed()) return false;
-        // 안드로이드가 아직 설치 권한을 안 넘겼고 아이폰도 아니면, 보여 줄 방법이 없다.
-        if (!deferred && !isIos()) return false;
+        // Automatic suggestions wait for browser support; explicit taps always get help.
+        if (!force && !deferred && !isIos()) return false;
 
         paint();
         root.querySelector('.di-auto').hidden = !deferred;
-        root.querySelector('.di-ios').hidden = !!deferred;
+        root.querySelector('.di-ios').hidden = !!deferred || !isIos();
+        root.querySelector('.di-manual').hidden = !!deferred || isIos();
         root.hidden = false;
         return true;
     }
@@ -187,6 +193,7 @@
     window.addEventListener('beforeinstallprompt', function (ev) {
         ev.preventDefault();   // 브라우저 기본 배너를 막고 우리 시점에 띄운다.
         deferred = ev;
+        if (!root.hidden) open(true);
     });
 
     window.addEventListener('appinstalled', function () {
@@ -196,11 +203,13 @@
     });
 
     document.getElementById('di-go').addEventListener('click', function () {
-        if (!deferred) { close(true); return; }
+        if (!deferred) { open(true); return; }
         var p = deferred;
         deferred = null;             // 한 번 쓴 프롬프트는 다시 못 쓴다.
         close(false);
-        p.prompt();
+        try {
+            Promise.resolve(p.prompt()).catch(function () { open(true); });
+        } catch (e) { open(true); }
     });
 
     Array.prototype.forEach.call(root.querySelectorAll('[data-di-dismiss]'), function (el) {

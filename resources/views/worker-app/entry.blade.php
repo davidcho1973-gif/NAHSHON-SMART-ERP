@@ -16,6 +16,8 @@
         'body' => '이 휴대폰은 아직 현장에 등록되어 있지 않습니다. 현장에 붙은 파란 「새 작업자 등록」 QR 을 휴대폰 카메라로 찍어 이름과 전화번호를 넣어 주세요. 등록을 마치면 이 화면을 거치지 않고 바로 열립니다.',
         'gate' => '이미 등록했는데 안 열리면, 출입구 QR 을 한 번 찍은 뒤 다시 시도해 주세요.',
         'retry' => '다시 시도',
+        'signIn' => '이메일 · Google로 내 앱 열기',
+        'existing' => '이미 등록했다면 다시 등록하지 마세요. 계정이 있는 분은 아래에서 로그인할 수 있습니다.',
     ],
     'en' => [
         'wait' => 'One moment…',
@@ -27,6 +29,8 @@
         'body' => 'Scan the blue “New Worker Sign-Up” QR posted on site with your phone camera and enter your name and phone number. After that this screen is skipped.',
         'gate' => 'Already registered? Scan the gate QR once, then try again.',
         'retry' => 'Try again',
+        'signIn' => 'Open my app with email · Google',
+        'existing' => 'Already registered? Do not register again. If you have an account, sign in below.',
     ],
     'es' => [
         'wait' => 'Un momento…',
@@ -38,6 +42,8 @@
         'body' => 'Escanee con la cámara el QR azul de “Registro de trabajador nuevo” que está en la obra y escriba su nombre y teléfono. Después esta pantalla no aparece más.',
         'gate' => '¿Ya se registró? Escanee el QR de la entrada una vez y vuelva a intentar.',
         'retry' => 'Intentar de nuevo',
+        'signIn' => 'Abrir mi app con correo · Google',
+        'existing' => '¿Ya está registrado? No se registre de nuevo. Si tiene una cuenta, inicie sesión abajo.',
     ],
 ][$lang] ?? [])
 <!DOCTYPE html>
@@ -46,6 +52,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @include('partials.personal-app-meta')
     <title>{{ \App\Support\Org::name() }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
@@ -85,6 +92,8 @@
             <div id="matches"></div>
             <p style="font-size:13px;opacity:.75">{{ $t['body'] }}</p>
             <a class="go" href="{{ route('worker-app.entry') }}">{{ $t['retry'] }}</a>
+            <p style="font-size:13px;margin-top:20px">{{ $t['existing'] }}</p>
+            <a class="go" href="{{ route('login', ['app' => 1]) }}">{{ $t['signIn'] }}</a>
         </div>
 
         {{-- 토큰은 localStorage 에 있다. 서버는 그걸 못 읽으므로 여기서 한 번 건넨다.

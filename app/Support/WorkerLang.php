@@ -579,11 +579,12 @@ final class WorkerLang
         return [
             'ko' => [
                 'title' => '홈 화면에 추가하는 방법',
-                'lead' => '한 번만 해 두면 다음부터는 QR 을 찾지 않고 아이콘만 누르면 됩니다.',
+                'lead' => '먼저 아래 버튼으로 개인앱을 여세요. 개인앱 화면에서 홈 화면에 추가합니다.',
+                'openApp' => '개인앱 열고 설치하기',
                 'yours' => '지금 쓰시는 휴대폰',
                 'others' => '다른 휴대폰은 이렇게 합니다',
                 'why' => '왜 하나요?',
-                'whyBody' => '홈 화면에 아이콘이 생깁니다. 출퇴근을 찍을 때마다 QR 을 찾거나 주소를 치지 않아도 됩니다.',
+                'whyBody' => '설치 후 앱을 닫고 새 아이콘을 눌러 본인 이름이 나오는지 확인하세요. 다시 로그인이 필요하면 기존 계정으로 들어갑니다. 출퇴근 기록은 현장 QR과 확인 버튼으로 남깁니다.',
                 'ask' => '그래도 안 되면 현장 관리자에게 이 화면을 보여 주세요.',
                 'cases' => [
                     'in-app' => [
@@ -592,23 +593,23 @@ final class WorkerLang
                         'steps' => [
                             '화면 오른쪽 위(또는 아래)의 <b>⋯</b> 또는 <b>공유</b> 를 누릅니다.',
                             '<b>다른 브라우저로 열기</b> · <b>Safari로 열기</b> · <b>Chrome으로 열기</b> 중 하나를 누릅니다.',
-                            '브라우저가 열리면 이 화면을 다시 열고, 아래 방법대로 추가합니다.',
+                            '브라우저에서 위의 <b>개인앱 열고 설치하기</b>를 누른 뒤, 개인앱 화면에서 추가합니다.',
                         ],
                     ],
                     'ios-safari' => [
                         'name' => '아이폰 (사파리)',
                         'note' => '',
                         'steps' => [
-                            '화면 <b>아래 가운데</b> 의 <b>공유</b> 버튼(⬆️ 네모에 화살표)을 누릅니다.',
+                            '개인앱 화면에서 <b>공유</b> 버튼(⬆️ 네모에 화살표)을 누릅니다.',
                             '목록을 <b>아래로 내려</b> <b>홈 화면에 추가</b> 를 누릅니다.',
                             '오른쪽 위 <b>추가</b> 를 누르면 홈 화면에 아이콘이 생깁니다.',
                         ],
                     ],
                     'ios-other' => [
                         'name' => '아이폰 (크롬·네이버 등)',
-                        'note' => '아이폰은 <b>사파리에서만</b> 홈 화면에 추가됩니다.',
+                        'note' => '<b>홈 화면에 추가</b>가 안 보이면 Safari에서 개인앱을 열어 주세요.',
                         'steps' => [
-                            '주소창의 주소를 <b>길게 눌러 복사</b> 합니다.',
+                            '개인앱 화면에서 <b>공유</b> → <b>홈 화면에 추가</b>를 찾습니다. 없으면 개인앱 주소를 복사합니다.',
                             '홈 화면에서 <b>Safari</b> 를 열고 주소창에 <b>붙여넣기</b> 합니다.',
                             '아래 가운데 <b>공유</b> → <b>홈 화면에 추가</b> → <b>추가</b>.',
                         ],
@@ -636,7 +637,7 @@ final class WorkerLang
                         'note' => '홈 화면 추가는 휴대폰에서 합니다.',
                         'steps' => [
                             '휴대폰 카메라로 현장에 붙은 <b>QR</b> 을 찍습니다.',
-                            '열린 화면에서 이 안내를 다시 엽니다.',
+                            '등록 후 <b>개인앱 열고 설치하기</b>를 누릅니다.',
                             '위의 자기 휴대폰 방법대로 추가합니다.',
                         ],
                     ],
@@ -644,11 +645,12 @@ final class WorkerLang
             ],
             'en' => [
                 'title' => 'How to add this to your home screen',
-                'lead' => 'Do this once and you can tap the icon instead of finding the QR every time.',
+                'lead' => 'Open your personal app with the button below first. Add it to your home screen from the app screen.',
+                'openApp' => 'Open personal app to install',
                 'yours' => 'Your phone',
                 'others' => 'Other phones',
                 'why' => 'Why?',
-                'whyBody' => 'An icon appears on your home screen, so you do not have to find a QR code or type an address to clock in.',
+                'whyBody' => 'Close the app and tap the new icon to check your name. If asked to sign in again, use your existing account. Attendance still requires the site QR and confirmation button.',
                 'ask' => 'If it still does not work, show this screen to your site manager.',
                 'cases' => [
                     'in-app' => [
@@ -657,23 +659,23 @@ final class WorkerLang
                         'steps' => [
                             'Tap <b>⋯</b> or <b>Share</b> at the top (or bottom) of the screen.',
                             'Choose <b>Open in browser</b> / <b>Open in Safari</b> / <b>Open in Chrome</b>.',
-                            'When the browser opens, come back to this screen and follow the steps below.',
+                            'In the browser, tap <b>Open personal app to install</b> above, then add it from the app screen.',
                         ],
                     ],
                     'ios-safari' => [
                         'name' => 'iPhone (Safari)',
                         'note' => '',
                         'steps' => [
-                            'Tap the <b>Share</b> button (square with an arrow) at the <b>bottom center</b>.',
+                            'On your personal app screen, tap <b>Share</b> (square with an arrow).',
                             'Scroll <b>down</b> and tap <b>Add to Home Screen</b>.',
                             'Tap <b>Add</b> at the top right. The icon appears on your home screen.',
                         ],
                     ],
                     'ios-other' => [
                         'name' => 'iPhone (Chrome and others)',
-                        'note' => 'On iPhone only <b>Safari</b> can add to the home screen.',
+                        'note' => 'If you do not see <b>Add to Home Screen</b>, open the personal app in Safari.',
                         'steps' => [
-                            'Press and hold the address bar and <b>copy</b> the address.',
+                            'On your personal app screen, look for <b>Share</b> → <b>Add to Home Screen</b>. If missing, copy the personal app address.',
                             'Open <b>Safari</b> from your home screen and <b>paste</b> it in the address bar.',
                             'Tap <b>Share</b> → <b>Add to Home Screen</b> → <b>Add</b>.',
                         ],
@@ -701,7 +703,7 @@ final class WorkerLang
                         'note' => 'Adding to a home screen is done on a phone.',
                         'steps' => [
                             'Scan the <b>QR</b> posted on site with your phone camera.',
-                            'Open this guide again on the phone.',
+                            'After registering, tap <b>Open personal app to install</b>.',
                             'Follow the steps for your phone above.',
                         ],
                     ],
@@ -709,11 +711,12 @@ final class WorkerLang
             ],
             'es' => [
                 'title' => 'Cómo agregarlo a la pantalla de inicio',
-                'lead' => 'Hágalo una vez y después solo toque el ícono, sin buscar el código QR.',
+                'lead' => 'Primero abra su app personal con el botón de abajo. Agréguela a inicio desde la pantalla de la app.',
+                'openApp' => 'Abrir app personal para instalar',
                 'yours' => 'Su teléfono',
                 'others' => 'Otros teléfonos',
                 'why' => '¿Para qué?',
-                'whyBody' => 'Aparece un ícono en su pantalla de inicio, así no tiene que buscar el QR ni escribir la dirección para marcar.',
+                'whyBody' => 'Cierre la app y toque el nuevo ícono para verificar su nombre. Si se pide iniciar sesión, use su cuenta existente. Para marcar asistencia aún se requiere el QR de la obra y la confirmación.',
                 'ask' => 'Si aun así no funciona, muestre esta pantalla a su supervisor.',
                 'cases' => [
                     'in-app' => [
@@ -722,23 +725,23 @@ final class WorkerLang
                         'steps' => [
                             'Toque <b>⋯</b> o <b>Compartir</b> arriba (o abajo) en la pantalla.',
                             'Elija <b>Abrir en el navegador</b> / <b>Abrir en Safari</b> / <b>Abrir en Chrome</b>.',
-                            'Cuando abra el navegador, vuelva a esta pantalla y siga los pasos de abajo.',
+                            'En el navegador, toque <b>Abrir app personal para instalar</b> y agregue la app desde esa pantalla.',
                         ],
                     ],
                     'ios-safari' => [
                         'name' => 'iPhone (Safari)',
                         'note' => '',
                         'steps' => [
-                            'Toque el botón <b>Compartir</b> (cuadro con flecha) en el <b>centro inferior</b>.',
+                            'En su app personal, toque <b>Compartir</b> (cuadro con flecha).',
                             'Baje en la lista y toque <b>Agregar a inicio</b>.',
                             'Toque <b>Agregar</b> arriba a la derecha. El ícono aparece en su pantalla.',
                         ],
                     ],
                     'ios-other' => [
                         'name' => 'iPhone (Chrome y otros)',
-                        'note' => 'En iPhone solo <b>Safari</b> puede agregar a la pantalla de inicio.',
+                        'note' => 'Si no ve <b>Agregar a inicio</b>, abra la app personal en Safari.',
                         'steps' => [
-                            'Mantenga presionada la barra de direcciones y <b>copie</b> la dirección.',
+                            'En su app personal, busque <b>Compartir</b> → <b>Agregar a inicio</b>. Si no aparece, copie la dirección de la app personal.',
                             'Abra <b>Safari</b> y <b>pegue</b> la dirección.',
                             'Toque <b>Compartir</b> → <b>Agregar a inicio</b> → <b>Agregar</b>.',
                         ],
@@ -766,7 +769,7 @@ final class WorkerLang
                         'note' => 'Agregar a la pantalla de inicio se hace en el teléfono.',
                         'steps' => [
                             'Escanee con la cámara el <b>QR</b> puesto en la obra.',
-                            'Abra esta guía de nuevo en el teléfono.',
+                            'Después de registrarse, toque <b>Abrir app personal para instalar</b>.',
                             'Siga los pasos de su teléfono, arriba.',
                         ],
                     ],
@@ -801,6 +804,7 @@ final class WorkerLang
                 'iosStep2' => '목록을 내려 <b>홈 화면에 추가</b> 를 누릅니다',
                 'iosStep3' => '오른쪽 위 <b>추가</b> 를 누르면 끝입니다',
                 'iosSafari' => '공유 목록에 <b>홈 화면에 추가</b> 가 안 보이면, 이 주소를 사파리(Safari)로 열어 다시 해 보세요.',
+                'manual' => '브라우저 메뉴에서 앱 설치 또는 홈 화면에 추가를 선택하세요. 카카오톡 안에서 열었다면 다른 브라우저로 연 뒤 진행하세요. 메뉴가 없으면 아래 자세한 방법을 확인하세요.',
                 'help' => '잘 안 되시나요? 자세한 방법 보기 →',
                 'done' => '홈 화면에 추가되었습니다.',
                 'close' => '닫기',
@@ -815,6 +819,7 @@ final class WorkerLang
                 'iosStep2' => 'Scroll down and tap <b>Add to Home Screen</b>',
                 'iosStep3' => 'Tap <b>Add</b> at the top right — done',
                 'iosSafari' => 'If you do not see <b>Add to Home Screen</b> in the share list, open this address in Safari and try again.',
+                'manual' => 'Choose Install app or Add to Home Screen from the browser menu. If opened inside KakaoTalk, open in an external browser first. Use the detailed guide below if the menu is missing.',
                 'help' => 'Not working? See detailed steps →',
                 'done' => 'Added to your home screen.',
                 'close' => 'Close',
@@ -829,6 +834,7 @@ final class WorkerLang
                 'iosStep2' => 'Baje y toque <b>Agregar a inicio</b>',
                 'iosStep3' => 'Toque <b>Agregar</b> arriba a la derecha — listo',
                 'iosSafari' => 'Si no ve <b>Agregar a inicio</b> en la lista de compartir, abra esta dirección en Safari e intente de nuevo.',
+                'manual' => 'Elija Instalar aplicación o Agregar a inicio en el menú del navegador. Si está dentro de KakaoTalk, abra primero en un navegador externo. Consulte la guía si falta el menú.',
                 'help' => '¿No funciona? Ver pasos detallados →',
                 'done' => 'Agregado a su pantalla de inicio.',
                 'close' => 'Cerrar',

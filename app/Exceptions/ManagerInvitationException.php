@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
-/** Enrollment failures need recovery guidance, while retaining their 410 denial. */
+/** Invalid enrollment credentials never authenticate; old shortcuts recover via normal login. */
 class ManagerInvitationException extends HttpException
 {
     public function __construct(private readonly bool $verificationExpired = false, private readonly ?string $restartToken = null)
@@ -28,6 +28,13 @@ class ManagerInvitationException extends HttpException
 
     public function render(Request $request): Response
     {
+        // A phone shortcut can retain an already-used invitation URL. Browsing it
+        // goes to ordinary login, without redeeming the token or selecting its user.
+        if ($request->isMethod('GET') && ! $request->expectsJson() && ! $this->verificationExpired) {
+            return redirect()->route('login', ['app' => 1])
+                ->with('status', '이 가입 링크로는 등록을 진행할 수 없습니다. 이미 가입했다면 기존 계정으로 로그인하세요. 처음 가입하는 분은 인사담당자에게 새 초대 링크를 요청하세요.')
+                ->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer');
+        }
         // No account details or private invalidation reasons enter the public error.
         // A restart URL only reopens the normal token validation and phone-verification flow.
         $response = $request->expectsJson()

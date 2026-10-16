@@ -111,6 +111,9 @@ class GateSelfServiceRegistrationTest extends TestCase
         $this->assertSame('', $response->viewData('deviceToken'), '공용 휴대폰은 누구의 것으로도 연결하지 않는다');
         $this->assertSame(0, WorkerDevice::query()->where('employee_id', $second->id)->count());
         $this->assertNull($response->viewData('pinSetupUrl'));
+        // 남을 등록한 공용 휴대폰에서는 개인앱 설치를 권하지 않는다.
+        $this->assertMatchesRegularExpression('/<a\b[^>]*id="install-link"[^>]*\shidden\b/', $response->getContent());
+        $this->assertNotSame($second->id, auth()->user()?->employee_id);
         // 그 사람은 명단에는 올라간다 — 현장에 서 있는 사람이니까.
         $this->assertSame('active', $second->employment_status);
     }

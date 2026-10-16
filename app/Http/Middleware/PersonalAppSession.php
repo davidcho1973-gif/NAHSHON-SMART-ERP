@@ -30,9 +30,12 @@ class PersonalAppSession
                 $request->session()->regenerateToken();
             }
             if (! $request->user() && ! $this->authenticationPath($request)) {
+                $loginMode = $request->is('app', 'app/*', 'attendance-app', 'attendance-app/*', 'expense-app', 'expense-app/*')
+                    ? ['app' => 1] : ['erp' => 1];
+
                 return $request->expectsJson()
                     ? response()->json(['success' => false, 'code' => 'personal_app_qr_retired', 'error' => '관리자 개인 QR 기능이 종료되었습니다. 다시 로그인하세요.'], 401)
-                    : redirect()->route('login', ['erp' => 1])->with('status', '관리자 개인 QR 기능이 종료되었습니다. Google 또는 이메일·비밀번호로 로그인하세요.');
+                    : redirect()->route('login', $loginMode)->with('status', '관리자 개인 QR 기능이 종료되었습니다. Google 또는 이메일·비밀번호로 로그인하세요.');
             }
         }
 

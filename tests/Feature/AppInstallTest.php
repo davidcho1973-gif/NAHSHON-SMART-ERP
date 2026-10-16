@@ -159,6 +159,9 @@ class AppInstallTest extends TestCase
 
         $this->assertNotSame($gate['id'], $worker['id']);
         $this->assertStringEndsWith('/attendance-app', $worker['start_url']);
+        $this->assertSame('worker-app', $worker['id']);
+        $this->assertSame(url('/'), $worker['scope']);
+        $this->assertNull(parse_url($worker['start_url'], PHP_URL_QUERY));
     }
 
     public function test_the_worker_app_screen_points_at_its_manifest(): void

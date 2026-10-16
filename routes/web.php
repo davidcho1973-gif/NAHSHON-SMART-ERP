@@ -106,8 +106,17 @@ Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Retired manager QR links must never issue or exchange credentials.
-Route::match(['GET', 'POST'], '/app/connect/{token}', fn () => response()->view('auth.personal-qr-retired', [], 410));
-Route::get('/attendance-app/manager-access', fn () => response()->view('auth.personal-qr-retired', [], 410));
+Route::match(['GET', 'POST'], '/app/connect/{token}', function (Request $request) {
+    return $request->isMethod('GET') && ! $request->expectsJson()
+        ? redirect()->route('login', ['app' => 1])->with('status', '기존 계정으로 로그인해 개인앱을 계속 이용하세요.')
+            ->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer')
+        : response()->view('auth.personal-qr-retired', [], 410);
+});
+Route::get('/attendance-app/manager-access', function (Request $request) {
+    return $request->expectsJson() ? response()->view('auth.personal-qr-retired', [], 410)
+        : redirect()->route('login', ['app' => 1])->with('status', '기존 계정으로 로그인해 개인앱을 계속 이용하세요.')
+            ->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer');
+});
 Route::any('/personal-app-access/{path?}', fn () => response()->json([
     'success' => false, 'error' => '관리자 개인 QR 기능은 종료되었습니다. Google 또는 이메일로 로그인하세요.',
 ], 410))->where('path', '.*');

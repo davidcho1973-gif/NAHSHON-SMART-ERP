@@ -92,6 +92,8 @@ class WorkerAppNeedsNoPasswordTest extends TestCase
 
         $this->assertStringNotContainsString('type="password"', $html);
         $this->assertStringNotContainsString('name="email"', $html);
+        $this->assertStringContainsString(route('login', ['app' => 1]), $html);
+        $this->assertStringContainsString('worker-app.webmanifest', $html);
     }
 
     public function test_the_phone_is_remembered_so_the_handoff_happens_only_once(): void

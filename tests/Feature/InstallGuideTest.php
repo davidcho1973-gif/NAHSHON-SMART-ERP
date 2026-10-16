@@ -26,6 +26,15 @@ class InstallGuideTest extends TestCase
         $this->get('/app/install')->assertOk()->assertSee('홈 화면에 추가하는 방법');
     }
 
+    public function test_install_guide_opens_the_permanent_app_before_installation(): void
+    {
+        $this->get('/app/install?return_to=https://untrusted.example/token')->assertOk()
+            ->assertSee(route('attendance-app.index', ['install' => 1]), false)
+            ->assertSee(route('worker-app.manifest'), false)
+            ->assertSee('먼저 아래 버튼으로 개인앱을 여세요')
+            ->assertDontSee('untrusted.example');
+    }
+
     public function test_kakaotalk_is_told_to_leave_the_in_app_browser_first(): void
     {
         // 현장에서 가장 흔한 실패다. 여기서 사파리 공유 버튼을 안내하면, 그 화면에는
@@ -44,14 +53,15 @@ class InstallGuideTest extends TestCase
         $this->open($ua)->assertOk()->assertSee('홈 화면에 추가', false);
     }
 
-    public function test_an_iphone_on_chrome_is_sent_to_safari(): void
+    public function test_an_iphone_on_chrome_has_conditional_safari_fallback(): void
     {
         // 아이폰의 크롬도 UserAgent 에 Safari 를 달고 다닌다. 그것만 보고 판정하면
         // 공유 목록에 없는 항목을 누르라고 안내하게 된다.
         $ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/126.0 Mobile/15E148 Safari/604.1';
 
         $this->assertSame(PhoneInstallGuide::IOS_OTHER, PhoneInstallGuide::detect($ua));
-        $this->open($ua)->assertOk()->assertSee('사파리에서만', false);
+        $this->open($ua)->assertOk()->assertSee('가 안 보이면 Safari에서', false)
+            ->assertDontSee('사파리에서만');
     }
 
     public function test_samsung_internet_gets_its_own_menu_names(): void

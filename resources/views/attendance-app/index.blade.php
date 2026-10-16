@@ -18,12 +18,7 @@
     <title>{{ __('내 출퇴근') }} · {{ \App\Support\Org::name() }}</title>
 
     {{-- 홈 화면에 추가하면 앱이 된다. --}}
-    <link rel="manifest" href="{{ route('worker-app.manifest') }}">
-    <link rel="apple-touch-icon" href="{{ asset('images/attendance-apple-touch.png') }}">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="내 출퇴근">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    @include('partials.personal-app-meta')
     @include('partials.field-app-theme')
     <style>
         /* One responsive shell keeps the fixed navigation aligned with the content.
@@ -972,12 +967,16 @@
         var d = state.data;
         var view = document.getElementById('view');
         document.getElementById('offline').hidden = navigator.onLine;
+        var installEntry = new URLSearchParams(location.search).get('install') === '1'
+            && window.AppInstall && !window.AppInstall.installed()
+            ? '<div class="sec"><button type="button" class="link" data-act="install" style="width:100%;text-align:left">' +
+                '<div><b>＋ ' + esc(window.AppInstall.label()) + '</b><div class="row-a">' + esc(T.installNote) + '</div></div><span class="go">›</span></button></div>' : '';
 
         if (!d || d.success === false) {
             // 연결이 안 된 것과 진짜로 실패한 것은 다른 상황이다. 같은 빨간 상자로 보여 주면
             // 관리자는 앱이 깨진 줄 알고, 작업자는 자기가 뭘 잘못했다고 생각한다.
-            view.innerHTML = (d && d.code === 'view_as_denied') ? viewDenied(d)
-                : (d && d.code === 'no_employee') ? notLinked(d) : managerQuickSection() + failed(d);
+            view.innerHTML = installEntry + ((d && d.code === 'view_as_denied') ? viewDenied(d)
+                : (d && d.code === 'no_employee') ? notLinked(d) : managerQuickSection() + failed(d));
             document.getElementById('nm').textContent = (d && d.email) ? d.email : @json($user?->name ?? '작업자');
             document.getElementById('tag').textContent = @json(mb_substr($user?->name ?? '··', 0, 2));
             document.getElementById('sb').textContent = (d && d.code === 'no_employee') ? '연결 대기 중' : '';
@@ -992,9 +991,9 @@
         document.getElementById('sb').textContent =
             [e.number, e.trade, d.site ? d.site.code : null].filter(Boolean).join(' · ');
 
-        view.innerHTML = state.tab === 'home' ? tabHome(d)
+        view.innerHTML = installEntry + (state.tab === 'home' ? tabHome(d)
             : state.tab === 'work' ? tabWork(d)
-            : tabMe(d);
+            : tabMe(d));
 
         paintTabs();
     }

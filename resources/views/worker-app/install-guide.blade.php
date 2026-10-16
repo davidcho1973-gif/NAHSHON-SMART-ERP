@@ -15,6 +15,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ $t['title'] }}</title>
+    @include('partials.personal-app-meta')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         :root {
@@ -62,6 +63,7 @@
         .why h3 { margin: 0 0 6px; font-size: 1rem; font-weight: 800; }
         .why p { margin: 0; color: var(--ink-2); font-size: .97rem; line-height: 1.65; }
         .ask { text-align: center; color: var(--ink-2); font-size: .93rem; line-height: 1.6; margin: 20px 4px 0; }
+        .open-app { display:block;background:var(--blue);color:#fff;text-align:center;text-decoration:none;border-radius:12px;padding:16px;font-weight:800;margin:16px 0; }
         h3.others { margin: 24px 2px 12px; font-size: .95rem; color: var(--ink-2); font-weight: 800; }
     </style>
 </head>
@@ -69,6 +71,7 @@
 <div class="wrap">
     <h1>{{ $t['title'] }}</h1>
     <p class="lead">{{ $t['lead'] }}</p>
+    <a class="open-app" href="{{ route('attendance-app.index', ['install' => 1]) }}">{{ $t['openApp'] }}</a>
 
     <div class="langs">
         @foreach ($langOptions as $code => $label)

@@ -49,6 +49,73 @@ class EmailPasswordAuthTest extends TestCase
             ->assertSee('/auth/password/login')->assertSee('/auth/google')->assertDontSee('/admin/login');
     }
 
+    public function test_personal_app_recovery_uses_the_worker_manifest_and_keeps_its_login_intent(): void
+    {
+        $this->withSession([EmailPasswordAuthService::ERP_LOGIN_SESSION => true])
+            ->get('/login?app=1')->assertOk()->assertViewHas('appLogin', true)
+            ->assertSee('worker-app.webmanifest')->assertDontSee('erp.webmanifest')
+            ->assertSee('name="app" value="1"', false)->assertSee('auth/google?app=1', false)
+            ->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true)
+            ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION);
+        $this->post('/auth/password/login', ['email' => 'unknown@example.test', 'password' => 'invalid'])
+            ->assertRedirect(route('login', ['app' => 1]))->assertSessionHasErrors('email_login')
+            ->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true);
+        $this->assertGuest();
+    }
+
+    public function test_admin_password_recovery_returns_only_to_the_personal_app_without_changing_permissions(): void
+    {
+        $user = $this->employeeUser('admin');
+        $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+        $this->withSession(['url.intended' => 'https://untrusted.example/steal'])
+            ->post('/auth/password/login', ['email' => $user->email, 'password' => 'MySite2026',
+                'app' => '1', 'return_to' => '/manager-invitation/used'])
+            ->assertRedirect('/attendance-app')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id)
+            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION)
+            ->assertSessionMissing('url.intended');
+        $this->assertAuthenticatedAs($user);
+        $this->assertSame('admin', $user->fresh()->access_role);
+        $this->assertSame('self', $user->fresh()->access_scope);
+        $this->get('/attendance-app')->assertOk();
+    }
+
+    public function test_explicit_erp_login_takes_priority_over_a_personal_app_request(): void
+    {
+        $user = $this->employeeUser('admin');
+        $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+        $this->withSession([EmailPasswordAuthService::APP_LOGIN_SESSION => true])
+            ->get('/login?erp=1&app=1')->assertOk()->assertViewHas('erpLogin', true)
+            ->assertViewHas('appLogin', false)->assertSee('erp.webmanifest')
+            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION);
+        $this->signIn('MySite2026')->assertRedirect('/')
+            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION)
+            ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION);
+    }
+
+    public function test_personal_app_request_does_not_upgrade_a_remembered_admin_session(): void
+    {
+        $user = $this->employeeUser('admin');
+        $user->forceFill(['remember_token' => str_repeat('r', 60)])->save();
+        $cookie = $user->getAuthIdentifier().'|'.$user->getRememberToken().'|'.$user->getAuthPassword();
+        $this->withCookie(Auth::guard()->getRecallerName(), $cookie)->get('/attendance-app')
+            ->assertOk()->assertSessionHas(WorkerDeviceSession::FLAG, true)
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->assertAuthenticatedAs($user);
+        $this->get('/login?app=1')->assertOk()->assertViewHas('appLogin', true)
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
+    }
+
+    public function test_signed_in_personal_app_login_returns_home_without_minting_strong_proof(): void
+    {
+        $user = $this->employeeUser('admin');
+        $this->actingAs($user)->get('/login?app=1')->assertRedirect('/attendance-app')
+            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION)
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->assertAuthenticatedAs($user);
+    }
+
     /**
      * 전화번호 뒷 4자리로 <b>바로</b> 들어간다 (2026-09-22, 오너 지시 「계속 쓸 수 있게」).
      *
