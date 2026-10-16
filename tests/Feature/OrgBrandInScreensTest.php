@@ -78,27 +78,27 @@ class OrgBrandInScreensTest extends TestCase
 
     public function test_the_quick_sign_up_form(): void
     {
-        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->followingRedirects()->get(route('worker-join.form', ['site' => $this->site]))
+        $this->actingAsPersonalAppUser(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->followingRedirects()->get(route('worker-join.form', ['site' => $this->site]))
             ->assertOk()->assertSee(self::NAME, false);
     }
 
     public function test_the_erp_home(): void
     {
-        $this->actingAs($this->admin())->followingRedirects()->get('/')->assertOk()->assertSee(self::NAME, false);
+        $this->actingAsPersonalAppUser($this->admin())->followingRedirects()->get('/')->assertOk()->assertSee(self::NAME, false);
     }
 
     public function test_the_w9_screen_a_worker_fills_in(): void
     {
         // 인쇄본(w9.blank)에는 회사 이름이 없다 — 국세청 양식에 없는 문구가 종이에
         // 섞이면 그 종이는 W-9 이 아니게 된다. 이름은 작성 화면에만 있다.
-        $this->actingAs($this->admin())
+        $this->actingAsPersonalAppUser($this->admin())
             ->followingRedirects()->get(URL::signedRoute('w9.show', ['employee' => $this->employee()->id]))
             ->assertOk()->assertSee(self::NAME, false);
     }
 
     public function test_the_app_install_card_handed_to_a_worker(): void
     {
-        $this->actingAs($this->admin())
+        $this->actingAsPersonalAppUser($this->admin())
             ->followingRedirects()->get(route('attendance-app.employee.install-card', ['employee' => $this->employee()]))
             ->assertOk()->assertSee(self::NAME, false);
     }
@@ -107,7 +107,7 @@ class OrgBrandInScreensTest extends TestCase
     {
         // 화면을 열면 가장 먼저 보이는 자리다. 여기에 남의 회사 머리글자가 떠 있으면
         // 나머지가 아무리 맞아도 고객은 이 화면이 자기 것이라고 느끼지 않는다.
-        $body = $this->actingAs($this->admin())->followingRedirects()->get('/')->assertOk()->getContent();
+        $body = $this->actingAsPersonalAppUser($this->admin())->followingRedirects()->get('/')->assertOk()->getContent();
 
         $this->assertStringContainsString('<div class="brand-logo">ABC</div>', $body);
         $this->assertStringNotContainsString('>NS<', $body, '옛 머리글자가 남아 있습니다.');
@@ -118,19 +118,19 @@ class OrgBrandInScreensTest extends TestCase
         OrgSetting::query()->updateOrCreate(['key' => 'color'], ['value' => '#16a34a']);
         Org::forget();
 
-        $this->actingAs($this->admin())->followingRedirects()->get('/')->assertOk()
+        $this->actingAsPersonalAppUser($this->admin())->followingRedirects()->get('/')->assertOk()
             ->assertSee('--brand-primary: #16a34a;', false);
     }
 
     public function test_the_messenger_screen(): void
     {
-        $this->actingAs($this->admin())->followingRedirects()->get(route('communication.index'))
+        $this->actingAsPersonalAppUser($this->admin())->followingRedirects()->get(route('communication.index'))
             ->assertOk()->assertSee(self::NAME, false);
     }
 
     public function test_the_document_intelligence_screen(): void
     {
-        $this->actingAs($this->admin())->followingRedirects()->get(route('document-intelligence.index', ['embed' => 1]))
+        $this->actingAsPersonalAppUser($this->admin())->followingRedirects()->get(route('document-intelligence.index', ['embed' => 1]))
             ->assertOk()->assertSee(self::NAME, false);
     }
 
@@ -150,7 +150,7 @@ class OrgBrandInScreensTest extends TestCase
             $this->assertStringNotContainsString($old, $login, '로그인 화면에 옛 이름이 남아 있습니다.');
         }
 
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
 
         foreach ([
             '/',

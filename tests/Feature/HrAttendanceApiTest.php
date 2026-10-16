@@ -70,7 +70,7 @@ class HrAttendanceApiTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-06-22 08:00:00'));
 
         // 1. Clock in John Doe
-        $response = $this->actingAs($this->adminUser)
+        $response = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-1001', 'AZ-01'],
             ]);
@@ -88,7 +88,7 @@ class HrAttendanceApiTest extends TestCase
         ]);
 
         // 2. Immediate tag should be ignored (Debounce)
-        $response2 = $this->actingAs($this->adminUser)
+        $response2 = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-1001', 'AZ-01'],
             ]);
@@ -99,7 +99,7 @@ class HrAttendanceApiTest extends TestCase
         // 3. 6 minutes later tag should register as Clock Out
         Carbon::setTestNow(Carbon::parse('2026-06-22 08:06:00'));
 
-        $response3 = $this->actingAs($this->adminUser)
+        $response3 = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-1001', 'AZ-01'],
             ]);
@@ -129,7 +129,7 @@ class HrAttendanceApiTest extends TestCase
             'employment_status' => 'pending',
         ]);
 
-        $response = $this->actingAs($this->adminUser)
+        $response = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-PENDING', 'AZ-01'],
             ]);
@@ -144,7 +144,7 @@ class HrAttendanceApiTest extends TestCase
     public function test_batch_photo_scan_flow_and_approval(): void
     {
         // 1. Send batch scan for both employees
-        $response = $this->actingAs($this->adminUser)
+        $response = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_submitBatchPhotoScan', [
                 'args' => [
                     ['NFC-1001', 'NFC-1002'], // badges
@@ -173,7 +173,7 @@ class HrAttendanceApiTest extends TestCase
         ]);
 
         // 2. Fetch pending reviews list
-        $logsResponse = $this->actingAs($this->adminUser)
+        $logsResponse = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_getPendingAttendanceLogs', [
                 'siteId' => 'ALL',
             ]);
@@ -187,7 +187,7 @@ class HrAttendanceApiTest extends TestCase
         $log2Id = $logs[1]['id'];
 
         // 3. Approve first log
-        $approveResponse = $this->actingAs($this->adminUser)
+        $approveResponse = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_approveAttendanceLog', [
                 'args' => [$log1Id],
             ]);
@@ -201,7 +201,7 @@ class HrAttendanceApiTest extends TestCase
         ]);
 
         // 4. Reject second log
-        $rejectResponse = $this->actingAs($this->adminUser)
+        $rejectResponse = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_rejectAttendanceLog', [
                 'args' => [$log2Id],
             ]);
@@ -231,7 +231,7 @@ class HrAttendanceApiTest extends TestCase
         ]);
 
         // 2. Perform successful clock in with matching team QR code
-        $response = $this->actingAs($this->adminUser)
+        $response = $this->actingAsPersonalAppUser($this->adminUser)
             ->postJson('/smart-company-api/api_clockInWithTeamQr', [
                 'args' => ['T-ELECT-A', 'clock_in'],
             ]);
@@ -271,16 +271,22 @@ class HrAttendanceApiTest extends TestCase
         ]);
 
         $user2 = User::factory()->create([
-            'access_role' => 'worker',
+            'access_role' => 'worker', 'account_status' => 'active',
             'employee_id' => $this->employee2->id,
         ]);
+
+        $this->actingAsPersonalAppUser($user2)
+            ->postJson('/smart-company-api/api_clockInWithTeamQr', ['args' => ['T-ELECT-A', 'clock_in']])
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+        $this->assertDatabaseMissing('attendance_logs', ['employee_id' => $this->employee2->id]);
+        $user2->forceFill(['access_role' => 'foreman'])->save();
 
         $this->employee2->update([
             'team_id' => $otherTeam->id,
         ]);
 
         // Scan the wrong team's QR code (T-ELECT-A) for employee2
-        $response2 = $this->actingAs($user2)
+        $response2 = $this->actingAsPersonalAppUser($user2)
             ->postJson('/smart-company-api/api_clockInWithTeamQr', [
                 'args' => ['T-ELECT-A', 'clock_in'],
             ]);
@@ -320,11 +326,11 @@ class HrAttendanceApiTest extends TestCase
         ]);
 
         $foremanUser = User::factory()->create([
-            'access_role' => 'worker',
+            'access_role' => 'foreman', 'account_status' => 'active',
             'employee_id' => $foremanEmployee->id,
         ]);
 
-        $response = $this->actingAs($foremanUser)
+        $response = $this->actingAsPersonalAppUser($foremanUser)
             ->post(route('attendance-app.crew.record', ['token' => $qrCode->token]), [
                 'badge_token' => route('attendance-app.badge', ['token' => $badgeToken->token]),
                 'mode' => 'clock_in',
@@ -366,7 +372,7 @@ class HrAttendanceApiTest extends TestCase
         $unauthenticatedResponse->assertRedirect(route('login'));
 
         // 3. Access with authentication -> should render 200 with correct content
-        $authenticatedResponse = $this->actingAs($this->adminUser)
+        $authenticatedResponse = $this->actingAsPersonalAppUser($this->adminUser)
             ->get(route('team.qr', ['team' => $team]));
 
         $authenticatedResponse->assertStatus(200);

@@ -203,7 +203,10 @@ class WorkerDeviceAndLanguageTest extends TestCase
         foreach (['ko', 'en', 'es'] as $code) {
             $res->assertSee('data-locale="'.$code.'"', false);
         }
-        $res->assertSee('Registrarme y marcar entrada');
+        // Registration now reviews details first; attendance remains a separate action.
+        $res->assertSee('Revisar datos')->assertSee('Completar registro');
+        $res->assertSee('Review details')->assertSee('Complete registration');
+        $res->assertSee('입력 확인')->assertSee('등록 완료');
         $res->assertSee('name="preferred_language"', false);
     }
 

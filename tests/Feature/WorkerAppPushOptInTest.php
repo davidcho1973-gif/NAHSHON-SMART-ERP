@@ -53,7 +53,7 @@ class WorkerAppPushOptInTest extends TestCase
         ]);
 
         return User::factory()->create([
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'account_status' => 'active',
             'employee_id' => $employee->id,
         ]);
@@ -61,7 +61,7 @@ class WorkerAppPushOptInTest extends TestCase
 
     public function test_the_attendance_screen_carries_the_bell_that_turns_notifications_on(): void
     {
-        $this->actingAs($this->worker())->get('/attendance-app')
+        $this->actingAsPersonalAppUser($this->worker())->get('/attendance-app')
             ->assertStatus(200)
             // 종 자리. 이것이 없으면 partials/push-optin 이 살릴 버튼을 못 찾는다.
             ->assertSee('id="push-bell"', false)
@@ -74,7 +74,7 @@ class WorkerAppPushOptInTest extends TestCase
     {
         // 출퇴근 화면에서 «새 메시지를 받습니다» 라고 하면, 정작 출근을 까먹는 사람은
         // 자기와 상관없는 안내로 읽고 닫는다.
-        $this->actingAs($this->worker())->get('/attendance-app')
+        $this->actingAsPersonalAppUser($this->worker())->get('/attendance-app')
             ->assertStatus(200)
             ->assertSee('출근·퇴근 알림을 받습니다')
             ->assertDontSee('새 메시지를 받습니다');
@@ -84,7 +84,7 @@ class WorkerAppPushOptInTest extends TestCase
     {
         // 출퇴근 화면에 종을 옮긴 것이 아니라 더한 것이다. 원래 있던 문을 닫으면
         // 메시지 알림을 켜 둔 사람들의 경로가 사라진다.
-        $this->actingAs($this->worker())->get(route('communication.index'))
+        $this->actingAsPersonalAppUser($this->worker())->get(route('communication.index'))
             ->assertStatus(200)
             ->assertSee('id="push-bell"', false);
     }
@@ -95,7 +95,7 @@ class WorkerAppPushOptInTest extends TestCase
         // 종은 push.key 응답을 보고 스스로 숨는다 — 눌러도 아무 일 없는 버튼은 만들지 않는다.
         config(['services.webpush.public_key' => '', 'services.webpush.private_key' => '']);
 
-        $this->actingAs($this->worker())->get('/attendance-app')
+        $this->actingAsPersonalAppUser($this->worker())->get('/attendance-app')
             ->assertStatus(200)
             ->assertSee('id="push-bell"', false);
     }

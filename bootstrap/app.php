@@ -7,6 +7,7 @@ use App\Http\Middleware\AuthorizeJobAccess;
 use App\Http\Middleware\LocalAutoLogin;
 use App\Http\Middleware\PersonalAppSession;
 use App\Http\Middleware\RequireActiveAccount;
+use App\Http\Middleware\RequirePersonalAppAccess;
 use App\Http\Middleware\SetLocale;
 use App\Support\UploadLimits;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
@@ -52,6 +53,10 @@ return Application::configure(basePath: dirname(__DIR__))
             SubstituteBindings::class,
             AuthorizeJobAccess::class,
         );
+        $middleware->prependToPriorityList(
+            AuthorizeJobAccess::class,
+            RequirePersonalAppAccess::class,
+        );
 
         // 모든 웹 요청에 선택 언어를 적용.
         $middleware->web(append: [
@@ -60,6 +65,7 @@ return Application::configure(basePath: dirname(__DIR__))
             PersonalAppSession::class,
             RequireActiveAccount::class,
             SetLocale::class,
+            RequirePersonalAppAccess::class,
             AuthorizeJobAccess::class,
             // 같은 사이트 안에서는 iframe 허용(SAMEORIGIN) — 안 붙이면 플랫폼이
             // deny 를 붙여 SPA 가 품은 문서함·문서 뷰어가 회색으로 깨진다.

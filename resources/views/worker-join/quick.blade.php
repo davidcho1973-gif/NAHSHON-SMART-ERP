@@ -29,12 +29,13 @@
         .error { margin:0 0 16px; padding:12px 14px; border-radius:12px; background:#fff0f0; color:#a12828; font-size:.86rem; }
         .error ul { margin:5px 0 0; padding-left:18px; }
         .submit, .gate { display:block; width:100%; min-height:56px; margin-top:22px; padding:16px; border:0; border-radius:13px; background:#0877bd; color:#fff; font:inherit; font-size:1.04rem; font-weight:900; text-align:center; text-decoration:none; cursor:pointer; }
+        .gate.secondary { background:#edf3fa; color:#234b6f; margin-top:12px; }
+        .gate[hidden] { display:none; }
         .privacy { margin:14px 0 0; color:#718198; font-size:.76rem; line-height:1.55; text-align:center; }
         .done { text-align:center; padding:12px 0 4px; }
         .check { width:66px; height:66px; margin:0 auto 16px; display:grid; place-items:center; border-radius:50%; background:#dcfce7; color:#16814b; font-size:34px; font-weight:900; }
         .done h1 { margin-bottom:10px; }
         .done p { color:#607188; line-height:1.6; word-break:keep-all; }
-        .moving { margin-top:16px; padding:12px; border-radius:12px; background:#edf7ff; color:#075985; font-weight:800; }
     </style>
 </head>
 <body>
@@ -44,8 +45,10 @@
             <div class="check">✓</div>
             <h1 id="done-title">등록되었습니다</h1>
             <p><strong>{{ $workerName }}</strong><br><span id="done-copy">이 휴대폰을 출퇴근용으로 연결했습니다.</span></p>
-            <div class="moving" id="moving">출근 화면으로 이동합니다…</div>
-            <a class="gate" id="gate-link" href="{{ $gateUrl }}">출근 화면 열기</a>
+            <p class="site">{{ $site->code }} · {{ $site->name }}</p>
+            <a class="gate" id="gate-link" href="{{ $gateUrl }}">출퇴근 화면 열기</a>
+            <p class="privacy" id="no-install">앱 설치 없이 다음에도 현장 QR을 찍으세요.</p>
+            <p class="privacy" id="done-paperwork">추가 인사정보와 W-9은 나중에 작성합니다.</p>
         </section>
         <script src="{{ asset('js/worker-device-remember.js') }}?v={{ filemtime(public_path('js/worker-device-remember.js')) }}"></script>
         <script>
@@ -60,27 +63,20 @@
 
                 var words = {
                     ko: shared
-                        ? ['등록되었습니다', '공용 휴대폰으로 보여 이 휴대폰을 본인 것으로 연결하지 않았습니다. 본인 휴대폰에서 같은 QR 을 찍으면 바로 출근할 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기']
-                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다. 바로 출근을 찍을 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기'],
+                        ? ['등록되었습니다', '이 휴대폰은 공용으로 사용 중입니다. 본인 휴대폰에서 현장 QR을 찍고 전화번호 뒷 4자리로 들어오세요.', '앱 설치 없이 다음에도 현장 QR을 찍으세요.', '출퇴근 화면 열기', '추가 인사정보와 W-9은 인사담당자의 안내를 받아 나중에 작성합니다.']
+                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다.', '앱 설치 없이 다음에도 현장 QR을 찍으세요.', '출퇴근 화면 열기', '추가 인사정보와 W-9은 인사담당자의 안내를 받아 나중에 작성합니다.'],
                     en: shared
-                        ? ['Registration complete', 'This looks like a shared phone, so it was not linked to you. Scan the same QR on your own phone and you can clock in right away.', 'Opening attendance…', 'Open attendance']
-                        : ['Registration complete', 'This phone is linked for attendance. You can clock in right now.', 'Opening attendance…', 'Open attendance'],
+                        ? ['Registration complete', 'This is a shared phone. Scan the site QR on your own phone and enter the last 4 digits of your number.', 'No app installation needed. Scan the site QR next time.', 'Open attendance', 'Complete your W-9 and other HR details later when HR sends instructions.']
+                        : ['Registration complete', 'This phone is linked for attendance.', 'No app installation needed. Scan the site QR next time.', 'Open attendance', 'Complete your W-9 and other HR details later when HR sends instructions.'],
                     es: shared
-                        ? ['Registro completo', 'Parece un teléfono compartido, así que no se vinculó a usted. Escanee el mismo QR en su propio teléfono y podrá marcar entrada de inmediato.', 'Abriendo asistencia…', 'Abrir asistencia']
-                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia. Ya puede marcar entrada.', 'Abriendo asistencia…', 'Abrir asistencia']
+                        ? ['Registro completo', 'Este teléfono es compartido. Escanee el QR de la obra en su propio teléfono e ingrese los últimos 4 dígitos de su número.', 'No necesita instalar una app. Escanee el QR de la obra la próxima vez.', 'Abrir asistencia', 'Complete el W-9 y otros datos después de recibir las instrucciones de Recursos Humanos.']
+                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia.', 'No necesita instalar una app. Escanee el QR de la obra la próxima vez.', 'Abrir asistencia', 'Complete el W-9 y otros datos después de recibir las instrucciones de Recursos Humanos.']
                 }[@json($lang)];
                 document.getElementById('done-title').textContent = words[0];
                 document.getElementById('done-copy').textContent = words[1];
-                document.getElementById('moving').textContent = words[2];
+                document.getElementById('no-install').textContent = words[2];
                 document.getElementById('gate-link').textContent = words[3];
-
-                // 공용 휴대폰이면 데려가지 않는다 — 여기서 읽어야 할 안내가 있고,
-                // 그 화면에서 이 사람이 찍을 수 있는 것도 없다.
-                if (!shared) {
-                    window.setTimeout(function () { window.location.replace(@json($gateUrl)); }, 900);
-                } else {
-                    document.getElementById('moving').textContent = '';
-                }
+                document.getElementById('done-paperwork').textContent = words[4];
             })();
         </script>
     @else

@@ -30,6 +30,7 @@ class PushNotificationTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
 
     protected function setUp(): void
@@ -48,7 +49,7 @@ class PushNotificationTest extends TestCase
         ]);
     }
 
-    private function member(string $email): array
+    private function member(string $email, string $role = 'worker'): array
     {
         $employee = Employee::create([
             'company_id' => $this->company->id, 'site_id' => $this->site->id,
@@ -56,7 +57,7 @@ class PushNotificationTest extends TestCase
         ]);
         $user = User::factory()->create([
             'employee_id' => $employee->id, 'email' => $email,
-            'access_role' => 'worker', 'account_status' => 'active',
+            'access_role' => $role, 'account_status' => 'active',
         ]);
 
         return [$employee, $user];
@@ -94,9 +95,9 @@ class PushNotificationTest extends TestCase
 
     public function test_a_device_registers_itself_for_notifications(): void
     {
-        [, $user] = $this->member('worker1@example.com');
+        [, $user] = $this->member('worker1@example.com', 'foreman');
 
-        $this->actingAs($user)->postJson(route('push.subscribe'), [
+        $this->actingAsPersonalAppUser($user)->postJson(route('push.subscribe'), [
             'endpoint' => 'https://push.example.com/abc123',
             'keys' => ['p256dh' => 'public-part', 'auth' => 'auth-part'],
         ])->assertOk()->assertJsonPath('success', true);
@@ -106,23 +107,23 @@ class PushNotificationTest extends TestCase
 
     public function test_the_same_device_registering_twice_does_not_ring_twice(): void
     {
-        [, $user] = $this->member('worker2@example.com');
+        [, $user] = $this->member('worker2@example.com', 'foreman');
         $payload = [
             'endpoint' => 'https://push.example.com/same-device',
             'keys' => ['p256dh' => 'public-part', 'auth' => 'auth-part'],
         ];
 
-        $this->actingAs($user)->postJson(route('push.subscribe'), $payload)->assertOk();
-        $this->actingAs($user)->postJson(route('push.subscribe'), $payload)->assertOk();
+        $this->actingAsPersonalAppUser($user)->postJson(route('push.subscribe'), $payload)->assertOk();
+        $this->actingAsPersonalAppUser($user)->postJson(route('push.subscribe'), $payload)->assertOk();
 
         $this->assertSame(1, PushSubscription::query()->count(), '같은 기기가 두 번 등록되면 알림이 두 번 옵니다.');
     }
 
     public function test_the_public_key_is_offered_but_the_private_one_never_is(): void
     {
-        [, $user] = $this->member('worker3@example.com');
+        [, $user] = $this->member('worker3@example.com', 'foreman');
 
-        $response = $this->actingAs($user)->getJson(route('push.key'))->assertOk();
+        $response = $this->actingAsPersonalAppUser($user)->getJson(route('push.key'))->assertOk();
 
         $response->assertJsonPath('available', true);
         $response->assertJsonPath('publicKey', 'test-public-key');
@@ -250,7 +251,8 @@ class PushNotificationTest extends TestCase
         $this->assertSame(0, app(ChatPushNotifier::class)->notify($message));
 
         // 화면은 눌러도 아무 일 없는 버튼을 보여주면 안 된다.
-        $this->actingAs($senderUser)->getJson(route('push.key'))->assertJsonPath('available', false);
+        $senderUser->forceFill(['access_role' => 'foreman'])->save();
+        $this->actingAsPersonalAppUser($senderUser)->getJson(route('push.key'))->assertJsonPath('available', false);
     }
 
     protected function tearDown(): void

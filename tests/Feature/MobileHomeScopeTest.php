@@ -68,6 +68,15 @@ class MobileHomeScopeTest extends TestCase
         $this->travel(1)->minutes();
         $this->actingAsPurchaseUser($user);
 
+        if ($job === 'worker') {
+            $this->get('/attendance-app')->assertRedirect(route('worker-app.entry'));
+            $this->get('/expense-app')->assertRedirect(route('worker-app.entry'));
+            $this->getJson('/expense-app/list')->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+            $this->assertSame($before, $this->chatSnapshot());
+
+            return;
+        }
+
         $this->get('/attendance-app')->assertOk()->assertSee('/expense-app', false);
         $this->get('/attendance-app')->assertOk();
         $this->get('/expense-app')->assertOk();
@@ -115,7 +124,7 @@ class MobileHomeScopeTest extends TestCase
         $user->forceFill(['job_role' => null, 'access_role' => 'worker', 'access_scope' => 'self'])->save();
         $newSite = Site::create(['code' => 'HOME-B', 'name' => 'Home B', 'company_id' => $user->allowed_company_id, 'status' => 'active']);
         $user->employee->update(['site_id' => $newSite->id]);
-        $this->actingAs($user);
+        $this->actingAsPersonalAppUser($user);
 
         $rooms = app(CommunicationService::class)->roomsForUser($user);
 

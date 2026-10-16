@@ -27,8 +27,11 @@ class ChatReactionsSearchPinsTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private CommunicationRoom $room;
+
     private CommunicationService $chat;
 
     protected function setUp(): void
@@ -52,7 +55,7 @@ class ChatReactionsSearchPinsTest extends TestCase
         ]);
     }
 
-    private function person(string $name, string $role = 'worker', ?CommunicationRoom $room = null, ?Site $site = null): User
+    private function person(string $name, string $role = 'foreman', ?CommunicationRoom $room = null, ?Site $site = null): User
     {
         static $n = 0;
         $n++;
@@ -71,7 +74,7 @@ class ChatReactionsSearchPinsTest extends TestCase
 
     private function react(User $user, CommunicationMessage $message, string $emoji = '✅')
     {
-        return $this->actingAs($user)->postJson(
+        return $this->actingAsPersonalAppUser($user)->postJson(
             route('communication.react', ['room' => $message->communication_room_id, 'message' => $message]),
             ['emoji' => $emoji],
         );
@@ -111,7 +114,7 @@ class ChatReactionsSearchPinsTest extends TestCase
         $message = $this->chat->postMessage($lee, $this->room, '자재 도착');
 
         $otherSite = Site::create(['company_id' => $this->company->id, 'code' => 'RSP-2', 'name' => '다른 현장', 'status' => 'active']);
-        $outsider = $this->person('외부인', 'worker', $this->room('다른 방', CommunicationRoom::TYPE_SITE_CHAT, $otherSite), $otherSite);
+        $outsider = $this->person('외부인', 'foreman', $this->room('다른 방', CommunicationRoom::TYPE_SITE_CHAT, $otherSite), $otherSite);
 
         $this->react($outsider, $message)->assertForbidden();
     }
@@ -136,7 +139,7 @@ class ChatReactionsSearchPinsTest extends TestCase
         $this->react($kim, $order);
         $this->react($kim, $order, '👀');
 
-        $row = $this->actingAs($boss)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
+        $row = $this->actingAsPersonalAppUser($boss)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
             ->assertOk()->json('messages.0');
 
         $this->assertSame('✅', $row['reactions'][0]['emoji'], '✅ 확인이 맨 앞에 와야 합니다.');
@@ -152,11 +155,11 @@ class ChatReactionsSearchPinsTest extends TestCase
         $kim = $this->person('김철수');
         $message = $this->chat->postMessage($kim, $this->room, '배관 완료');
 
-        $first = $this->actingAs($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))->json();
+        $first = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))->json();
         $this->travel(10)->seconds();
         $this->react($kim, $message);
 
-        $next = $this->actingAs($lee)->getJson(route('communication.stream', [
+        $next = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', [
             'room' => $this->room, 'after' => $first['lastId'], 'changed' => $first['cursor'],
         ]))->json();
 
@@ -194,7 +197,7 @@ class ChatReactionsSearchPinsTest extends TestCase
         $lee = $this->person('이영희');
         $otherSite = Site::create(['company_id' => $this->company->id, 'code' => 'RSP-3', 'name' => '다른 현장', 'status' => 'active']);
         $otherRoom = $this->room('다른 현장방', CommunicationRoom::TYPE_SITE_CHAT, $otherSite);
-        $stranger = $this->person('남', 'worker', $otherRoom, $otherSite);
+        $stranger = $this->person('남', 'foreman', $otherRoom, $otherSite);
         $this->chat->postMessage($stranger, $otherRoom, '비밀 단가 표');
 
         $this->assertSame([], $this->search($lee, '단가'), '들어갈 수 없는 방의 글이 검색에 나왔습니다.');
@@ -250,13 +253,13 @@ class ChatReactionsSearchPinsTest extends TestCase
         $lee = $this->person('이영희');
         $message = $this->chat->postMessage($lee, $this->room, '도면 Rev.3 받았습니다');
 
-        $this->actingAs($lee)->get(route('communication.search', ['q' => 'Rev.3']))
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.search', ['q' => 'Rev.3']))
             ->assertOk()
             ->assertSee(route('communication.show', ['room' => $this->room, 'focus' => $message->id]), false)
             ->assertSee('<mark>Rev.3</mark>', false);
 
         // 한 글자("도")는 거의 모든 글에 걸린다 — 결과를 쏟아내지 않고 더 적어 달라고 한다.
-        $this->actingAs($lee)->get(route('communication.search', ['q' => '도']))->assertOk()->assertDontSee('class="hit"', false);
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.search', ['q' => '도']))->assertOk()->assertDontSee('class="hit"', false);
     }
 
     public function test_searching_a_room_you_cannot_open_is_refused(): void
@@ -265,7 +268,7 @@ class ChatReactionsSearchPinsTest extends TestCase
         $otherSite = Site::create(['company_id' => $this->company->id, 'code' => 'RSP-4', 'name' => '다른 현장', 'status' => 'active']);
         $otherRoom = $this->room('다른 현장방', CommunicationRoom::TYPE_SITE_CHAT, $otherSite);
 
-        $this->actingAs($lee)->get(route('communication.search', ['q' => '단가', 'room' => $otherRoom->id]))->assertNotFound();
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.search', ['q' => '단가', 'room' => $otherRoom->id]))->assertNotFound();
     }
 
     // ── 고정 ─────────────────────────────────────────────────────────
@@ -276,15 +279,15 @@ class ChatReactionsSearchPinsTest extends TestCase
         $kim = $this->person('김철수');
         $rule = $this->chat->postMessage($kim, $this->room, '3층 출입은 07~17시만');
 
-        $this->actingAs($lee)->postJson(route('communication.pin', ['room' => $this->room, 'message' => $rule]))
+        $this->actingAsPersonalAppUser($lee)->postJson(route('communication.pin', ['room' => $this->room, 'message' => $rule]))
             ->assertOk()->assertJsonPath('pinned', true);
         $this->assertTrue($rule->fresh()->is_pinned);
         $this->assertSame('이영희', $rule->fresh()->payload['pinned_by']['name'], '누가 꽂았는지 남아야 합니다.');
 
-        $pins = $this->actingAs($kim)->getJson(route('communication.pins', ['room' => $this->room]))->assertOk()->json('pins');
+        $pins = $this->actingAsPersonalAppUser($kim)->getJson(route('communication.pins', ['room' => $this->room]))->assertOk()->json('pins');
         $this->assertSame([$rule->id], array_column($pins, 'id'));
 
-        $this->actingAs($lee)->postJson(route('communication.pin', ['room' => $this->room, 'message' => $rule]))
+        $this->actingAsPersonalAppUser($lee)->postJson(route('communication.pin', ['room' => $this->room, 'message' => $rule]))
             ->assertOk()->assertJsonPath('pinned', false);
         $this->assertFalse($rule->fresh()->is_pinned);
     }
@@ -293,11 +296,11 @@ class ChatReactionsSearchPinsTest extends TestCase
     {
         $notice = $this->room('공지방', CommunicationRoom::TYPE_SITE_ANNOUNCEMENT);
         $boss = $this->person('박반장', 'site_manager', $notice);
-        $lee = $this->person('이영희', 'worker', $notice);
+        $lee = $this->person('이영희', 'foreman', $notice);
         $post = $this->chat->postMessage($boss, $notice, '안전모 필수', ['kind' => CommunicationMessage::KIND_ANNOUNCEMENT]);
         $post->update(['is_pinned' => false]);
 
-        $this->actingAs($lee)->postJson(route('communication.pin', ['room' => $notice, 'message' => $post]))->assertForbidden();
-        $this->actingAs($boss)->postJson(route('communication.pin', ['room' => $notice, 'message' => $post]))->assertOk();
+        $this->actingAsPersonalAppUser($lee)->postJson(route('communication.pin', ['room' => $notice, 'message' => $post]))->assertForbidden();
+        $this->actingAsPersonalAppUser($boss)->postJson(route('communication.pin', ['room' => $notice, 'message' => $post]))->assertOk();
     }
 }

@@ -13,7 +13,7 @@ class ErpHistoryNavigationTest extends TestCase
     public function test_admin_shell_renders_shared_history_and_restores_document_context(): void
     {
         $user = User::factory()->create(['access_role' => 'super_admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
-        $response = $this->actingAs($user)->get('/?view=wbs');
+        $response = $this->actingAsPersonalAppUser($user)->get('/?view=wbs');
         $response->assertOk()->assertSee('js/erp-history.js', false)
             ->assertSee('erpNavigation.start()', false)->assertSee('ERPDocumentNavigate', false)
             ->assertSee("newUrl.searchParams.delete('team_code')", false);
@@ -24,7 +24,7 @@ class ErpHistoryNavigationTest extends TestCase
     public function test_document_hub_uses_shared_history_without_delayed_deep_link_open(): void
     {
         $user = User::factory()->create(['access_role' => 'super_admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
-        $response = $this->actingAs($user)->get('/document-hub?embed=1');
+        $response = $this->actingAsPersonalAppUser($user)->get('/document-hub?embed=1');
         $response->assertOk()->assertSee('restoreDocumentNavigation', false)
             ->assertSee('rememberDocumentNavigation', false)
             ->assertDontSee('setTimeout(()=>openDocument(Number(requested)),400)', false);
@@ -35,7 +35,7 @@ class ErpHistoryNavigationTest extends TestCase
     {
         $user = User::factory()->create(['access_role' => 'super_admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
         foreach (['/attendance-app' => 'worker', '/attendance-app/ops-room' => 'ops'] as $url => $name) {
-            $response = $this->actingAs($user)->get($url);
+            $response = $this->actingAsPersonalAppUser($user)->get($url);
             $response->assertOk()->assertSee('js/erp-history.js', false)->assertSee('ERPHistory.create', false);
             file_put_contents(storage_path('app/navigation-'.$name.'-fixture.html'), $response->getContent());
         }

@@ -49,7 +49,7 @@ class MobileMaterialReceiptTest extends TestCase
             'account_status' => 'active', 'access_role' => 'site_manager', 'access_scope' => 'site',
             'allowed_company_id' => $this->company->id, 'allowed_site_id' => $this->site->id,
         ], $overrides));
-        $this->actingAs($user);
+        $this->actingAsPersonalAppUser($user);
 
         return $user;
     }
@@ -91,24 +91,19 @@ class MobileMaterialReceiptTest extends TestCase
         return $response->json();
     }
 
-    /**
-     * 자재 인수는 로그인한 사람만 한다 — 다만 «한 겹 더» 는 이제 없다.
-     *
-     * 예전에는 휴대폰만으로 들어온 세션에 PIN 을 한 번 더 받았다. PIN 이 사라졌으므로
-     * (사장님 결정 2026-09-23) 그 한 겹을 요구할 수단이 없고, 대신 이 문으로 들어온
-     * 세션은 ERP 본화면에 닿지 못한다(FourDigitDoorTest).
-     */
-    public function test_receiving_requires_login_but_not_a_second_step(): void
+    /** Receiving requires the manager's real sign-in, not attendance identification. */
+    public function test_receiving_requires_verified_manager_login_and_rejects_old_phone_only_sessions(): void
     {
         $this->get(self::URL)->assertRedirect(route('worker-app.entry'));
         $this->postJson(self::URL, $this->payload())->assertUnauthorized();
 
         $this->manager();
 
-        // 휴대폰 번호로 들어온 세션에도 이 화면은 열린다 — PIN 한 겹이 사라졌으므로
-        // 더 요구할 것이 없다. (본화면은 여전히 닫혀 있다 — FourDigitDoorTest.)
-        $this->withSession([WorkerDeviceSession::FLAG => true])->getJson(self::URL.'/items')->assertOk();
-        $this->withSession([WorkerDeviceSession::FLAG => true])->get(self::URL)->assertOk();
+        // An old phone-only session cannot be reused as a manager credential.
+        $this->withSession([WorkerDeviceSession::FLAG => true])->getJson(self::URL.'/items')
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_sign_in_required');
+        $this->withSession([WorkerDeviceSession::FLAG => true])->get(self::URL)
+            ->assertRedirect(route('login', ['app' => 1]));
     }
 
     public function test_unlinked_manager_can_open_receiving_from_worker_app_home(): void
@@ -148,7 +143,7 @@ class MobileMaterialReceiptTest extends TestCase
             ['account_status' => 'pending'],
         ] as $overrides) {
             $this->manager($overrides);
-            $this->get(self::URL)->assertForbidden();
+            $this->getJson(self::URL)->assertForbidden();
             $this->getJson(self::URL.'/items')->assertForbidden();
             $this->postJson(self::URL, $this->payload())->assertForbidden();
             $this->postJson(self::URL.'/upload', [
@@ -162,7 +157,7 @@ class MobileMaterialReceiptTest extends TestCase
     public function test_employee_supervisor_can_receive_only_for_assigned_site_even_with_all_sites_flag(): void
     {
         $this->manager([
-            'access_role' => 'worker', 'access_scope' => 'all_sites', 'employee_id' => $this->employee()->id,
+            'access_role' => 'foreman', 'access_scope' => 'all_sites', 'employee_id' => $this->employee()->id,
         ]);
         $this->get(self::URL)->assertOk();
         $this->postJson(self::URL, $this->payload())->assertSuccessful()->assertJsonPath('success', true);
@@ -340,7 +335,7 @@ class MobileMaterialReceiptTest extends TestCase
 
         $this->manager();
         $this->postJson(self::URL, $this->payload(['photo' => $upload['file']]))->assertUnprocessable();
-        $this->actingAs($originalManager);
+        $this->actingAsPersonalAppUser($originalManager);
         $this->travel(25)->hours();
         $this->postJson(self::URL, $this->payload(['photo' => $upload['file']]))->assertUnprocessable();
         $this->travelBack();

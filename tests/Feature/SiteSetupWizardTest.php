@@ -16,10 +16,15 @@ class SiteSetupWizardTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private User $unauthorizedUser;
+
     private Company $company;
+
     private Site $newSite;
+
     private Employee $managerCandidate;
+
     private Employee $worker;
 
     protected function setUp(): void
@@ -159,7 +164,8 @@ class SiteSetupWizardTest extends TestCase
             'siteId' => 'ALL',
         ]);
 
-        $response->assertStatus(200);
-        $response->assertJson(['success' => false, 'error' => '현장 초기 셋업 권한이 없습니다.']);
+        $response->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+        $this->assertNull($this->newSite->fresh()->setup_completed_at);
+        $this->assertNull($this->managerCandidate->fresh()->site_id);
     }
 }

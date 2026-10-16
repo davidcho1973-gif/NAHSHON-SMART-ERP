@@ -27,11 +27,17 @@ class ChatEditingAndPresenceTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private CommunicationRoom $room;
+
     private Employee $mine;
+
     private User $me;
+
     private Employee $theirs;
+
     private User $them;
 
     protected function setUp(): void
@@ -60,7 +66,7 @@ class ChatEditingAndPresenceTest extends TestCase
         ]);
         $user = User::factory()->create([
             'employee_id' => $employee->id, 'email' => $email,
-            'access_role' => 'worker', 'account_status' => 'active',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
         app(CommunicationService::class)->ensureRoomMember($this->room, $employee);
 
@@ -78,7 +84,7 @@ class ChatEditingAndPresenceTest extends TestCase
     {
         $message = $this->say($this->me, '3층 배관 4인치 완료');
 
-        $this->actingAs($this->me)
+        $this->actingAsPersonalAppUser($this->me)
             ->patchJson(route('communication.message.update', ['room' => $this->room, 'message' => $message]), [
                 'body' => '3층 배관 6인치 완료',
             ])->assertOk();
@@ -92,7 +98,7 @@ class ChatEditingAndPresenceTest extends TestCase
     {
         $message = $this->say($this->them, '원청 지시 사항입니다');
 
-        $this->actingAs($this->me)
+        $this->actingAsPersonalAppUser($this->me)
             ->patchJson(route('communication.message.update', ['room' => $this->room, 'message' => $message]), [
                 'body' => '그런 지시 없었습니다',
             ])->assertForbidden();
@@ -119,7 +125,7 @@ class ChatEditingAndPresenceTest extends TestCase
     {
         $message = $this->say($this->me, '잘못 올린 개인 정보');
 
-        $this->actingAs($this->me)
+        $this->actingAsPersonalAppUser($this->me)
             ->deleteJson(route('communication.message.destroy', ['room' => $this->room, 'message' => $message]))
             ->assertOk();
 
@@ -147,13 +153,13 @@ class ChatEditingAndPresenceTest extends TestCase
     {
         // 지운 글이 남의 화면에는 그대로 남아 있으면 지운 것이 아니다.
         $message = $this->say($this->me, '곧 지울 글');
-        $seen = $this->actingAs($this->them)
+        $seen = $this->actingAsPersonalAppUser($this->them)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
             ->json('lastId');
 
         app(CommunicationService::class)->removeMessage($this->me, $message);
 
-        $rows = $this->actingAs($this->them)
+        $rows = $this->actingAsPersonalAppUser($this->them)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => $seen]))
             ->assertOk()->json('messages');
 
@@ -167,11 +173,11 @@ class ChatEditingAndPresenceTest extends TestCase
 
     public function test_the_room_shows_who_is_here_and_who_is_watching_now(): void
     {
-        $this->actingAs($this->me)
+        $this->actingAsPersonalAppUser($this->me)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
             ->assertOk();
 
-        $response = $this->actingAs($this->me)
+        $response = $this->actingAsPersonalAppUser($this->me)
             ->getJson(route('communication.members', ['room' => $this->room]))
             ->assertOk();
 
@@ -185,7 +191,7 @@ class ChatEditingAndPresenceTest extends TestCase
 
     public function test_the_stream_carries_the_online_count(): void
     {
-        $data = $this->actingAs($this->me)
+        $data = $this->actingAsPersonalAppUser($this->me)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
             ->assertOk()->json();
 
@@ -195,9 +201,9 @@ class ChatEditingAndPresenceTest extends TestCase
 
     public function test_an_outsider_cannot_see_who_is_in_the_room(): void
     {
-        $outsider = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']);
+        $outsider = User::factory()->create(['access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active']);
 
-        $this->actingAs($outsider)
+        $this->actingAsPersonalAppUser($outsider)
             ->getJson(route('communication.members', ['room' => $this->room]))
             ->assertForbidden();
     }
@@ -211,7 +217,7 @@ class ChatEditingAndPresenceTest extends TestCase
             $this->say($this->me, "메시지 {$i}");
         }
 
-        $rows = $this->actingAs($this->them)
+        $rows = $this->actingAsPersonalAppUser($this->them)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
             ->assertOk()->json('messages');
 

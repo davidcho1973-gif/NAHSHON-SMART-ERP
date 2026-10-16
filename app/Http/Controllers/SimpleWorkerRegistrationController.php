@@ -60,7 +60,7 @@ class SimpleWorkerRegistrationController extends Controller
 
     /**
      * 현장 공용 QR 화면. 새 작업자는 이름과 전화번호만 적는다.
-     * 회사·현장·직책·공정 분류는 QR 과 ERP 기준값으로 채우고 인사담당자가 나중에 보완한다.
+     * 현장은 QR 로 정한다. 소속회사·고용구분·공정은 인사담당자가 확인한다.
      */
     public function quickForm(Request $request, Site $site): RedirectResponse
     {
@@ -845,6 +845,7 @@ class SimpleWorkerRegistrationController extends Controller
                 'employee' => $employee,
                 'workerName' => $workerName,
                 'gateUrl' => route('gate.show', ['site' => $site, 'onboarded' => 1]),
+                'installUrl' => route('attendance-app.index', ['install' => 1]),
                 'pinSetupUrl' => $pinSetupUrl,
             ]);
         }

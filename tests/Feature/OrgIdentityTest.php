@@ -3,12 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\Company;
+use App\Models\MemberRegistration;
 use App\Models\OrgSetting;
 use App\Models\User;
 use App\Services\Admin\OrgSettingService;
+use App\Services\ApplicantInvitationService;
+use App\Services\Attendance\AutoClockOutService;
 use App\Support\Org;
 use App\Support\WorkerLang;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -65,7 +71,7 @@ class OrgIdentityTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('names')]
+    #[DataProvider('names')]
     public function test_the_logo_initials_come_from_the_name(string $name, string $expected): void
     {
         $this->rename($name);
@@ -169,7 +175,7 @@ class OrgIdentityTest extends TestCase
     {
         // 설치 전·마이그레이션 도중에도 이름을 묻는 코드가 있다. 여기서 예외가
         // 나면 앱이 통째로 안 뜬다.
-        \Illuminate\Support\Facades\Schema::drop('org_settings');
+        Schema::drop('org_settings');
         Org::forget();
 
         $this->assertNotSame('', Org::name());
@@ -198,7 +204,7 @@ class OrgIdentityTest extends TestCase
         $this->rename('ABC 건설');
 
         $this->get(route('worker-app.manifest'))->assertOk()->assertJsonFragment([
-            'name' => '내 출퇴근 · ABC 건설',
+            'name' => '업무 개인앱 · ABC 건설',
         ]);
     }
 
@@ -206,13 +212,13 @@ class OrgIdentityTest extends TestCase
     {
         $this->rename('ABC 건설');
 
-        $registration = \App\Models\MemberRegistration::create([
+        $registration = MemberRegistration::create([
             'full_name' => 'Test Applicant',
             'email' => 'applicant@example.com',
             'member_type' => 'worker',
         ]);
 
-        $url = app(\App\Services\ApplicantInvitationService::class)
+        $url = app(ApplicantInvitationService::class)
             ->mailtoUrl($registration, 'applicant@example.com');
 
         $this->assertStringContainsString(rawurlencode('ABC 건설'), $url);
@@ -226,7 +232,7 @@ class OrgIdentityTest extends TestCase
         config(['org.name' => 'ABC CONSTRUCTION', 'org.code' => 'ABC']);
         Org::forget();
 
-        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+        $this->seed(DatabaseSeeder::class);
 
         $own = Company::query()->where('code', 'ABC')->first();
         $this->assertNotNull($own);
@@ -316,7 +322,7 @@ class OrgIdentityTest extends TestCase
     {
         config(['org.attendance.indirect_cutoff_hour' => 18]);
 
-        $this->assertSame(18, \App\Services\Attendance\AutoClockOutService::cutoffHour());
+        $this->assertSame(18, AutoClockOutService::cutoffHour());
     }
 
     public function test_policy_numbers_fall_back_when_the_setting_is_junk(): void
@@ -324,7 +330,7 @@ class OrgIdentityTest extends TestCase
         // 환경변수는 사람이 손으로 넣는다. 오타 하나로 근무시간이 0 이 되면 안 된다.
         config(['org.attendance.indirect_cutoff_hour' => 'abc']);
 
-        $this->assertSame(16, \App\Services\Attendance\AutoClockOutService::cutoffHour());
+        $this->assertSame(16, AutoClockOutService::cutoffHour());
     }
 
     public function test_a_broken_time_setting_does_not_break_the_scheduler(): void

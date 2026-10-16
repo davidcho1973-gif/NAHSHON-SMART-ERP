@@ -110,17 +110,16 @@ class AppInstallTest extends TestCase
         }
     }
 
-    public function test_the_gate_screen_points_at_its_manifest_and_icon(): void
+    public function test_the_gate_screen_does_not_offer_app_installation(): void
     {
         // 매니페스트가 있어도 화면이 가리키지 않으면 브라우저는 찾아가지 않는다.
         $site = $this->site();
 
         $this->get(route('gate.show', ['site' => $site]))
             ->assertOk()
-            ->assertSee(route('gate.manifest', ['site' => $site]), false)
-            // 앱마다 아이콘이 다르다 — 홈 화면에서 출퇴근과 영수증이 구분되어야 한다.
-            ->assertSee('attendance-apple-touch.png', false)
-            ->assertSee('apple-mobile-web-app-capable', false);
+            ->assertDontSee('rel="manifest"', false)
+            ->assertDontSee('apple-mobile-web-app-capable', false)
+            ->assertDontSee('id="install-button"', false);
     }
 
     public function test_the_gate_links_to_the_full_app_instead_of_offering_gate_installation(): void
@@ -159,6 +158,9 @@ class AppInstallTest extends TestCase
 
         $this->assertNotSame($gate['id'], $worker['id']);
         $this->assertStringEndsWith('/attendance-app', $worker['start_url']);
+        $this->assertSame('worker-app', $worker['id']);
+        $this->assertSame(url('/'), $worker['scope']);
+        $this->assertNull(parse_url($worker['start_url'], PHP_URL_QUERY));
     }
 
     public function test_the_worker_app_screen_points_at_its_manifest(): void
@@ -171,11 +173,11 @@ class AppInstallTest extends TestCase
             'preferred_language' => 'es',
         ]);
         $user = User::factory()->create([
-            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
             'employee_id' => $employee->id,
         ]);
 
-        $this->actingAs($user)
+        $this->actingAsPersonalAppUser($user)
             ->get(route('attendance-app.index'))
             ->assertOk()
             ->assertSee(route('worker-app.manifest'), false)

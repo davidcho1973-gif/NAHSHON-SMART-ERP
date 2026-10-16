@@ -44,7 +44,7 @@ class OpsVoiceNoteTest extends TestCase
         ]);
 
         return User::factory()->create([
-            'access_role' => 'worker', 'account_status' => 'active', 'employee_id' => $employee->id,
+            'access_role' => 'foreman', 'account_status' => 'active', 'employee_id' => $employee->id,
         ]);
     }
 
@@ -69,7 +69,7 @@ class OpsVoiceNoteTest extends TestCase
             "3층 천장 배관 20개 중 약 12개 완료\n그레이바 자재 화요일 도착 예정",
         );
 
-        $res = $this->actingAs($this->foreman())->post(route('ops.voice'), [
+        $res = $this->actingAsPersonalAppUser($this->foreman())->post(route('ops.voice'), [
             'audio' => UploadedFile::fake()->createWithContent('note.webm', 'FAKE-AUDIO-BYTES'),
             'mime' => 'audio/webm;codecs=opus',
         ]);
@@ -85,7 +85,7 @@ class OpsVoiceNoteTest extends TestCase
         // 정리가 비어 오면 들은 것이라도 준다. 반장이 말한 사실이 사라지는 것이 제일 나쁘다.
         $this->fakeHeard('배관 12개 했습니다', '');
 
-        $res = $this->actingAs($this->foreman())->post(route('ops.voice'), [
+        $res = $this->actingAsPersonalAppUser($this->foreman())->post(route('ops.voice'), [
             'audio' => UploadedFile::fake()->createWithContent('note.webm', 'FAKE'),
             'mime' => 'audio/webm',
         ]);
@@ -97,7 +97,7 @@ class OpsVoiceNoteTest extends TestCase
     {
         $this->fakeHeard('배관 했습니다');
 
-        $this->actingAs($this->foreman())->post(route('ops.voice'), [
+        $this->actingAsPersonalAppUser($this->foreman())->post(route('ops.voice'), [
             'audio' => UploadedFile::fake()->createWithContent('note.m4a', 'FAKE-AUDIO-BYTES'),
             'mime' => 'audio/mp4',
         ]);
@@ -116,7 +116,7 @@ class OpsVoiceNoteTest extends TestCase
         // 다른 문으로 되풀이하는 것이 된다.
         $this->fakeHeard('   ', '   ');
 
-        $res = $this->actingAs($this->foreman())->post(route('ops.voice'), [
+        $res = $this->actingAsPersonalAppUser($this->foreman())->post(route('ops.voice'), [
             'audio' => UploadedFile::fake()->createWithContent('note.webm', 'FAKE'),
             'mime' => 'audio/webm',
         ]);
@@ -127,7 +127,7 @@ class OpsVoiceNoteTest extends TestCase
 
     public function test_a_photo_cannot_be_smuggled_in_as_a_recording(): void
     {
-        $res = $this->actingAs($this->foreman())->post(route('ops.voice'), [
+        $res = $this->actingAsPersonalAppUser($this->foreman())->post(route('ops.voice'), [
             'audio' => UploadedFile::fake()->createWithContent('x.jpg', 'JPEGDATA'),
             'mime' => 'image/jpeg',
         ]);

@@ -9,13 +9,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/**
- * 직영 작업자가 앱을 실제로 손에 넣는 경로.
- *
- * 협력사는 게이트 포스터 한 장이면 끝난다(계정이 없고 매일 사람이 바뀐다). 직영은 다르다 —
- * 로그인이 필요하고, 가장 흔한 실패는 "설치를 못 한다"가 아니라 <b>어느 구글 계정으로
- * 로그인해야 하는지 모른다</b> 이다. 휴대폰에 계정이 두세 개 있는 경우가 흔하다.
- */
+/** Installation cards are for approved managers and foremen; workers receive the site QR guidance. */
 class WorkerAppInstallCardTest extends TestCase
 {
     use RefreshDatabase;
@@ -54,10 +48,10 @@ class WorkerAppInstallCardTest extends TestCase
         $employee = $this->worker();
         User::factory()->create([
             'employee_id' => $employee->id, 'email' => 'cristian.rosas@gmail.com',
-            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($this->admin())
+        $this->actingAsPersonalAppUser($this->admin())
             ->get(route('attendance-app.employee.install-card', ['employee' => $employee]))
             ->assertOk()
             ->assertSee('cristian.rosas@gmail.com')
@@ -66,14 +60,15 @@ class WorkerAppInstallCardTest extends TestCase
 
     public function test_the_card_says_plainly_when_the_worker_has_no_account_yet(): void
     {
-        // 계정 없이 이 종이를 주면 작업자가 로그인에 실패한다. 인쇄하는 사람이 지금 알아야 한다.
+        // An employee without an eligible account must not receive an app installation card.
         $employee = $this->worker('Dhairo Carmona');
 
-        $this->actingAs($this->admin())
+        $this->actingAsPersonalAppUser($this->admin())
             ->get(route('attendance-app.employee.install-card', ['employee' => $employee]))
             ->assertOk()
-            ->assertSee('로그인 계정 없음')
-            ->assertSee('계정 만들기');
+            ->assertViewIs('worker-app.access')
+            ->assertSee(route('gate.show', $this->site), false)
+            ->assertDontSee('data:image/svg+xml;base64,', false);
     }
 
     public function test_a_suspended_account_is_not_printed_as_usable(): void
@@ -84,31 +79,51 @@ class WorkerAppInstallCardTest extends TestCase
             'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'suspended',
         ]);
 
-        $this->actingAs($this->admin())
+        $this->actingAsPersonalAppUser($this->admin())
             ->get(route('attendance-app.employee.install-card', ['employee' => $employee]))
             ->assertOk()
             ->assertDontSee('gone@gmail.com')
-            ->assertSee('로그인 계정 없음');
+            ->assertViewIs('worker-app.access');
+    }
+
+    public function test_an_active_worker_account_gets_site_attendance_guidance_instead_of_an_install_card(): void
+    {
+        $employee = $this->worker();
+        $employee->update(['position' => 'foreman']);
+        User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker',
+            'access_scope' => 'self', 'account_status' => 'active']);
+
+        foreach (['attendance-app.employee.install-card', 'attendance-app.employee.share'] as $route) {
+            $this->actingAsPersonalAppUser($this->admin())->get(route($route, $employee))
+                ->assertOk()->assertViewIs('worker-app.access')
+                ->assertSee(route('gate.show', $this->site), false)
+                ->assertDontSee('data:image/svg+xml;base64,', false)
+                ->assertDontSee('rel="manifest"', false);
+        }
     }
 
     public function test_the_card_carries_all_three_languages(): void
     {
         $employee = $this->worker();
 
-        $res = $this->actingAs($this->admin())
+        User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'foreman', 'account_status' => 'active']);
+
+        $res = $this->actingAsPersonalAppUser($this->admin())
             ->get(route('attendance-app.employee.install-card', ['employee' => $employee]))
             ->assertOk();
 
-        $res->assertSee('내 출퇴근 앱');
-        $res->assertSee('My Attendance App');
-        $res->assertSee('Mi aplicación de asistencia', false);
+        $res->assertSee('업무 개인앱');
+        $res->assertSee('Personal Work App');
+        $res->assertSee('App personal de trabajo', false);
     }
 
     public function test_the_card_points_at_the_worker_app_not_the_gate(): void
     {
         $employee = $this->worker();
 
-        $this->actingAs($this->admin())
+        User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'foreman', 'account_status' => 'active']);
+
+        $this->actingAsPersonalAppUser($this->admin())
             ->get(route('attendance-app.employee.install-card', ['employee' => $employee]))
             ->assertOk()
             ->assertSee(route('attendance-app.index'), false);
@@ -120,28 +135,27 @@ class WorkerAppInstallCardTest extends TestCase
         $target = $this->worker();
         $other = $this->worker('Someone Else');
         $otherUser = User::factory()->create([
-            'employee_id' => $other->id, 'access_role' => 'worker',
+            'employee_id' => $other->id, 'access_role' => 'foreman',
             'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($otherUser)
+        $this->actingAsPersonalAppUser($otherUser)
             ->get(route('attendance-app.employee.install-card', ['employee' => $target]))
             ->assertForbidden();
     }
 
     // ── 로그인 뒤에 어디로 떨어지는가 ──────────────────────────────
 
-    public function test_a_worker_lands_on_the_worker_app_not_the_erp(): void
+    public function test_a_worker_lands_on_the_site_qr_guidance_not_the_personal_app(): void
     {
-        // 자기 근무시간을 보러 앱을 열었는데 로그인 뒤에 회사 전체 화면이 뜨면,
-        // 잘못 눌렀다고 생각하고 앱을 지운다. 설치를 부탁하는 첫날에 겪으면 두 번째는 없다.
+        // Previously installed worker icons recover to attendance guidance, without a new app login.
         $employee = $this->worker();
         $user = User::factory()->create([
             'employee_id' => $employee->id, 'access_role' => 'worker',
             'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->assertSame('/attendance-app', $user->landingPath());
+        $this->assertSame('/app', $user->landingPath());
     }
 
     public function test_a_foreman_lands_on_the_worker_app_too(): void

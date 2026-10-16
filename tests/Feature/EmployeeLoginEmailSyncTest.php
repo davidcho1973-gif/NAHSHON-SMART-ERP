@@ -134,6 +134,7 @@ class EmployeeLoginEmailSyncTest extends TestCase
 
     public function test_the_send_screen_points_out_the_mismatch(): void
     {
+        $this->account->forceFill(['access_role' => 'foreman', 'access_scope' => 'team'])->save();
         $this->employee->update(['email' => 'new@gmail.com']);
 
         $res = $this->get(route('attendance-app.employee.share', ['employee' => $this->employee]))
@@ -146,6 +147,7 @@ class EmployeeLoginEmailSyncTest extends TestCase
 
     public function test_the_send_screen_stays_quiet_when_they_match(): void
     {
+        $this->account->forceFill(['access_role' => 'foreman', 'access_scope' => 'team'])->save();
         // 맞는데도 경고가 뜨면 사람들은 경고를 무시하게 된다.
         $this->get(route('attendance-app.employee.share', ['employee' => $this->employee]))
             ->assertOk()->assertDontSee('위 계정과 다릅니다', false);

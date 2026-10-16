@@ -71,7 +71,8 @@ class AssistantDraftSuggestionTest extends TestCase
 
     private function suggest(array $overrides = []): TestResponse
     {
-        return $this->actingAsPurchaseUser($this->actor)->postJson(self::ENDPOINT, $this->input($overrides));
+        // Each HTTP request resolves a fresh account and its current employee link.
+        return $this->actingAsPurchaseUser($this->actor->fresh())->postJson(self::ENDPOINT, $this->input($overrides));
     }
 
     private function fakeProvider(mixed $fields = ['title' => 'Prepare revised drawings'], array $questions = [], ?callable $during = null): void

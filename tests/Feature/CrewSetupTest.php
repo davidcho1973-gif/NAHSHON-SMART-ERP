@@ -66,7 +66,7 @@ class CrewSetupTest extends TestCase
         $service = app(AttendanceQrService::class);
         $this->assertTrue($service->canProcessCrew($user, $qr));
         $this->assertFalse($service->canProcessCrew($user, $otherQr));
-        $this->actingAs($user)->get(route('attendance-app.crew', ['token' => $qr->token]))->assertOk();
+        $this->actingAsPersonalAppUser($user)->get(route('attendance-app.crew', ['token' => $qr->token]))->assertOk();
         $this->get(route('attendance-app.crew', ['token' => $otherQr->token]))->assertRedirect();
         $this->assertDatabaseHas('auth_events', ['event' => 'foreman_access_applied', 'user_id' => $user->id]);
     }
@@ -256,7 +256,7 @@ class CrewSetupTest extends TestCase
         $this->postJson('/smart-company-api/api_getCrewSetup', ['args' => [], 'siteId' => 'ALL'])
             ->assertOk()->assertJsonPath('teams.0.code', 'CREW-PIPE');
         $this->actingAs(User::factory()->create(['access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']));
-        $this->postJson('/smart-company-api/api_getCrewSetup', ['args' => []])->assertOk()->assertJson(['success' => false]);
+        $this->postJson('/smart-company-api/api_getCrewSetup', ['args' => []])->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
         $this->postJson('/smart-company-api/api_saveCrewTeam', ['args' => [$this->input()]])->assertForbidden();
     }
 

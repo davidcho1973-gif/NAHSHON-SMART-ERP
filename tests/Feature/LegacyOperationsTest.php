@@ -22,10 +22,10 @@ class LegacyOperationsTest extends TestCase
 
     private function admin(): void
     {
-        $this->actingAs(User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']));
+        $this->actingAsPersonalAppUser(User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']));
     }
 
-    public function test_admin_reads_original_and_worker_reads_only_assigned_technical_document(): void
+    public function test_admin_and_foreman_read_the_assigned_technical_document(): void
     {
         Storage::fake('local');
         Storage::disk('local')->put('fixture.txt', 'technical source');
@@ -33,7 +33,7 @@ class LegacyOperationsTest extends TestCase
         $doc = IntegratedDocument::create(['site_id' => $site->id, 'title' => 'Plan', 'document_type' => 'drawing', 'disk' => 'local', 'path' => 'fixture.txt', 'status' => 'confirmed']);
         $this->admin();
         $this->get('/docs-api/file/'.$doc->id)->assertOk();
-        $this->actingAs(User::factory()->create(['access_role' => 'worker', 'account_status' => 'active', 'access_scope' => 'site', 'allowed_site_id' => $site->id]));
+        $this->actingAsPersonalAppUser(User::factory()->create(['access_role' => 'foreman', 'account_status' => 'active', 'access_scope' => 'site', 'allowed_site_id' => $site->id]));
         $this->get('/docs-api/file/'.$doc->id)->assertOk();
     }
 
@@ -91,7 +91,7 @@ class LegacyOperationsTest extends TestCase
             $thread = MailThread::open(['site_id' => $site->id, 'counterparty_email' => 'vendor@example.invalid', 'subject' => 'Quote']);
             MailMessage::create(['mail_thread_id' => $thread->id, 'site_id' => $site->id, 'direction' => 'incoming', 'status' => 'received', 'channel' => 'mail', 'subject' => 'Reply', 'body_text' => $site->code, 'occurred_at' => now()]);
         }
-        $this->actingAs(User::factory()->create(['access_role' => 'site_manager', 'account_status' => 'active', 'access_scope' => 'site', 'allowed_site_id' => $a->id]));
+        $this->actingAsPersonalAppUser(User::factory()->create(['access_role' => 'site_manager', 'account_status' => 'active', 'access_scope' => 'site', 'allowed_site_id' => $a->id]));
         $result = SmartCompanyData::handle('api_getVendorReplies', ['vendor@example.invalid']);
         $this->assertSame(['REPLY-A'], array_column($result['replies'], 'body'));
     }

@@ -58,7 +58,7 @@ class GateQrCountsAsOnSiteTest extends TestCase
         ]);
         User::query()->create([
             'name' => 'A B', 'email' => 'ab@example.test', 'password' => Hash::make('x'),
-            'access_role' => 'worker', 'access_scope' => 'assigned_sites',
+            'access_role' => 'foreman', 'access_scope' => 'assigned_sites',
             'account_status' => 'active', 'employee_id' => $this->employee->id,
         ]);
     }

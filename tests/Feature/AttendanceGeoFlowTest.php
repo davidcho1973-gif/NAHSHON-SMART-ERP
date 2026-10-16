@@ -25,7 +25,7 @@ class AttendanceGeoFlowTest extends TestCase
         $emp = Employee::create(['company_id' => $company->id, 'site_id' => $site->id, 'first_name' => 'D', 'last_name' => 'C', 'email' => 'd@x.com', 'employment_status' => 'active']);
         $user = User::factory()->create(['employee_id' => $emp->id, 'access_role' => 'admin', 'account_status' => 'active']);
 
-        $this->actingAs($user);
+        $this->actingAsPersonalAppUser($user);
 
         // 1) 현재 위치를 현장 중심으로 설정(반경 322m).
         $set = $this->postJson('/smart-company-api/api_setMySiteGeofence', ['args' => [33.4, -112.0, 322]]);
@@ -46,10 +46,10 @@ class AttendanceGeoFlowTest extends TestCase
         $company = Company::create(['code' => 'C2', 'name' => 'Co2', 'status' => 'active']);
         $site = Site::create(['code' => 'AZ-02', 'name' => 'AZ2', 'timezone' => 'UTC', 'status' => 'active']);
         $emp = Employee::create(['company_id' => $company->id, 'site_id' => $site->id, 'first_name' => 'E', 'last_name' => 'C', 'email' => 'e@x.com', 'employment_status' => 'active']);
-        $user = User::factory()->create(['employee_id' => $emp->id, 'access_role' => 'worker', 'account_status' => 'active']);
+        $user = User::factory()->create(['employee_id' => $emp->id, 'access_role' => 'foreman', 'account_status' => 'active']);
 
         // 지오펜스 미설정 → 현장 판정 불가 → off_site(세션 미생성).
-        $this->actingAs($user)->postJson('/attendance-geo/ping', ['lat' => 33.4, 'lng' => -112.0, 'accuracy' => 10])
+        $this->actingAsPersonalAppUser($user)->postJson('/attendance-geo/ping', ['lat' => 33.4, 'lng' => -112.0, 'accuracy' => 10])
             ->assertOk()->assertJson(['success' => true, 'onSite' => false]);
     }
 }

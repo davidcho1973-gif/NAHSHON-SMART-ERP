@@ -1,5 +1,5 @@
 {{--
-    작업자 출퇴근 화면.
+    관리직원·반장의 업무 개인앱. 일반 작업자는 현장 QR로 출퇴근한다.
 
     규칙 하나 — 작업자에게 방법을 고르게 하지 않는다. 화면이 상황을 보고 알아서
     자동 → 직접 → QR 로 내려가고, 보이는 것은 큰 버튼 하나와 "왜 이 방법인지" 한 줄이다.
@@ -15,15 +15,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ __('내 출퇴근') }} · {{ \App\Support\Org::name() }}</title>
+    <title>{{ __('업무 개인앱') }} · {{ \App\Support\Org::name() }}</title>
 
     {{-- 홈 화면에 추가하면 앱이 된다. --}}
-    <link rel="manifest" href="{{ route('worker-app.manifest') }}">
-    <link rel="apple-touch-icon" href="{{ asset('images/attendance-apple-touch.png') }}">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="내 출퇴근">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    @include('partials.personal-app-meta')
     @include('partials.field-app-theme')
     <style>
         /* One responsive shell keeps the fixed navigation aligned with the content.
@@ -506,7 +501,7 @@
             autoDetect: '현장 자동 인식', gps: 'GPS 반경', wifi: '현장 WiFi',
             registered: '등록됨', notRegistered: '미등록',
             autoNote: '둘 중 하나만 등록돼 있어도 자동 출퇴근이 됩니다. 둘 다 없으면 직접 눌러야 합니다.',
-            installNote: '다음부터 아이콘만 누르면 열립니다', logout: '로그아웃',
+            installNote: '이 아이콘으로 업무 개인앱을 엽니다', logout: '로그아웃',
             retry: '다시 시도', loadFail: '정보를 불러오지 못했습니다.',
             sentFail: '보내지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.', done: '처리했습니다.',
             viewOnly: '보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
@@ -560,7 +555,7 @@
             autoDetect: 'Site auto-detect', gps: 'GPS radius', wifi: 'Site WiFi',
             registered: 'Registered', notRegistered: 'Not set',
             autoNote: 'Either one enables automatic clock-in. With neither, press the button.',
-            installNote: 'Opens with one tap next time', logout: 'Log out',
+            installNote: 'Open your work app from this icon', logout: 'Log out',
             retry: 'Retry', loadFail: 'Could not load your data.',
             sentFail: 'Could not send. Check your internet and try again.', done: 'Done.',
             viewOnly: 'View-only mode. You cannot punch here.',
@@ -614,7 +609,7 @@
             autoDetect: 'Detección automática', gps: 'Radio GPS', wifi: 'WiFi del sitio',
             registered: 'Registrado', notRegistered: 'Sin registrar',
             autoNote: 'Con uno de los dos, la entrada es automática. Sin ninguno, presione el botón.',
-            installNote: 'La próxima vez abre con un toque', logout: 'Cerrar sesión',
+            installNote: 'Abra su app de trabajo desde este ícono', logout: 'Cerrar sesión',
             retry: 'Reintentar', loadFail: 'No se pudo cargar su información.',
             sentFail: 'No se pudo enviar. Revise su internet e intente de nuevo.', done: 'Listo.',
             viewOnly: 'Modo de solo lectura. No puede marcar aquí.',
@@ -972,12 +967,16 @@
         var d = state.data;
         var view = document.getElementById('view');
         document.getElementById('offline').hidden = navigator.onLine;
+        var installEntry = new URLSearchParams(location.search).get('install') === '1'
+            && window.AppInstall && !window.AppInstall.installed()
+            ? '<div class="sec"><button type="button" class="link" data-act="install" style="width:100%;text-align:left">' +
+                '<div><b>＋ ' + esc(window.AppInstall.label()) + '</b><div class="row-a">' + esc(T.installNote) + '</div></div><span class="go">›</span></button></div>' : '';
 
         if (!d || d.success === false) {
             // 연결이 안 된 것과 진짜로 실패한 것은 다른 상황이다. 같은 빨간 상자로 보여 주면
             // 관리자는 앱이 깨진 줄 알고, 작업자는 자기가 뭘 잘못했다고 생각한다.
-            view.innerHTML = (d && d.code === 'view_as_denied') ? viewDenied(d)
-                : (d && d.code === 'no_employee') ? notLinked(d) : managerQuickSection() + failed(d);
+            view.innerHTML = installEntry + ((d && d.code === 'view_as_denied') ? viewDenied(d)
+                : (d && d.code === 'no_employee') ? notLinked(d) : managerQuickSection() + failed(d));
             document.getElementById('nm').textContent = (d && d.email) ? d.email : @json($user?->name ?? '작업자');
             document.getElementById('tag').textContent = @json(mb_substr($user?->name ?? '··', 0, 2));
             document.getElementById('sb').textContent = (d && d.code === 'no_employee') ? '연결 대기 중' : '';
@@ -992,9 +991,9 @@
         document.getElementById('sb').textContent =
             [e.number, e.trade, d.site ? d.site.code : null].filter(Boolean).join(' · ');
 
-        view.innerHTML = state.tab === 'home' ? tabHome(d)
+        view.innerHTML = installEntry + (state.tab === 'home' ? tabHome(d)
             : state.tab === 'work' ? tabWork(d)
-            : tabMe(d);
+            : tabMe(d));
 
         paintTabs();
     }

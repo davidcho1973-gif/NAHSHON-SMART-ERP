@@ -14,6 +14,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Communication\ChatAttachmentService;
 use App\Services\Communication\ChatDocumentReplyConnector;
+use App\Services\Communication\CommunicationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
@@ -34,8 +35,11 @@ class ChatAttachmentRoutingTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private Employee $employee;
+
     private User $user;
 
     protected function setUp(): void
@@ -54,7 +58,7 @@ class ChatAttachmentRoutingTest extends TestCase
             'email' => 'kim@example.com', 'employment_status' => 'active',
         ]);
         $this->user = User::factory()->create([
-            'employee_id' => $this->employee->id, 'access_role' => 'site_manager', 'account_status' => 'active',
+            'employee_id' => $this->employee->id, 'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
     }
 
@@ -154,9 +158,9 @@ class ChatAttachmentRoutingTest extends TestCase
     {
         Queue::fake();
         $room = $this->room();
-        app(\App\Services\Communication\CommunicationService::class)->ensureRoomMember($room, $this->employee);
+        app(CommunicationService::class)->ensureRoomMember($room, $this->employee);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->post(route('communication.store', ['room' => $room]), [
                 'files' => [UploadedFile::fake()->image('site.jpg')],
             ])
@@ -166,14 +170,47 @@ class ChatAttachmentRoutingTest extends TestCase
         $this->assertSame('site.jpg', $attachment->original_name);
 
         // 방 사람은 열 수 있고, 남은 못 연다 — 영수증·급여 서류가 오가는 방이다.
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->get(route('communication.file', ['room' => $room, 'file' => $attachment]))
             ->assertOk();
 
-        $outsider = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']);
-        $this->actingAs($outsider)
+        $outsider = User::factory()->create(['access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active']);
+        $this->actingAsPersonalAppUser($outsider)
             ->get(route('communication.file', ['room' => $room, 'file' => $attachment]))
             ->assertForbidden();
+    }
+
+    public function test_a_worker_cannot_upload_or_download_chat_files_even_as_an_existing_room_member(): void
+    {
+        Queue::fake();
+        $room = $this->room();
+        app(CommunicationService::class)->ensureRoomMember($room, $this->employee);
+        $attachment = app(ChatAttachmentService::class)->attach(
+            $this->message($room),
+            UploadedFile::fake()->image('existing.jpg'),
+            $this->user,
+        );
+        $messageCount = CommunicationMessage::query()->count();
+        $documentCount = IntelligentDocument::query()->count();
+        $fileCount = CommunicationMessageFile::query()->count();
+        $disk = Storage::disk((string) config('document-intelligence.disk', 'local'));
+        $storedFiles = $disk->allFiles();
+        Queue::fake();
+        $this->user->forceFill(['access_role' => 'worker', 'access_scope' => 'self'])->save();
+
+        $this->actingAsPersonalAppUser($this->user)
+            ->getJson(route('communication.file', ['room' => $room, 'file' => $attachment]))
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+        $this->actingAsPersonalAppUser($this->user)
+            ->postJson(route('communication.store', ['room' => $room]), [
+                'files' => [UploadedFile::fake()->image('denied.jpg')],
+            ])->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+
+        $this->assertSame($messageCount, CommunicationMessage::query()->count());
+        $this->assertSame($documentCount, IntelligentDocument::query()->count());
+        $this->assertSame($fileCount, CommunicationMessageFile::query()->count());
+        $this->assertSame($storedFiles, $disk->allFiles());
+        Queue::assertNothingPushed();
     }
 
     // ── 결과가 방으로 돌아오는가 ───────────────────────────────────────

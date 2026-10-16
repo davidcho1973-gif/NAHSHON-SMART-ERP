@@ -91,10 +91,21 @@ class NewManagerInvitationTest extends TestCase
         $this->assertDatabaseCount('users', 2);
         $this->assertDatabaseCount('payroll_timesheets', 0);
         $this->assertSame($user->id, ManagerInvitation::first()->user_id);
-        $this->get($invite['url'])->assertGone();
+        $this->get($invite['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->finish($invite)->assertGone();
         $this->get('/')->assertOk();
         $this->get('/attendance-app')->assertOk();
+
+        $this->guest();
+        $this->get($invite['url'])->assertRedirect(route('login', ['app' => 1]))
+            ->assertHeader('Referrer-Policy', 'no-referrer')->assertHeader('Cache-Control', 'no-store, private')
+            ->assertDontSee('New Manager')->assertDontSee('new@example.com')->assertDontSee(basename($invite['url']));
+        $this->assertGuest();
+        $this->assertNull(session(ManagerInvitationService::SESSION));
+        $this->assertDatabaseCount('employees', 1);
+        $this->assertDatabaseCount('users', 2);
+        $this->assertSame($user->id, ManagerInvitation::first()->user_id);
+        $this->assertNotNull(ManagerInvitation::first()->accepted_at);
     }
 
     public function test_missing_details_invalid_phone_and_existing_employee_phone_cannot_register(): void
@@ -135,7 +146,7 @@ class NewManagerInvitationTest extends TestCase
         $this->assertArrayNotHasKey('token_hash', $rows[0]);
         $second = $this->issue(['replaceInvitationId' => $first['id']]);
         $this->guest();
-        $this->get($first['url'])->assertGone();
+        $this->get($first['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->details($second);
         $this->actingAsPurchaseUser($this->owner);
         $this->assertTrue(app(ManagerInvitationService::class)->revokeNew($second['id'])['success']);
@@ -145,7 +156,7 @@ class NewManagerInvitationTest extends TestCase
         $this->assertSame([], app(UserAccessService::class)->list()['newInvitations']);
         $this->assertFalse(app(ManagerInvitationService::class)->revokeNew($third['id'])['success']);
         $this->guest();
-        $this->get($third['url'])->assertGone();
+        $this->get($third['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->assertDatabaseCount('employees', 0);
     }
 
@@ -157,7 +168,7 @@ class NewManagerInvitationTest extends TestCase
         $this->finish($invite)->assertGone();
         $this->travelBack();
         ManagerInvitation::find($invite['id'])->update(['expires_at' => now()->subSecond()]);
-        $this->get($invite['url'])->assertGone();
+        $this->get($invite['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->assertDatabaseCount('employees', 0);
         $this->assertDatabaseCount('users', 1);
     }
@@ -177,7 +188,8 @@ class NewManagerInvitationTest extends TestCase
         $this->assertDatabaseCount('employees', 1);
         $this->assertDatabaseCount('users', 2);
         $this->assertDatabaseCount('manager_invitations', 1);
-        $this->get($invite['url'])->assertGone()->assertSee('이미 등록을 완료했다면')->assertDontSee('전화번호 다시 확인');
+        $this->get($invite['url'])->assertRedirect(route('login', ['app' => 1]))
+            ->assertSessionHas('status', fn ($status) => str_contains($status, '기존 계정으로 로그인'));
     }
 
     public function test_new_google_enrollment_and_duplicate_google_identity_are_atomic(): void

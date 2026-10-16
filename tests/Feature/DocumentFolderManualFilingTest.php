@@ -95,7 +95,7 @@ class DocumentFolderManualFilingTest extends TestCase
     public function test_upload_with_chosen_folder_locks_it_against_ai_reclassification(): void
     {
         // CAD 는 보통 03(시공·공정)으로 가지만, 사용자가 06 을 고르면 06 에 저장돼야 한다.
-        $res = $this->actingAs($this->admin())->postJson(route('docs.upload'), [
+        $res = $this->actingAsPersonalAppUser($this->admin())->postJson(route('docs.upload'), [
             'file' => UploadedFile::fake()->create('plan.dwg', 20),
             'folder_code' => '06',
         ]);
@@ -112,7 +112,7 @@ class DocumentFolderManualFilingTest extends TestCase
         $code = $this->service()->createFolder('협력사 제출서류')['folder']['code'];
         IntegratedDocument::forgetFolderMap();
 
-        $this->actingAs($this->admin())->postJson(route('docs.upload'), [
+        $this->actingAsPersonalAppUser($this->admin())->postJson(route('docs.upload'), [
             'file' => UploadedFile::fake()->create('plan.dwg', 10),
             'folder_code' => $code,
         ])->assertStatus(201);
@@ -122,7 +122,7 @@ class DocumentFolderManualFilingTest extends TestCase
 
     public function test_upload_without_folder_choice_still_uses_ai_classification(): void
     {
-        $this->actingAs($this->admin())->postJson(route('docs.upload'), [
+        $this->actingAsPersonalAppUser($this->admin())->postJson(route('docs.upload'), [
             'file' => UploadedFile::fake()->create('plan.dwg', 10),
         ])->assertStatus(201);
 
