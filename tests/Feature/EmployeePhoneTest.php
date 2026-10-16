@@ -8,6 +8,7 @@ use App\Models\MemberRegistration;
 use App\Models\User;
 use App\Services\Admin\EmployeeAdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -66,7 +67,7 @@ class EmployeePhoneTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('numbers')]
+    #[DataProvider('numbers')]
     public function test_it_turns_a_typed_number_into_a_dialable_one(?string $typed, ?string $expected): void
     {
         $this->assertSame($expected, $this->employee(['phone' => $typed])->dialNumber());
@@ -128,7 +129,8 @@ class EmployeePhoneTest extends TestCase
     {
         $employee = $this->employee(['phone' => '480-555-0100']);
 
-        $res = $this->actingAs($this->admin())
+        User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'foreman', 'account_status' => 'active']);
+        $res = $this->actingAsPersonalAppUser($this->admin())
             ->get(route('attendance-app.employee.share', ['employee' => $employee]))
             ->assertOk();
 
@@ -139,8 +141,10 @@ class EmployeePhoneTest extends TestCase
     public function test_the_send_screen_says_so_when_there_is_no_number(): void
     {
         // 조용히 빈 링크를 주면 반장은 왜 안 열리는지 모른다.
-        $res = $this->actingAs($this->admin())
-            ->get(route('attendance-app.employee.share', ['employee' => $this->employee()]))
+        $employee = $this->employee();
+        User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'foreman', 'account_status' => 'active']);
+        $res = $this->actingAsPersonalAppUser($this->admin())
+            ->get(route('attendance-app.employee.share', ['employee' => $employee]))
             ->assertOk();
 
         $res->assertSee('전화번호가 없습니다');

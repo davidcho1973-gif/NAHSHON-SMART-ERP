@@ -12,6 +12,7 @@ use App\Models\EquipmentRental;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
+use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\Equipment\EquipmentChecklistService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -450,7 +451,8 @@ class EquipmentChecklistTest extends TestCase
         $equipment = $this->excavator();
         $token = $equipment->ensureQrToken();
 
-        $this->actingAs($this->user)
+        $this->user->forceFill(['access_role' => 'foreman'])->save();
+        $this->actingAsPersonalAppUser($this->user)
             ->get("/eq/{$token}")
             ->assertOk()
             ->assertSee('Excavator 320', false);
@@ -468,7 +470,8 @@ class EquipmentChecklistTest extends TestCase
 
     public function test_a_dead_sticker_says_so_instead_of_crashing(): void
     {
-        $this->actingAs($this->user)
+        $this->user->forceFill(['access_role' => 'foreman'])->save();
+        $this->actingAsPersonalAppUser($this->user)
             ->get('/eq/eq_thisdoesnotexist')
             ->assertRedirect(route('attendance-app.index'));
     }
@@ -487,7 +490,8 @@ class EquipmentChecklistTest extends TestCase
         }
         $payload['photo_'.$item->id] = UploadedFile::fake()->image('damage.jpg');
 
-        $this->actingAs($this->user)
+        $this->user->forceFill(['access_role' => 'foreman'])->save();
+        $this->actingAsPersonalAppUser($this->user)
             ->post("/eq/{$token}/submit", $payload)
             ->assertOk()
             ->assertJson(['success' => true, 'result' => EquipmentChecklistLog::FAIL]);
@@ -501,7 +505,7 @@ class EquipmentChecklistTest extends TestCase
     {
         // 스티커 한 장이 곧 그 장비의 열쇠다. 작업자 계정이 전 장비 토큰을 한 번에
         // 받아 갈 수 있으면 토큰을 추측 불가능하게 만든 뜻이 없어진다.
-        $this->actingAs($this->user)->get('/equipment-stickers')->assertForbidden();
+        $this->actingAs($this->user)->getJson('/equipment-stickers')->assertForbidden();
 
         $manager = User::query()->create([
             'name' => 'M', 'email' => 'm2@example.test', 'password' => Hash::make('x'),
@@ -509,7 +513,7 @@ class EquipmentChecklistTest extends TestCase
         ]);
         $this->excavator();
 
-        $this->actingAs($manager)->get('/equipment-stickers')->assertOk()->assertSee('조작부 근처');
+        $this->actingAsPersonalAppUser($manager)->get('/equipment-stickers')->assertOk()->assertSee('조작부 근처');
     }
 
     public function test_the_worker_app_shows_what_that_person_is_holding(): void
@@ -519,7 +523,7 @@ class EquipmentChecklistTest extends TestCase
         $template = $this->service()->templateFor($equipment, 'pre_use');
         $this->service()->submit($equipment, $this->user, 'pre_use', $this->answerAll($template, true));
 
-        $home = app(\App\Services\Attendance\WorkerAttendanceService::class)->home($this->employee);
+        $home = app(WorkerAttendanceService::class)->home($this->employee);
 
         $this->assertCount(1, $home['myEquipment']);
         $this->assertSame($equipment->equipment_code, $home['myEquipment'][0]['code']);

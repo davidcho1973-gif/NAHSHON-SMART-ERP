@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\JobAccess;
+use App\Support\PersonalAppAccess;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -37,6 +38,20 @@ class User extends Authenticatable implements OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    protected static function booted(): void
+    {
+        static::updating(function (User $user): void {
+            // A site-QR worker recaller must not become a business-app credential
+            // when any account-management path later grants a staff role.
+            if ($user->isDirty('access_role')
+                && $user->getRawOriginal('access_role') === 'worker'
+                && $user->getRawOriginal('access_scope') === 'self'
+                && in_array($user->access_role, PersonalAppAccess::ROLES, true)) {
+                $user->setRememberToken(null);
+            }
+        });
+    }
 
     /** MCP is bearer-only and deliberately does not install a Passport cookie guard. */
     public function getProviderName(): string
@@ -248,12 +263,16 @@ class User extends Authenticatable implements OAuthenticatable
      */
     public function landingPath(): string
     {
+        if ($this->access_role === 'worker') {
+            return '/app';
+        }
+
         if (JobAccess::managed($this)) {
             return '/attendance-app';
         }
 
         return match ($this->access_role) {
-            'foreman', 'worker' => '/attendance-app',
+            'foreman' => '/attendance-app',
             default => '/',
         };
     }

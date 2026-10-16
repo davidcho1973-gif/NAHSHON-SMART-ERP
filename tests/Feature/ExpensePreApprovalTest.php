@@ -15,8 +15,11 @@ class ExpensePreApprovalTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Employee $employee;
+
     private Company $company;
+
     private Site $site;
 
     protected function setUp(): void
@@ -48,7 +51,7 @@ class ExpensePreApprovalTest extends TestCase
         $this->user = User::factory()->create([
             'employee_id' => $this->employee->id,
             'email' => 'jane.smith@example.com',
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'access_scope' => 'self',
             'account_status' => 'active',
         ]);
@@ -89,7 +92,7 @@ class ExpensePreApprovalTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $response = $this->actingAs($this->user)->get(route('expense-pre-approval.index'));
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('expense-pre-approval.index'));
 
         $response->assertStatus(200);
         $response->assertViewHas('requests');
@@ -101,7 +104,7 @@ class ExpensePreApprovalTest extends TestCase
 
     public function test_pre_approval_create_renders_correctly(): void
     {
-        $response = $this->actingAs($this->user)->get(route('expense-pre-approval.create'));
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('expense-pre-approval.create'));
 
         $response->assertStatus(200);
         $response->assertViewHas('sites');
@@ -121,7 +124,7 @@ class ExpensePreApprovalTest extends TestCase
             'action' => 'draft',
         ];
 
-        $response = $this->actingAs($this->user)->post(route('expense-pre-approval.store'), $data);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('expense-pre-approval.store'), $data);
 
         $response->assertRedirect(route('expense-pre-approval.index'));
         $response->assertSessionHas('success', 'Pre-approval draft saved.');
@@ -148,7 +151,7 @@ class ExpensePreApprovalTest extends TestCase
             'action' => 'save',
         ];
 
-        $response = $this->actingAs($this->user)->post(route('expense-pre-approval.store'), $data);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('expense-pre-approval.store'), $data);
 
         $response->assertRedirect(route('expense-pre-approval.index'));
         $response->assertSessionHas('success', 'Pre-approval request submitted.');
@@ -205,7 +208,7 @@ class ExpensePreApprovalTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $response = $this->actingAs($admin)->get(route('expense-pre-approval.index'));
+        $response = $this->actingAsPersonalAppUser($admin)->get(route('expense-pre-approval.index'));
 
         $response->assertOk();
         $response->assertSee('Jane request');
@@ -247,11 +250,11 @@ class ExpensePreApprovalTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->patch(route('expense-pre-approval.approve', $approveRequest))
             ->assertRedirect(route('expense-pre-approval.index'));
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->patch(route('expense-pre-approval.reject', $rejectRequest))
             ->assertRedirect(route('expense-pre-approval.index'));
 
@@ -265,7 +268,7 @@ class ExpensePreApprovalTest extends TestCase
         ]);
     }
 
-    public function test_worker_cannot_approve_pre_approval_requests(): void
+    public function test_workers_and_foremen_cannot_approve_pre_approval_requests(): void
     {
         $request = ExpensePreApproval::create([
             'company_id' => $this->company->id,
@@ -280,9 +283,14 @@ class ExpensePreApprovalTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->patch(route('expense-pre-approval.approve', $request))
             ->assertForbidden();
+
+        $this->user->forceFill(['access_role' => 'worker'])->save();
+        $this->actingAsPersonalAppUser($this->user)
+            ->patchJson(route('expense-pre-approval.approve', $request))
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
 
         $this->assertDatabaseHas('expense_pre_approvals', [
             'id' => $request->id,

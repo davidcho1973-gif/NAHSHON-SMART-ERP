@@ -220,7 +220,7 @@ class KakaoWorkReminderTest extends TestCase
         foreach (['worker', 'foreman', 'site_manager', 'hr_manager'] as $role) {
             $this->worker->update(['access_role' => $role]);
             $this->actingAs($this->worker);
-            $this->postJson('/smart-company-api/api_getKakaoReminders', ['args' => []])->assertOk()->assertJson(['success' => false]);
+            $this->postJson('/smart-company-api/api_getKakaoReminders', ['args' => []])->assertStatus($role === 'worker' ? 403 : 200)->assertJson(['success' => false]);
             $this->postJson('/smart-company-api/api_saveKakaoReminder', ['args' => [[]]])->assertForbidden();
         }
     }

@@ -71,7 +71,7 @@ class DailyCrewReportTest extends TestCase
         $employeeCount = Employee::query()->count();
         $timesheetCount = \DB::table('payroll_timesheets')->count();
 
-        $response = $this->actingAs($this->manager)
+        $response = $this->actingAsPersonalAppUser($this->manager)
             ->post(route('attendance-app.crew.daily-close', ['token' => $this->qrCode->token]), [
                 'external_headcount' => 12,
                 'manual_adjustment' => 0,
@@ -108,7 +108,7 @@ class DailyCrewReportTest extends TestCase
         $this->clockIn($first, '08:03:00');
         $this->clockIn($second, '08:05:00');
 
-        $response = $this->actingAs($this->manager)
+        $response = $this->actingAsPersonalAppUser($this->manager)
             ->post(route('attendance-app.crew.daily-close', ['token' => $this->qrCode->token]), [
                 'external_headcount' => 8,
                 'manual_adjustment' => -1,
@@ -130,13 +130,13 @@ class DailyCrewReportTest extends TestCase
 
     public function test_same_team_and_date_updates_one_daily_report(): void
     {
-        $this->actingAs($this->manager)
+        $this->actingAsPersonalAppUser($this->manager)
             ->post(route('attendance-app.crew.daily-close', ['token' => $this->qrCode->token]), [
                 'external_headcount' => 10,
                 'manual_adjustment' => 0,
             ]);
 
-        $this->actingAs($this->manager)
+        $this->actingAsPersonalAppUser($this->manager)
             ->post(route('attendance-app.crew.daily-close', ['token' => $this->qrCode->token]), [
                 'external_headcount' => 11,
                 'manual_adjustment' => 1,
@@ -154,7 +154,7 @@ class DailyCrewReportTest extends TestCase
 
     public function test_adjustment_requires_a_reason(): void
     {
-        $response = $this->actingAs($this->manager)
+        $response = $this->actingAsPersonalAppUser($this->manager)
             ->from(route('attendance-app.crew', ['token' => $this->qrCode->token]))
             ->post(route('attendance-app.crew.daily-close', ['token' => $this->qrCode->token]), [
                 'external_headcount' => 7,
@@ -168,7 +168,7 @@ class DailyCrewReportTest extends TestCase
 
     public function test_crew_screen_shows_separate_daily_close_form(): void
     {
-        $this->actingAs($this->manager)
+        $this->actingAsPersonalAppUser($this->manager)
             ->get(route('attendance-app.crew', ['token' => $this->qrCode->token]))
             ->assertOk()
             ->assertSee('일일 인원 마감')
@@ -180,7 +180,7 @@ class DailyCrewReportTest extends TestCase
     {
         // 마감은 그날 그 팀의 기록으로 남아야 한다 — 나중에 "그날 몇 명이었나" 를
         // 되짚는 유일한 근거다.
-        $this->actingAs($this->manager)
+        $this->actingAsPersonalAppUser($this->manager)
             ->post(route('attendance-app.crew.daily-close', ['token' => $this->qrCode->token]), [
                 'external_headcount' => 6,
                 'manual_adjustment' => 0,

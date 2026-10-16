@@ -5,12 +5,15 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MobileExpense;
+use App\Models\Project;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Ocr\OcrEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -36,7 +39,7 @@ class ExpenseAppTest extends TestCase
             'company_id' => $company->id, 'site_id' => $site->id,
             'first_name' => '수', 'last_name' => '김', 'name' => '김수', 'employment_status' => 'active',
         ]);
-        $this->user = User::factory()->create(['employee_id' => $this->employee->id, 'access_role' => 'worker', 'account_status' => 'active']);
+        $this->user = User::factory()->create(['employee_id' => $this->employee->id, 'access_role' => 'foreman', 'account_status' => 'active']);
     }
 
     private function fakeOcr(array $fields): void
@@ -46,16 +49,16 @@ class ExpenseAppTest extends TestCase
         ])]);
     }
 
-    private function submit(array $extra = []): \Illuminate\Testing\TestResponse
+    private function submit(array $extra = []): TestResponse
     {
-        return $this->actingAs($this->user)->post(route('expense-app.submit'), array_merge([
+        return $this->actingAsPersonalAppUser($this->user)->post(route('expense-app.submit'), array_merge([
             'receipt' => UploadedFile::fake()->image('receipt.jpg', 800, 1200),
             'payment_type' => 'personal',
             'lang' => 'ko',
         ], $extra));
     }
 
-    public function test_사진_한_장이_ERP_등록과_같은_승인대기_경비가_된다(): void
+    public function test_사진_한_장이_er_p_등록과_같은_승인대기_경비가_된다(): void
     {
         $this->fakeOcr([
             'vendor_name' => 'Home Depot', 'amount' => 84.2, 'date' => '2026-08-24',
@@ -81,7 +84,7 @@ class ExpenseAppTest extends TestCase
 
     public function test_continuation_pages_are_analyzed_once_and_create_one_expense_with_one_total(): void
     {
-        $engine = \Mockery::mock(\App\Services\Ocr\OcrEngine::class);
+        $engine = \Mockery::mock(OcrEngine::class);
         $engine->shouldReceive('analyze')->once()
             ->withArgs(fn (array $parts, string $prompt): bool => count($parts) === 1
                 && $parts[0]['mime_type'] === 'application/pdf'
@@ -93,7 +96,7 @@ class ExpenseAppTest extends TestCase
                 'date' => '2026-10-06', 'category' => '5201 Job Materials',
                 'description' => 'Page 1: PVC pipe; page 2: fittings; page 3: valves',
             ], 'model' => 'mock']);
-        $this->app->instance(\App\Services\Ocr\OcrEngine::class, $engine);
+        $this->app->instance(OcrEngine::class, $engine);
 
         $this->submit(['receipt' => UploadedFile::fake()->createWithContent('purchase-pages.pdf', file_get_contents(base_path('tests/Fixtures/receipt-continuation.pdf')))])
             ->assertOk()->assertJsonPath('analyzed.amount', 175.25);
@@ -128,7 +131,7 @@ class ExpenseAppTest extends TestCase
         $this->employee->update(['employment_status' => 'terminated']);
         $this->fakeOcr(['vendor_name' => 'X', 'amount' => 10, 'date' => '', 'accounting_account' => '', 'category' => '', 'description' => '', 'handwritten_notes' => '']);
 
-        $this->submit()->assertStatus(422)->assertJson(['code' => 'not_active']);
+        $this->submit()->assertForbidden()->assertJson(['code' => 'personal_app_role_required']);
         $this->assertSame(0, MobileExpense::query()->count());
     }
 
@@ -142,7 +145,7 @@ class ExpenseAppTest extends TestCase
             'category' => '5403 Small Tools & Consumables', 'description' => '남의 것', 'amount' => 99,
             'expense_date' => '2026-08-20', 'status' => 'approved']);
 
-        $res = $this->actingAs($this->user)->getJson(route('expense-app.list'));
+        $res = $this->actingAsPersonalAppUser($this->user)->getJson(route('expense-app.list'));
 
         $res->assertOk();
         $items = $res->json('items');
@@ -154,7 +157,7 @@ class ExpenseAppTest extends TestCase
     public function test_수기_현장_메모가_경비를_그_현장으로_귀속시킨다(): void
     {
         $hff = Site::create(['code' => 'HFF-02', 'name' => '수소충전소 2호', 'status' => 'active']);
-        $project = \App\Models\Project::create(['project_code' => 'HFF-P', 'name' => 'HFF 공사', 'construction_type' => 'equipment_setting', 'site_id' => $hff->id]);
+        $project = Project::create(['project_code' => 'HFF-P', 'name' => 'HFF 공사', 'construction_type' => 'equipment_setting', 'site_id' => $hff->id]);
 
         $this->fakeOcr([
             'vendor_name' => 'Graybar', 'amount' => 210.0, 'date' => '2026-08-25',
@@ -214,7 +217,7 @@ class ExpenseAppTest extends TestCase
 
     public function test_앱_화면과_매니페스트가_열린다(): void
     {
-        $this->actingAs($this->user)->get(route('expense-app.index'))->assertOk()->assertSee('영수증');
+        $this->actingAsPersonalAppUser($this->user)->get(route('expense-app.index'))->assertOk()->assertSee('영수증');
         $this->get(route('expense-app.manifest'))->assertOk()->assertJson(['id' => 'expense-app', 'theme_color' => '#FEE500']);
     }
 

@@ -8,6 +8,7 @@ use App\Models\UnifiedAlert;
 use App\Models\User;
 use App\Services\Admin\UserAccessService;
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\PersonalAppAccessService;
 use App\Support\PurchaseAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,11 +50,11 @@ class EmailPasswordAuthTest extends TestCase
             ->assertSee('/auth/password/login')->assertSee('/auth/google')->assertDontSee('/admin/login');
     }
 
-    public function test_personal_app_recovery_uses_the_worker_manifest_and_keeps_its_login_intent(): void
+    public function test_anonymous_personal_app_recovery_keeps_login_intent_without_offering_installation(): void
     {
         $this->withSession([EmailPasswordAuthService::ERP_LOGIN_SESSION => true])
             ->get('/login?app=1')->assertOk()->assertViewHas('appLogin', true)
-            ->assertSee('worker-app.webmanifest')->assertDontSee('erp.webmanifest')
+            ->assertDontSee('worker-app.webmanifest')->assertDontSee('erp.webmanifest')
             ->assertSee('name="app" value="1"', false)->assertSee('auth/google?app=1', false)
             ->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true)
             ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION);
@@ -100,6 +101,7 @@ class EmailPasswordAuthTest extends TestCase
         $cookie = $user->getAuthIdentifier().'|'.$user->getRememberToken().'|'.$user->getAuthPassword();
         $this->withCookie(Auth::guard()->getRecallerName(), $cookie)->get('/attendance-app')
             ->assertOk()->assertSessionHas(WorkerDeviceSession::FLAG, true)
+            ->assertSessionHas(PersonalAppAccessService::LEGACY_SESSION, true)
             ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
         $this->assertAuthenticatedAs($user);
         $this->get('/login?app=1')->assertOk()->assertViewHas('appLogin', true)
@@ -107,29 +109,72 @@ class EmailPasswordAuthTest extends TestCase
         $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
     }
 
-    public function test_signed_in_personal_app_login_returns_home_without_minting_strong_proof(): void
+    public function test_old_unflagged_manager_session_must_reauthenticate_before_entering_the_personal_app(): void
     {
         $user = $this->employeeUser('admin');
-        $this->actingAs($user)->get('/login?app=1')->assertRedirect('/attendance-app')
-            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION)
+        $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+
+        // A session created before device-only tracking is not evidence of a verified login.
+        $this->actingAs($user)->get('/attendance-app')->assertRedirect(route('login', ['app' => 1]));
+        $this->get('/login?app=1')->assertOk()->assertViewHas('appLogin', true)
+            ->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true)
+            ->assertSessionMissing(WorkerDeviceSession::FLAG)
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->signIn('wrong-password')->assertRedirect(route('login', ['app' => 1]))
+            ->assertSessionHasErrors('email_login')
+            ->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true)
             ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
         $this->assertAuthenticatedAs($user);
+        $this->get('/attendance-app')->assertRedirect(route('login', ['app' => 1]));
+
+        $this->signIn('MySite2026')->assertRedirect('/attendance-app')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id)
+            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION)
+            ->assertSessionMissing(WorkerDeviceSession::FLAG);
+        $this->get('/attendance-app')->assertOk();
+        $this->assertAuthenticatedAs($user);
+        $this->assertSame('admin', $user->fresh()->access_role);
+        $this->assertSame('self', $user->fresh()->access_scope);
     }
 
-    /**
-     * 전화번호 뒷 4자리로 <b>바로</b> 들어간다 (2026-09-22, 오너 지시 「계속 쓸 수 있게」).
-     *
-     * 예전에는 4자리가 «비밀번호를 정하는 5분» 만 열었고, 비밀번호를 정하면 닫혔다.
-     * 오너가 계속 쓰게 하라고 정했다 — 현장 관리자에게 비밀번호를 하나 더 외우게 하는
-     * 것이 실제로는 «못 들어온다» 로 끝나기 때문이다.
-     */
-    public function test_phone_digits_sign_a_person_straight_in(): void
+    public function test_verified_worker_can_open_management_login_and_switch_only_after_valid_credentials(): void
+    {
+        $worker = $this->employeeUser();
+        $manager = $this->employeeUser('admin', 'manager@example.com');
+        foreach ([$worker, $manager] as $user) {
+            $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+        }
+
+        $this->signIn('MySite2026')->assertRedirect('/app')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $worker->id);
+        $this->get('/login?app=1')->assertOk()->assertViewHas('appLogin', true);
+        $this->signIn('MySite2026')->assertRedirect('/attendance-app');
+        $this->get('/attendance-app')->assertRedirect('/app');
+        $this->get('/login?app=1')->assertOk();
+
+        $this->signIn('wrong-password', $manager->email)
+            ->assertRedirect(route('login', ['app' => 1]))->assertSessionHasErrors('email_login')
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->assertAuthenticatedAs($worker);
+        $this->signIn('MySite2026', $manager->email)->assertRedirect('/attendance-app')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $manager->id);
+        $this->assertAuthenticatedAs($manager);
+        $this->get('/attendance-app')->assertOk();
+        $this->assertSame('worker', $worker->fresh()->access_role);
+        $this->assertSame('admin', $manager->fresh()->access_role);
+        $this->assertSame('self', $manager->fresh()->access_scope);
+    }
+
+    public function test_phone_digits_sign_a_worker_in_for_gate_guidance_without_business_app_access(): void
     {
         $user = $this->employeeUser();
 
         // 이메일은 앞뒤 공백·대소문자가 달라도 같은 사람으로 읽는다.
-        $this->signIn('0072', ' WORKER@YAHOO.COM ')->assertRedirect('/attendance-app');
+        $this->signIn('0072', ' WORKER@YAHOO.COM ')->assertRedirect('/app')
+            ->assertSessionHas(WorkerDeviceSession::FLAG, true)
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
         $this->assertAuthenticatedAs($user);
+        $this->get('/attendance-app')->assertRedirect('/app');
 
         // 들어왔다고 권한이 달라지지 않는다.
         $this->assertSame('worker', $user->fresh()->access_role);
@@ -145,13 +190,12 @@ class EmailPasswordAuthTest extends TestCase
         $user = $this->employeeUser();
         $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
 
-        // 비밀번호를 정했다고 4자리가 닫히지 않는다 — 그게 「계속 쓸 수 있게」 의 뜻이다.
-        $this->signIn('0072')->assertRedirect('/attendance-app');
+        // Ordinary workers retain their legacy login, but it only leads to gate guidance.
+        $this->signIn('0072')->assertRedirect('/app');
         $this->assertAuthenticatedAs($user);
         Auth::logout();
 
-        // 정해 둔 비밀번호도 그대로 통한다. 둘 다 열쇠다.
-        $this->signIn('MySite2026')->assertRedirect('/attendance-app');
+        $this->signIn('MySite2026')->assertRedirect('/app');
         $this->assertAuthenticatedAs($user);
     }
 
@@ -165,50 +209,54 @@ class EmailPasswordAuthTest extends TestCase
         $this->signIn('0072')->assertSessionHasErrors('email_login');
         $this->assertGuest();
 
-        $this->signIn('9911')->assertRedirect('/attendance-app');
+        $this->signIn('9911')->assertRedirect('/app');
         $this->assertAuthenticatedAs($user);
     }
 
-    /**
-     * 구글이 안 되는 관리자도 들어올 수 있어야 한다 (2026-09-22, 오너 지시).
-     *
-     * 예전에는 google_id 가 있으면 이 길을 막았다. 4자리가 약한 값이라서였다. 그런데
-     * 지메일이 없거나 회사 구글 로그인이 막힌 관리자에게는 그게 «문이 하나도 없다» 가
-     * 된다 — 계정은 있는데 들어갈 수가 없었다.
-     */
-    public function test_a_manager_whose_google_does_not_work_can_still_get_in_with_phone_digits(): void
+    public function test_a_google_manager_uses_a_real_password_when_google_is_unavailable(): void
     {
         $user = $this->employeeUser('site_manager');
-        $user->forceFill(['google_id' => 'registered-google'])->save();
+        $user->forceFill(['google_id' => 'registered-google',
+            'password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
 
-        $this->signIn()->assertRedirect($user->fresh()->landingPath());
+        $this->signIn()->assertSessionHasErrors('email_login')
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->assertGuest();
+        $this->signIn('MySite2026')->assertRedirect($user->fresh()->landingPath())
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id);
         $this->assertAuthenticatedAs($user->fresh());
 
         // 구글 연결은 건드리지 않는다 — 나중에 지메일이 다시 되면 그대로 쓴다.
         $this->assertSame('registered-google', $user->fresh()->google_id);
     }
 
-    public function test_a_google_manager_keeps_the_digits_after_setting_a_password(): void
+    public function test_managers_and_foremen_reject_phone_digits_even_after_setting_a_password(): void
     {
-        $user = $this->employeeUser('site_manager');
-        $user->forceFill(['google_id' => 'registered-google'])->save();
+        foreach (['site_manager', 'foreman'] as $role) {
+            $email = $role.'@example.com';
+            $user = $this->employeeUser($role, $email);
+            $user->forceFill(['google_id' => 'google-'.$role,
+                'password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
 
-        $this->signIn();
-        $this->savePassword();
-        Auth::logout();
-
-        // 비밀번호를 정해 둔 뒤에도 4자리는 그대로 열쇠다.
-        $this->signIn()->assertRedirect($user->fresh()->landingPath());
-        $this->assertAuthenticatedAs($user->fresh());
+            $this->signIn('0072', $email)->assertSessionHasErrors('email_login')
+                ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+            $this->assertGuest();
+            $this->signIn('MySite2026', $email)->assertRedirect($user->fresh()->landingPath())
+                ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id);
+            $this->assertAuthenticatedAs($user->fresh());
+            $this->assertSame($role, $user->fresh()->access_role);
+            $this->assertSame('self', $user->fresh()->access_scope);
+            $this->post('/logout');
+        }
     }
 
     public function test_getting_in_with_the_digits_is_reported_once(): void
     {
         // 4자리는 명부·단톡방에 적혀 있는 값이라 아는 사람이 여럿이다. 상시 열쇠로 쓰는
         // 이상 잠금만으로는 «번호를 아는 사람» 을 막을 수 없으니, 들어온 사실을 보이게 한다.
-        $user = $this->employeeUser('site_manager');
+        $user = $this->employeeUser();
 
-        $this->signIn();
+        $this->signIn()->assertRedirect('/app');
 
         $this->assertDatabaseHas('unified_alerts', [
             'fingerprint' => "signed-in-with-phone-digits:{$user->id}",
@@ -259,10 +307,12 @@ class EmailPasswordAuthTest extends TestCase
 
     public function test_ordinary_phone_digit_login_does_not_create_remember_cookie_or_retain_strong_proof(): void
     {
-        $user = $this->employeeUser('site_manager');
+        $user = $this->employeeUser();
         $this->withSession([EmailPasswordAuthService::STRONG_AUTH_SESSION => $user->id]);
 
-        $this->signIn()->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION)
+        $this->signIn()->assertRedirect('/app')
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION)
+            ->assertSessionHas(WorkerDeviceSession::FLAG, true)
             ->assertCookieMissing(Auth::guard()->getRecallerName());
         $this->assertAuthenticatedAs($user);
         $this->assertDatabaseHas('auth_events', ['user_id' => $user->id, 'event' => 'login_success', 'method' => 'phone4']);
@@ -278,7 +328,7 @@ class EmailPasswordAuthTest extends TestCase
     {
         $user = $this->employeeUser('site_manager');
         $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
-        $this->signIn('0072')->assertRedirect('/');
+        $this->actingAs($user);
         $this->assertAuthenticatedAs($user);
 
         // A pre-existing email/phone login is authenticated but has no device flag or strong proof.
@@ -356,7 +406,9 @@ class EmailPasswordAuthTest extends TestCase
     {
         $user = $this->employeeUser('admin');
         $user->forceFill(['google_id' => 'existing-google'])->save();
-        $this->actingAs($user)->get('/auth/password/setup')->assertOk();
+        // Matching strong proof represents the verified Google callback, not google_id alone.
+        $this->withSession([EmailPasswordAuthService::STRONG_AUTH_SESSION => $user->id])
+            ->actingAs($user)->get('/auth/password/setup')->assertOk();
         $this->savePassword()->assertRedirect('/');
         $this->assertSame('existing-google', $user->fresh()->google_id);
         Auth::logout();
@@ -405,7 +457,7 @@ class EmailPasswordAuthTest extends TestCase
         $this->travel(16)->minutes();
         // 4자리는 10,000 가지뿐이다. 이 잠금이 «전부 시도하면 언젠가 열린다» 를 막는다
         // (5회/15분이면 다 해보는 데 500시간이 걸린다).
-        $this->signIn()->assertRedirect('/attendance-app');
+        $this->signIn()->assertRedirect('/app');
         $this->assertSame(0, $user->fresh()->password_login_failures);
         $this->assertAuthenticatedAs($user->fresh());
     }
@@ -492,7 +544,7 @@ class EmailPasswordAuthTest extends TestCase
         $this->assertTrue(Hash::check('MySite2026', $user->fresh()->password));
         $this->post('/auth/password/setup', [
             'current_password' => 'MySite2026', 'password' => 'NewSite2026', 'password_confirmation' => 'NewSite2026',
-        ])->assertRedirect('/attendance-app');
+        ])->assertRedirect('/app');
         $this->assertTrue(Hash::check('NewSite2026', $user->fresh()->password));
     }
 
@@ -503,12 +555,16 @@ class EmailPasswordAuthTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_active_manager_without_google_can_bootstrap_without_changing_scope(): void
+    public function test_active_manager_without_google_cannot_bootstrap_a_password_using_phone_digits(): void
     {
         $user = $this->employeeUser('site_manager', 'manager@outlook.com');
-        $this->signIn('0072', 'manager@outlook.com')->assertRedirect('/');
-        $this->assertAuthenticatedAs($user);
-        $this->savePassword()->assertRedirect('/');
+        $this->signIn('0072', 'manager@outlook.com')->assertSessionHasErrors('email_login')
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->assertGuest();
+        $this->savePassword()->assertRedirect('/login');
+        $this->actingAs($user);
+        $this->savePassword()->assertSessionHasErrors('password');
+        $this->assertNull($user->fresh()->password_set_at);
         $this->assertSame('site_manager', $user->fresh()->access_role);
         $this->assertSame('self', $user->fresh()->access_scope);
     }

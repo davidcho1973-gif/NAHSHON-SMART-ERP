@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Auth\ManagerInvitationService;
 use App\Services\Auth\PersonalAppAccessService;
+use App\Support\PersonalAppAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,7 @@ class GoogleAuthController extends Controller
         $appLogin = EmailPasswordAuthService::rememberAppLogin($request);
 
         if ($user instanceof User && ! WorkerDeviceSession::isDeviceOnly($request)
+            && (! $appLogin || PersonalAppAccess::authenticated($request))
             && (! $erpLogin || EmailPasswordAuthService::hasStrongAuthentication($request, $user))) {
             // 이미 로그인돼 있는데 로그인 화면으로 온 경우(북마크·뒤로가기).
             // 작업자를 ERP 로 보내면 안 된다 — 아래 landingPath 가 역할별로 갈라 준다.

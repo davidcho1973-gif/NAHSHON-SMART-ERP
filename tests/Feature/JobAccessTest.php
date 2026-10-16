@@ -300,7 +300,8 @@ class JobAccessTest extends TestCase
         $this->assertSame([], PayrollRun::pluck('id')->all());
         $this->get('/attendance-app/payslips/'.$own->id)->assertOk()->assertSee('Own worker')->assertDontSee('Foreign worker');
         $this->get('/attendance-app/payslips/'.$otherSlip->id)->assertNotFound();
-        $this->withSession([WorkerDeviceSession::FLAG => true])->get('/attendance-app/payslips/'.$own->id)->assertForbidden();
+        $this->withSession([WorkerDeviceSession::FLAG => true])->getJson('/attendance-app/payslips/'.$own->id)
+            ->assertForbidden()->assertDontSee('Own worker');
     }
 
     public function test_approval_only_president_can_approve_attendance_but_editor_cannot(): void
@@ -368,15 +369,16 @@ class JobAccessTest extends TestCase
         $this->assertDatabaseHas('mobile_expenses', ['id' => $expense->id, 'status' => 'paid', 'paid_by_user_id' => $payer->id]);
     }
 
-    public function test_managed_worker_retains_own_gps_status_and_push_settings_on_phone_login(): void
+    public function test_managed_worker_keeps_public_gate_but_cannot_use_personal_app_gps_or_push(): void
     {
         [$company, $site] = $this->fixtures();
         $employee = Employee::create(['name' => 'Worker', 'company_id' => $company->id, 'site_id' => $site->id]);
         $user = $this->profile('worker', $company, [$site], ['scope' => 'self']);
         $user->forceFill(['employee_id' => $employee->id])->save();
         $this->actingAs($user)->withSession([WorkerDeviceSession::FLAG => true]);
-        $this->getJson('/attendance-geo/status')->assertOk();
-        $this->getJson('/push/key')->assertOk();
+        $this->get(route('gate.show', $site))->assertOk();
+        $this->getJson('/attendance-geo/status')->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+        $this->getJson('/push/key')->assertForbidden()->assertJsonMissingPath('publicKey');
         $this->getJson('/attendance-app/workspace')->assertForbidden();
     }
 
@@ -465,7 +467,7 @@ class JobAccessTest extends TestCase
         $this->assertDatabaseCount('payroll_runs', 0);
     }
 
-    public function test_worker_keeps_personal_document_upload_and_equipment_checks_without_management_access(): void
+    public function test_only_verified_foreman_gets_scoped_document_upload_and_equipment_checks(): void
     {
         [$company, $site, $second, $foreign] = $this->fixtures();
         Storage::fake('public');
@@ -479,16 +481,26 @@ class JobAccessTest extends TestCase
         $user = $this->profile('worker', $company, [$site], ['scope' => 'self']);
         $user->forceFill(['employee_id' => $employee->id])->save();
         $this->actingAs($user)->withSession([WorkerDeviceSession::FLAG => true]);
+        $this->get('/attendance-app/docs')->assertRedirect(route('worker-app.entry'));
+        $this->post('/docs-api/upload', ['site_id' => $site->id, 'file' => UploadedFile::fake()->create('Plan.dwg', 1, 'application/octet-stream')], ['Accept' => 'application/json'])->assertForbidden();
+        $this->postJson('/eq/'.$token.'/submit', ['stage' => 'pre_use', 'answers' => $answers])->assertForbidden();
+        $this->assertDatabaseCount('integrated_documents', 0);
+        $this->assertDatabaseCount('equipment_checklist_logs', 0);
+        $this->postJson('/smart-company-api/api_getEquipmentList', ['args' => []])->assertForbidden();
+        Auth::logout();
+        $team = Team::create(['code' => 'QR-TEAM', 'name' => 'Pipe team', 'trade_type' => '배관', 'company_id' => $company->id, 'site_id' => $site->id]);
+        $employee->update(['team_id' => $team->id]);
+        $user->forceFill(JobAccess::grant(['jobRole' => 'trade_lead', 'scope' => 'team', 'teamId' => $team->id,
+            'companyId' => $company->id, 'siteIds' => [$site->id],
+            'jobPermissions' => ['documents' => ['view', 'edit'], 'reports' => ['view', 'edit'], 'messages' => ['view', 'edit']],
+        ], $user))->save();
+        $this->actingAsPersonalAppUser($user)->withSession([WorkerDeviceSession::FLAG => false]);
+        $this->assertFalse(JobAccess::can($user, 'materials'), 'Personal equipment checks do not require inventory-management access.');
         $this->get('/attendance-app/docs')->assertOk();
         $this->post('/docs-api/upload', ['site_id' => $site->id, 'file' => UploadedFile::fake()->create('Plan.dwg', 1, 'application/octet-stream')], ['Accept' => 'application/json'])->assertStatus(201);
         $this->post('/docs-api/upload', ['site_id' => $foreign->id, 'file' => UploadedFile::fake()->create('Other.dwg', 1, 'application/octet-stream')], ['Accept' => 'application/json'])->assertForbidden();
         $this->get('/eq/'.$token)->assertOk();
         $this->postJson('/eq/'.$token.'/submit', ['stage' => 'pre_use', 'answers' => $answers])->assertOk()->assertJsonPath('success', true);
         $this->postJson('/smart-company-api/api_getEquipmentList', ['args' => []])->assertForbidden();
-        Auth::logout();
-        $team = Team::create(['code' => 'QR-TEAM', 'name' => 'Pipe team', 'trade_type' => '배관', 'company_id' => $company->id, 'site_id' => $site->id]);
-        $user->forceFill(JobAccess::grant(['jobRole' => 'trade_lead', 'scope' => 'team', 'teamId' => $team->id, 'companyId' => $company->id, 'siteIds' => [$site->id]], $user))->save();
-        $this->actingAs($user)->withSession([WorkerDeviceSession::FLAG => true]);
-        $this->get('/eq/'.$token)->assertOk();
     }
 }

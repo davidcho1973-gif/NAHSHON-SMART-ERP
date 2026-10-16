@@ -75,13 +75,13 @@ class DefaultScopeTest extends TestCase
         [, $site] = $this->world();
         $manager = $this->user('site_manager', ['access_scope' => 'site', 'allowed_site_id' => $site->id]);
 
-        $this->actingAs($manager)->get(route('mobile-expense.wizard'))
+        $this->actingAsPersonalAppUser($manager)->get(route('mobile-expense.wizard'))
             ->assertOk()
             ->assertSee('value="'.$site->id.'" selected', false);
 
         // 수퍼관리자는 Global(지정 안함) 이 기본 — 어떤 현장에도 selected 가 없다.
         $admin = $this->user('super_admin', ['allowed_site_id' => $site->id]);
-        $this->actingAs($admin)->get(route('mobile-expense.wizard'))
+        $this->actingAsPersonalAppUser($admin)->get(route('mobile-expense.wizard'))
             ->assertOk()
             ->assertDontSee('value="'.$site->id.'" selected', false);
     }
@@ -91,20 +91,20 @@ class DefaultScopeTest extends TestCase
         [$company, $site, $project] = $this->world();
         $manager = $this->user('site_manager', ['access_scope' => 'site', 'allowed_site_id' => $site->id]);
 
-        $body = $this->actingAs($manager)
+        $body = $this->actingAsPersonalAppUser($manager)
             ->get(route('document-intelligence.index', ['embed' => 1]))
             ->assertOk()->getContent();
         $this->assertStringContainsString('value="'.$site->id.'" selected', $body);
         $this->assertStringContainsString('value="'.$project->id.'" selected', $body);
 
         $admin = $this->user('super_admin');
-        $adminBody = $this->actingAs($admin)
+        $adminBody = $this->actingAsPersonalAppUser($admin)
             ->get(route('document-intelligence.index', ['embed' => 1]))
             ->assertOk()->getContent();
         $this->assertStringNotContainsString('value="'.$site->id.'" selected', $adminBody);
 
         // ERP 상단에서 고른 현장(파라미터)은 수퍼관리자여도 그대로 따른다 — 사람이 고른 값이 이긴다.
-        $picked = $this->actingAs($admin)
+        $picked = $this->actingAsPersonalAppUser($admin)
             ->get(route('document-intelligence.index', ['embed' => 1, 'site_id' => $site->id]))
             ->assertOk()->getContent();
         $this->assertStringContainsString('value="'.$site->id.'" selected', $picked);

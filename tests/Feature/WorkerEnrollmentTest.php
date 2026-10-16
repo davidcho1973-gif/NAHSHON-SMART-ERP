@@ -74,8 +74,8 @@ class WorkerEnrollmentTest extends TestCase
         $this->assertSame(route('gate.show', ['site' => $this->team->site_id]), $response->viewData('url'));
     }
 
-    /** 승인만으로 계정이 서고, 본인은 전화번호 뒷 4자리로 들어온다. */
-    public function test_approval_alone_lets_the_worker_in_with_four_digits(): void
+    /** Approval permits site-scoped attendance without granting the personal business app. */
+    public function test_approval_lets_the_worker_use_the_site_gate_without_a_business_app(): void
     {
         $enrollment = $this->submit();
         $this->actingAs($this->admin)->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1])->assertRedirect();
@@ -86,14 +86,17 @@ class WorkerEnrollmentTest extends TestCase
         $this->assertSame('worker', $user->access_role);
 
         auth()->logout();
-        $found = $this->postJson(route('worker-app.find'), ['last4' => '0147'])->assertOk()->json('workers');
+        $found = $this->postJson(route('gate.identify', $this->team->site_id), ['last4' => '0147'])->assertOk()->json('workers');
         $this->assertSame($employee->id, $found[0]['id']);
 
-        $this->postJson(route('worker-app.enter'), ['employee_id' => $employee->id])->assertOk();
+        $this->postJson(route('gate.claim', $this->team->site_id), ['employee_id' => $employee->id])
+            ->assertOk()->assertJsonPath('success', true)->assertJsonStructure(['device_token']);
         $this->assertAuthenticatedAs($user);
-        $this->get(route('attendance-app.index'))->assertOk();
-        // 그 문으로는 ERP 본화면이 열리지 않는다.
-        $this->get('/')->assertRedirect(route('attendance-app.index'));
+        $this->get(route('gate.show', $this->team->site_id))->assertOk();
+        $this->get(route('attendance-app.index'))->assertRedirect(route('worker-app.entry'));
+        $this->get('/')->assertRedirect(route('worker-app.entry'));
+        $this->assertSame('worker', $user->fresh()->access_role);
+        $this->assertDatabaseCount('attendance_logs', 0);
     }
 
     public function test_public_registration_and_team_qr_are_removed_and_guest_cannot_register(): void
@@ -138,7 +141,7 @@ class WorkerEnrollmentTest extends TestCase
         $person = Employee::create(['name' => 'Foreman', 'company_id' => $this->team->company_id, 'site_id' => $this->team->site_id, 'team_id' => $this->team->id, 'employment_status' => 'active']);
         $foreman = User::factory()->create(['employee_id' => $person->id, 'access_role' => 'foreman', 'access_scope' => 'team', 'allowed_team_id' => $this->team->id, 'account_status' => 'active']);
         $this->team->update(['foreman_employee_id' => $person->id]);
-        $this->actingAs($foreman)->get(route('worker-enrollment.index'))->assertOk()->assertSee('Kim Worker')->assertDontSee('<form', false);
+        $this->actingAsPersonalAppUser($foreman)->get(route('worker-enrollment.index'))->assertOk()->assertSee('Kim Worker')->assertDontSee('<form', false);
         $this->post($this->url(), ['team_id' => $this->team->id, 'name' => 'Other', 'phone' => '2025550100'])->assertForbidden();
         $this->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1])->assertForbidden();
         $this->post(route('worker-enrollment.reject', $enrollment))->assertForbidden();
@@ -150,7 +153,8 @@ class WorkerEnrollmentTest extends TestCase
         WorkerEnrollment::create(['team_id' => $other->id, 'name' => 'Hidden Person', 'phone' => '+12025550100', 'status' => 'pending']);
         $this->get(route('worker-enrollment.index'))->assertDontSee('Hidden Person');
         $foreman->update(['access_role' => 'worker']);
-        $this->actingAs($foreman)->get(route('worker-enrollment.index'))->assertForbidden();
+        $this->actingAs($foreman)->get(route('worker-enrollment.index'))->assertRedirect(route('worker-app.entry'));
+        $this->getJson(route('worker-enrollment.index'))->assertForbidden()->assertDontSee('Kim Worker');
     }
 
     public function test_existing_phone_in_other_team_is_not_overwritten_or_duplicated(): void

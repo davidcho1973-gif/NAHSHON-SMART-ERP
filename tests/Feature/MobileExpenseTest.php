@@ -22,8 +22,11 @@ class MobileExpenseTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Employee $employee;
+
     private Company $company;
+
     private Site $site;
 
     protected function setUp(): void
@@ -55,7 +58,7 @@ class MobileExpenseTest extends TestCase
         $this->user = User::factory()->create([
             'employee_id' => $this->employee->id,
             'email' => 'john.doe@example.com',
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'access_scope' => 'self',
             'account_status' => 'active',
         ]);
@@ -121,7 +124,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'paid',
         ]);
 
-        $response = $this->actingAs($this->user)->get(route('mobile-expense.index'));
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-expense.index'));
 
         $response->assertStatus(200);
         $response->assertViewHas('expenses');
@@ -137,7 +140,7 @@ class MobileExpenseTest extends TestCase
 
     public function test_mobile_expense_wizard_displays_sites_and_details(): void
     {
-        $response = $this->actingAs($this->user)->get(route('mobile-expense.wizard'));
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-expense.wizard'));
 
         $response->assertStatus(200);
         $response->assertViewHas('sites');
@@ -146,13 +149,13 @@ class MobileExpenseTest extends TestCase
 
     public function test_mobile_expense_wizard_preselects_site_from_finance_context(): void
     {
-        $response = $this->actingAs($this->user)->get(route('mobile-expense.wizard', [
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-expense.wizard', [
             'site' => $this->site->code,
         ]));
 
         $response->assertStatus(200);
         $response->assertViewHas('selectedSiteId', $this->site->id);
-        $response->assertSee('value="' . $this->site->id . '" selected', false);
+        $response->assertSee('value="'.$this->site->id.'" selected', false);
     }
 
     public function test_manager_can_approve_and_reject_expense_via_review(): void
@@ -164,7 +167,7 @@ class MobileExpenseTest extends TestCase
             'amount' => 50, 'expense_date' => '2026-07-21', 'status' => 'pending',
         ]);
 
-        $this->actingAs($manager)
+        $this->actingAsPersonalAppUser($manager)
             ->patch(route('mobile-expense.review', $expense), ['decision' => 'approved'])
             ->assertRedirect();
 
@@ -183,7 +186,7 @@ class MobileExpenseTest extends TestCase
             'amount' => 50, 'expense_date' => '2026-07-21', 'status' => 'pending',
         ]);
 
-        $this->actingAs($worker)
+        $this->actingAsPersonalAppUser($worker)
             ->patch(route('mobile-expense.review', $expense), ['decision' => 'approved'])
             ->assertForbidden();
         $this->assertSame('pending', $expense->fresh()->status);
@@ -198,7 +201,7 @@ class MobileExpenseTest extends TestCase
         ]);
 
         // 신규 등록(wizard)과 수정(edit) 양쪽에서 노출되어야 한다.
-        $wizard = $this->actingAs($this->user)->get(route('mobile-expense.wizard'));
+        $wizard = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-expense.wizard'));
         $wizard->assertStatus(200)->assertSee('LGES-AZ - LGES');
 
         $expense = MobileExpense::create([
@@ -207,7 +210,7 @@ class MobileExpenseTest extends TestCase
             'accounting_account' => '5201 Job Materials', 'description' => 'Materials',
             'amount' => 100, 'expense_date' => '2026-07-21', 'status' => 'pending',
         ]);
-        $edit = $this->actingAs($this->user)->get(route('mobile-expense.edit', $expense));
+        $edit = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-expense.edit', $expense));
         $edit->assertStatus(200)->assertSee('LGES-AZ - LGES');
     }
 
@@ -232,7 +235,7 @@ class MobileExpenseTest extends TestCase
 
         $file = UploadedFile::fake()->create('receipt.jpg', 500, 'image/jpeg');
 
-        $response = $this->actingAs($this->user)->postJson(route('mobile-expense.upload-receipt'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson(route('mobile-expense.upload-receipt'), [
             'receipt' => $file,
         ]);
 
@@ -255,7 +258,7 @@ class MobileExpenseTest extends TestCase
         $this->assertNotNull($path);
         // Path matches public storage receipts directory
         $storedFilename = basename($path);
-        Storage::disk('public')->assertExists('receipts/' . $storedFilename);
+        Storage::disk('public')->assertExists('receipts/'.$storedFilename);
     }
 
     public function test_mobile_expense_store_saves_expense_record(): void
@@ -275,7 +278,7 @@ class MobileExpenseTest extends TestCase
             ],
         ];
 
-        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), $expenseData);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.store'), $expenseData);
 
         $response->assertRedirect(route('mobile-expense.index'));
         $response->assertSessionHas('success');
@@ -294,7 +297,7 @@ class MobileExpenseTest extends TestCase
 
     public function test_mobile_expense_store_uses_ai_account_and_handwritten_notes(): void
     {
-        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.store'), [
             'payment_type' => 'personal',
             'category' => '6201 Fuel - Office Vehicles',
             'accounting_account' => '6201 Fuel - Office Vehicles',
@@ -333,7 +336,7 @@ class MobileExpenseTest extends TestCase
             $table->dropColumn('accounting_account');
         });
 
-        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.store'), [
             'payment_type' => 'personal',
             'category' => '6201 Fuel - Office Vehicles',
             'accounting_account' => '6201 Fuel - Office Vehicles',
@@ -370,7 +373,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.store'), [
             'payment_type' => 'personal',
             'category' => 'Travel & Lodging',
             'class' => 'Field',
@@ -406,7 +409,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.store'), [
             'payment_type' => 'personal',
             'category' => 'Travel & Lodging',
             'class' => 'Field',
@@ -443,7 +446,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->get(route('mobile-expense.receipt', $expense))
             ->assertOk();
     }
@@ -464,7 +467,7 @@ class MobileExpenseTest extends TestCase
 
         $otherUser = User::factory()->create([
             'employee_id' => $otherEmployee->id,
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'access_scope' => 'self',
             'account_status' => 'active',
         ]);
@@ -482,7 +485,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($otherUser)
+        $this->actingAsPersonalAppUser($otherUser)
             ->get(route('mobile-expense.receipt', $expense))
             ->assertForbidden();
     }
@@ -511,7 +514,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->get(route('mobile-expense.receipt', $expense))
             ->assertOk();
     }
@@ -536,7 +539,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $response = $this->actingAs($this->user)
+        $response = $this->actingAsPersonalAppUser($this->user)
             ->get(route('mobile-expense.receipt', $expense));
 
         $response->assertOk();
@@ -564,7 +567,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $response = $this->actingAs($this->user)
+        $response = $this->actingAsPersonalAppUser($this->user)
             ->get(route('mobile-expense.receipt', $expense));
 
         $response->assertOk();
@@ -579,7 +582,7 @@ class MobileExpenseTest extends TestCase
         $this->assertIsString($imageBytes);
         Storage::disk('public')->put('receipts/database-safe.png', $imageBytes);
 
-        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.store'), [
             'payment_type' => 'personal',
             'category' => '6201 Fuel - Office Vehicles',
             'accounting_account' => '6201 Fuel - Office Vehicles',
@@ -598,7 +601,7 @@ class MobileExpenseTest extends TestCase
         $this->assertNotNull($expense);
         $this->assertSame($imageBytes, ReceiptFilePayload::decode($expense->receipt_file));
 
-        $receiptResponse = $this->actingAs($this->user)
+        $receiptResponse = $this->actingAsPersonalAppUser($this->user)
             ->get(route('mobile-expense.receipt', $expense));
 
         $receiptResponse->assertOk();
@@ -624,7 +627,7 @@ class MobileExpenseTest extends TestCase
         $replacementImage = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', true);
         $this->assertIsString($replacementImage);
 
-        $response = $this->actingAs($this->user)
+        $response = $this->actingAsPersonalAppUser($this->user)
             ->put(route('mobile-expense.update', $expense), [
                 'payment_type' => 'corporate',
                 'category' => '5403 Small Tools & Consumables',
@@ -672,7 +675,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->put(route('mobile-expense.update', $expense), [
                 'payment_type' => 'personal',
                 'category' => '5403 Small Tools & Consumables',
@@ -701,7 +704,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->delete(route('mobile-expense.destroy', $expense))
             ->assertRedirect(route('mobile-expense.index'));
 
@@ -721,13 +724,13 @@ class MobileExpenseTest extends TestCase
             'amount' => 45.99, 'expense_date' => '2026-06-21', 'status' => 'pending',
         ]);
 
-        $res = $this->actingAs($this->user)->deleteJson(route('mobile-expense.destroy', $expense));
+        $res = $this->actingAsPersonalAppUser($this->user)->deleteJson(route('mobile-expense.destroy', $expense));
 
         $res->assertOk()->assertJson(['success' => true, 'id' => $expense->id]);
         $this->assertDatabaseMissing('mobile_expenses', ['id' => $expense->id]);
 
         // 이미 지워진 것을 다시 지우면 404 도 JSON 으로 온다 — 화면이 HTML 을 읽다 죽지 않는다.
-        $this->actingAs($this->user)->deleteJson(route('mobile-expense.destroy', $expense->id))
+        $this->actingAsPersonalAppUser($this->user)->deleteJson(route('mobile-expense.destroy', $expense->id))
             ->assertNotFound()->assertHeader('content-type', 'application/json');
     }
 
@@ -754,7 +757,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->delete(route('mobile-expense.destroy', $expense))
             ->assertForbidden();
 
@@ -781,7 +784,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->put(route('mobile-expense.update', $expense), [
                 'payment_type' => 'personal',
                 'category' => '6601 Office Supplies',
@@ -798,7 +801,7 @@ class MobileExpenseTest extends TestCase
         $this->assertSame('6601 Office Supplies', $expense->accounting_account);
         $this->assertSame('rejected', $expense->status);
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->delete(route('mobile-expense.destroy', $expense))
             ->assertRedirect(route('mobile-expense.index'));
 
@@ -825,7 +828,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->put(route('mobile-expense.update', $expense), [
                 'payment_type' => 'personal',
                 'category' => 'Travel & Lodging',
@@ -881,13 +884,13 @@ class MobileExpenseTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_getExpenses', [
+        $response = $this->actingAsPersonalAppUser($admin)->postJson('/smart-company-api/api_getExpenses', [
             'args' => [],
             'siteId' => 'ALL',
         ]);
 
         $response->assertOk();
-        $this->assertSame('EXP-' . $expense->id, $response->json('0.id'));
+        $this->assertSame('EXP-'.$expense->id, $response->json('0.id'));
         $this->assertTrue($response->json('0.canModify'));
         $this->assertSame($preApproval->id, $response->json('0.preApprovalId'));
         $this->assertSame('Approved lodging budget', $response->json('0.preApprovalTitle'));
@@ -928,7 +931,7 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_getExpenses', [
+        $response = $this->actingAsPersonalAppUser($admin)->postJson('/smart-company-api/api_getExpenses', [
             'args' => [],
             'siteId' => $this->site->code,
         ]);
@@ -937,11 +940,11 @@ class MobileExpenseTest extends TestCase
 
         $rows = collect($response->json());
 
-        $this->assertContains('EXP-' . $siteExpense->id, $rows->pluck('id')->all());
-        $this->assertContains('EXP-' . $globalExpense->id, $rows->pluck('id')->all());
-        $this->assertSame('Global / Office', $rows->firstWhere('id', 'EXP-' . $globalExpense->id)['site']);
+        $this->assertContains('EXP-'.$siteExpense->id, $rows->pluck('id')->all());
+        $this->assertContains('EXP-'.$globalExpense->id, $rows->pluck('id')->all());
+        $this->assertSame('Global / Office', $rows->firstWhere('id', 'EXP-'.$globalExpense->id)['site']);
 
-        $statsResponse = $this->actingAs($admin)->postJson('/smart-company-api/api_getFinanceStats', [
+        $statsResponse = $this->actingAsPersonalAppUser($admin)->postJson('/smart-company-api/api_getFinanceStats', [
             'args' => [],
             'siteId' => $this->site->code,
         ]);
@@ -1003,7 +1006,7 @@ class MobileExpenseTest extends TestCase
             ]);
         }
 
-        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_getFinanceStats', [
+        $response = $this->actingAsPersonalAppUser($admin)->postJson('/smart-company-api/api_getFinanceStats', [
             'args' => [],
             'siteId' => 'ALL',
         ]);
@@ -1036,9 +1039,9 @@ class MobileExpenseTest extends TestCase
                 ]);
         });
 
-        $fakeBase64 = 'data:image/jpeg;base64,' . base64_encode('fake-image-bytes');
+        $fakeBase64 = 'data:image/jpeg;base64,'.base64_encode('fake-image-bytes');
 
-        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_universalAIScan', [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson('/smart-company-api/api_universalAIScan', [
             'args' => [
                 'EXPENSE',
                 $fakeBase64,

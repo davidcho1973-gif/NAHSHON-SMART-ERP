@@ -225,12 +225,12 @@ class AssistantGroundedAskTest extends TestCase
     }
 
     #[DataProvider('financeQuestions')]
-    public function test_worker_finance_question_is_denied_before_any_provider_request(string $dataset, string $question): void
+    public function test_foreman_finance_question_is_denied_before_any_provider_request(string $dataset, string $question): void
     {
         $this->record($dataset, $this->site, 'ASK_WORKER_SECRET');
         Http::fake();
 
-        $this->actingAsPurchaseUser($this->actor('worker'))->postJson(route('ask.question'), [
+        $this->actingAsPersonalAppUser($this->actor('foreman'))->postJson(route('ask.question'), [
             'question' => $question, 'site_id' => $this->site->id,
         ])->assertOk()->assertJson([
             'success' => true, 'found' => false, 'sources' => [], 'answer' => AiInformationAccess::DENIED,
@@ -242,14 +242,14 @@ class AssistantGroundedAskTest extends TestCase
         $this->assertDatabaseCount('ai_assistant_requests', 0);
     }
 
-    public function test_worker_billing_topic_is_blocked_by_dataset_permission_even_without_a_financial_keyword(): void
+    public function test_foreman_billing_topic_is_blocked_by_dataset_permission_even_without_a_financial_keyword(): void
     {
         $this->record('pay_applications', $this->site, 'ASK_BILLING_SECRET');
         $question = 'billing status';
         $this->assertFalse(AiInformationAccess::financial($question), 'Exercise the dataset guard independently of the keyword guard.');
         $this->fakeProvider('기성 청구', 'internal_reference');
 
-        $response = $this->actingAsPurchaseUser($this->actor('worker'))->postJson(route('ask.question'), [
+        $response = $this->actingAsPersonalAppUser($this->actor('foreman'))->postJson(route('ask.question'), [
             'question' => $question, 'site_id' => $this->site->id,
         ])->assertOk()->assertJson(['success' => true, 'found' => false, 'sources' => [], 'denied' => [AiInformationAccess::DENIED]]);
 
@@ -259,6 +259,18 @@ class AssistantGroundedAskTest extends TestCase
         $this->assertStringNotContainsString('ASK_BILLING_SECRET', json_encode($this->providerPayloads));
         $this->assertStringNotContainsString('ASK_BILLING_SECRET', $response->json('answer'));
         $this->assertStringContainsString(AiInformationAccess::DENIED, $this->providerPayloads[0]['system']);
+    }
+
+    public function test_worker_cannot_enter_business_ask_even_with_a_password_session(): void
+    {
+        Http::fake();
+        $this->actingAsPersonalAppUser($this->actor('worker'))->postJson(route('ask.question'), [
+            'question' => '내일 작업 일정', 'site_id' => $this->site->id,
+        ])->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('document_questions', 0);
+        $this->assertDatabaseCount('ai_assistant_requests', 0);
     }
 
     #[DataProvider('datasets')]

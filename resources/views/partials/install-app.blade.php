@@ -1,19 +1,18 @@
 {{--
-    "홈 화면에 추가" 안내. 게이트 화면과 작업자 앱이 같은 것을 쓴다.
+    관리직원·반장의 업무 개인앱 설치 안내. 일반 작업자는 현장 QR만 사용한다.
 
     필요한 변수:
       $installLang  현재 언어 코드(ko|en|es)
 
-    설계 하나 — 처음 열자마자 띄우지 않는다. 아무것도 해 보지 않은 사람에게 설치를
-    권하면 대부분 닫는다. 출퇴근을 한 번 찍고 나서, 그러니까 이 화면이 쓸모 있다는 걸
-    안 다음에 올라온다. 부르는 쪽에서 window.AppInstall.offer() 를 호출한다.
+    처음 열자마자 띄우지 않는다. 사용자가 직접 설치를 누르거나 업무를 마친 뒤
+    부르는 쪽에서 window.AppInstall.offer() 를 호출한다.
 
     설계 둘 — 이미 홈 화면에서 연 사람에게는 영원히 안 뜬다. 닫은 사람에게도 안 뜬다.
     현장에서 같은 안내를 두 번 보는 것만큼 앱을 미워하게 만드는 건 없다.
 
-    스타일이 이 파일 안에 다 들어 있는 이유 — 게이트(남색·흰 카드)와 작업자 앱(종이색)의
-    디자인이 완전히 다르다. 두 곳에 얹히려면 남의 CSS 에 기대지 않아야 한다.
+    개인앱과 영수증 화면에서 같은 안내를 쓴다. 접근 대상은 서버의 공통 정책을 따른다.
 --}}
+@if (\App\Support\PersonalAppAccess::eligible(auth()->user()))
 @php
     $installDict = \App\Support\WorkerLang::install();
     $installLang = \App\Support\WorkerLang::resolve($installLang ?? null);
@@ -230,3 +229,4 @@
     };
 })();
 </script>
+@endif

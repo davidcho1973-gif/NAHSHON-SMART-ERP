@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\PersonalAppAccessService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -57,7 +58,7 @@ class ErpHomeLinkTest extends TestCase
         $admin = $this->userWith('admin');
 
         foreach ($this->sideApps() as $url) {
-            $this->actingAs($admin)->get($url)
+            $this->actingAsPersonalAppUser($admin)->get($url)
                 ->assertOk()
                 ->assertSee('class="erp-home"', false, "돌아가는 문이 없습니다: {$url}");
         }
@@ -70,7 +71,12 @@ class ErpHomeLinkTest extends TestCase
         foreach (['worker', 'foreman'] as $role) {
             $user = $this->userWith($role);
 
-            $this->actingAs($user)->get(route('attendance-app.index'))
+            if ($role === 'worker') {
+                $this->actingAs($user)->get(route('attendance-app.index'))->assertRedirect(route('worker-app.entry'));
+
+                continue;
+            }
+            $this->actingAsPersonalAppUser($user)->get(route('attendance-app.index'))
                 ->assertOk()
                 ->assertDontSee('class="erp-home"', false, "[{$role}] 에게 ERP 문이 열려 있습니다");
         }
@@ -79,7 +85,7 @@ class ErpHomeLinkTest extends TestCase
     public function test_app_only_manager_can_find_erp_sign_in_without_logging_out(): void
     {
         $manager = $this->userWith('super_admin');
-        $this->actingAs($manager)->withSession([WorkerDeviceSession::FLAG => true])
+        $this->actingAs($manager)->withSession([WorkerDeviceSession::FLAG => true, PersonalAppAccessService::LEGACY_SESSION => true])
             ->get(route('attendance-app.index'))->assertOk()
             ->assertSee('ERP 로그인')->assertSee(route('login', ['erp' => 1]), false);
         $this->get('/login?erp=1')->assertOk()->assertSee('name="password"', false);
@@ -95,7 +101,7 @@ class ErpHomeLinkTest extends TestCase
     {
         // 규칙이 두 벌이면 "로그인하면 앱으로 보내면서 앱에서는 ERP 로 가라고 하는"
         // 모순이 생긴다.
-        $this->assertSame('/attendance-app', $this->userWith('worker')->landingPath());
+        $this->assertSame('/app', $this->userWith('worker')->landingPath());
         $this->assertSame('/', $this->userWith('admin')->landingPath());
     }
 

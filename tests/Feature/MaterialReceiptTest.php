@@ -57,7 +57,7 @@ class MaterialReceiptTest extends TestCase
         $user = User::factory()->create(array_merge([
             'access_role' => 'site_manager', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ], $extra));
-        $this->actingAs($user);
+        $this->actingAsPersonalAppUser($user);
 
         return $user;
     }
@@ -273,7 +273,7 @@ class MaterialReceiptTest extends TestCase
 
     public function test_someone_without_site_authority_cannot_record_one(): void
     {
-        $this->actingAs(User::factory()->create([
+        $this->actingAsPersonalAppUser(User::factory()->create([
             'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
         ]));
 
@@ -373,7 +373,7 @@ class MaterialReceiptTest extends TestCase
 
     public function test_a_worker_cannot_push_a_photo_into_the_books(): void
     {
-        $this->actingAs(User::factory()->create([
+        $this->actingAsPersonalAppUser(User::factory()->create([
             'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
         ]));
 

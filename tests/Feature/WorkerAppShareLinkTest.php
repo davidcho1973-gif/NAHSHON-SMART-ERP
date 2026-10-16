@@ -10,13 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
-/**
- * 직영 작업자에게 앱 링크를 보내는 화면.
- *
- * 인쇄 카드와 목적이 다르다. 카드는 손에 쥐여 주는 종이고, 이건 문자·왓츠앱으로 보낸다.
- * 여기서 빠지면 곤란한 것 두 가지 — <b>어느 구글 계정으로 로그인하는지</b>(가장 흔한
- * 실패), 그리고 <b>보낼 문구</b>(링크만 덜렁 보내면 모르는 주소라 안 누른다).
- */
+/** Managers and foremen receive app links with their sign-in account and installation steps. */
 class WorkerAppShareLinkTest extends TestCase
 {
     use RefreshDatabase;
@@ -31,6 +25,8 @@ class WorkerAppShareLinkTest extends TestCase
             'company_id' => $company->id, 'name' => 'Cristian rosas',
             'employment_status' => 'active', 'preferred_language' => 'es',
         ]);
+        User::factory()->create(['employee_id' => $this->employee->id, 'email' => 'cristian@gmail.com',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active']);
     }
 
     private function admin(): User
@@ -42,7 +38,7 @@ class WorkerAppShareLinkTest extends TestCase
 
     private function open(): TestResponse
     {
-        return $this->actingAs($this->admin())
+        return $this->actingAsPersonalAppUser($this->admin())
             ->get(route('attendance-app.employee.share', ['employee' => $this->employee]));
     }
 
@@ -57,27 +53,23 @@ class WorkerAppShareLinkTest extends TestCase
 
     public function test_it_shows_which_google_account_to_sign_in_with(): void
     {
-        User::factory()->create([
-            'employee_id' => $this->employee->id, 'email' => 'cristian@gmail.com',
-            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
-        ]);
-
         $this->open()->assertOk()->assertSee('cristian@gmail.com');
     }
 
     public function test_it_warns_when_there_is_no_account_to_sign_in_with(): void
     {
         // 계정 없이 링크를 보내면 작업자가 로그인에서 막힌다. 보내기 전에 알아야 한다.
-        $this->open()->assertOk()->assertSee('계정 없음')->assertSee('계정 만들기');
+        User::where('employee_id', $this->employee->id)->delete();
+        $this->open()->assertOk()->assertViewIs('worker-app.access')->assertDontSee('data:image/svg+xml;base64,', false);
     }
 
     public function test_it_carries_a_ready_made_message_in_three_languages(): void
     {
         $res = $this->open()->assertOk();
 
-        $res->assertSee('내 출퇴근 앱입니다', false);
-        $res->assertSee('This is your attendance app', false);
-        $res->assertSee('Esta es su aplicación de asistencia', false);
+        foreach (WorkerLang::shareMessage(route('attendance-app.index')) as $message) {
+            $res->assertSee($message);
+        }
     }
 
     public function test_every_message_carries_the_link_and_the_two_steps(): void
@@ -107,11 +99,11 @@ class WorkerAppShareLinkTest extends TestCase
             'employment_status' => 'active',
         ]);
         $user = User::factory()->create([
-            'employee_id' => $other->id, 'access_role' => 'worker',
+            'employee_id' => $other->id, 'access_role' => 'foreman',
             'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($user)
+        $this->actingAsPersonalAppUser($user)
             ->get(route('attendance-app.employee.share', ['employee' => $this->employee]))
             ->assertForbidden();
     }

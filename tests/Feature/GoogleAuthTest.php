@@ -92,8 +92,11 @@ class GoogleAuthTest extends TestCase
         $this->get('https://erp.example.com/auth/google/callback?'.http_build_query(['state' => $state, 'code' => 'auth-code']))
             ->assertRedirect('https://erp.example.com'.$destination)
             ->assertSessionMissing('google_oauth_state')
-            ->assertSessionMissing('url.intended');
+            ->assertSessionMissing('url.intended')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id);
         $this->assertAuthenticatedAs($user->fresh());
+        $this->get('https://erp.example.com'.$destination)->assertRedirect('https://erp.example.com/app');
+        $this->get('https://erp.example.com/app')->assertOk()->assertViewIs('worker-app.access');
     }
 
     public function test_alias_login_preserves_explicit_erp_entry_across_host_sessions(): void
@@ -159,7 +162,7 @@ class GoogleAuthTest extends TestCase
         $this->get('/auth/google/callback?error=access_denied')->assertRedirect('/login')
             ->assertSessionHasErrors('google')->assertSessionHas(EmailPasswordAuthService::APP_LOGIN_SESSION, true);
         $this->get('/login')->assertOk()->assertViewHas('appLogin', true)
-            ->assertSee('worker-app.webmanifest')->assertSee('다시 직원등록하지 않아도 됩니다.');
+            ->assertDontSee('worker-app.webmanifest')->assertSee('다시 직원등록하지 않아도 됩니다.');
         $this->assertGuest();
         Http::assertNothingSent();
     }
@@ -232,14 +235,37 @@ class GoogleAuthTest extends TestCase
             ->withSession(['google_oauth_state' => 'known-state', WorkerDeviceSession::FLAG => true])
             ->get('/auth/google/callback?state=known-state&code=auth-code');
 
-        // 작업자는 ERP 가 아니라 자기 앱으로 간다. 자기 근무시간을 보러 로그인했는데
-        // 회사 전체 화면이 뜨면 잘못 눌렀다고 생각하고 앱을 지운다.
-        $response->assertRedirect('/attendance-app')
+        // Verified identity does not grant a worker access to the management app.
+        $response->assertRedirect('/app')
             ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id)
             ->assertSessionMissing(WorkerDeviceSession::FLAG);
         $this->assertAuthenticatedAs($user->fresh());
         $this->assertSame('google-123', $user->fresh()->google_id);
         $this->assertNotNull($user->fresh()->last_login_at);
+    }
+
+    public function test_a_worker_can_choose_a_manager_google_account_without_changing_the_worker_role(): void
+    {
+        $this->configureGoogle();
+        $worker = User::factory()->create(['access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
+        $foreman = User::factory()->create(['access_role' => 'foreman', 'access_scope' => 'team', 'account_status' => 'active']);
+
+        $this->actingAs($worker)->withSession([EmailPasswordAuthService::STRONG_AUTH_SESSION => $worker->id])
+            ->get('/login?app=1')->assertOk()->assertViewHas('appLogin', true);
+        $this->get('/auth/google')->assertRedirect()->assertSessionHas('google_oauth_state');
+        $state = session('google_oauth_state');
+        $this->fakeGoogleProfile($foreman);
+
+        $this->get('/auth/google/callback?'.http_build_query(['state' => $state, 'code' => 'auth-code']))
+            ->assertRedirect('/attendance-app')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $foreman->id)
+            ->assertSessionMissing(WorkerDeviceSession::FLAG)
+            ->assertSessionMissing(EmailPasswordAuthService::APP_LOGIN_SESSION);
+        $this->assertAuthenticatedAs($foreman->fresh());
+        $this->assertSame('worker', $worker->fresh()->access_role);
+        $this->assertSame('foreman', $foreman->fresh()->access_role);
+        $this->assertDatabaseCount('users', 2);
+        $this->get('/attendance-app')->assertOk();
     }
 
     public function test_google_callback_rejects_unregistered_email(): void

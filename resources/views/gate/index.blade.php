@@ -4,10 +4,8 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <title>{{ $site->code }} · 출퇴근</title>
-<link rel="manifest" href="{{ route('gate.manifest', $site) }}">
 <link rel="apple-touch-icon" href="{{ asset('images/attendance-apple-touch.png') }}">
 <meta name="theme-color" content="#FEE500">
-<meta name="apple-mobile-web-app-capable" content="yes">
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#19242e;font-family:system-ui,sans-serif;padding:20px}main{max-width:460px;margin:20px auto;background:white;border-radius:20px;padding:26px}small,p{color:#617184;line-height:1.6}h1{font-size:27px;margin:18px 0 8px}h2{font-size:24px}label{display:block;margin:18px 0 6px}input,select,button{font:inherit;border-radius:12px;padding:15px;border:1px solid #cbd5df}input{width:100%}button{cursor:pointer;width:100%;margin-top:16px;background:#fff;font-weight:700}button.primary{background:#fee500;border:0;min-height:62px;font-size:20px}button:disabled{opacity:.5}select{padding:8px}header{display:flex;justify-content:space-between;align-items:center;gap:8px}section[hidden]{display:none}.note{background:#eff5fa;border-radius:10px;padding:12px;font-size:14px}.error{color:#a62128;white-space:pre-line}.success{color:#147243;font-weight:700}#who{text-align:center;padding:22px 0}#notice{white-space:pre-line}a{color:#0877bd}
 </style>

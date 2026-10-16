@@ -4,7 +4,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ $site->code }} · 새 작업자 등록</title>
-    @include('partials.personal-app-meta')
     <style>
         :root { color-scheme:light; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",Arial,sans-serif; background:#f3f6fa; color:#10233f; }
         * { box-sizing:border-box; }
@@ -47,9 +46,8 @@
             <h1 id="done-title">등록되었습니다</h1>
             <p><strong>{{ $workerName }}</strong><br><span id="done-copy">이 휴대폰을 출퇴근용으로 연결했습니다.</span></p>
             <p class="site">{{ $site->code }} · {{ $site->name }}</p>
-            {{-- Install from the permanent app entry, never this one-time POST result. --}}
-            <a class="gate" id="install-link" href="{{ $installUrl }}" @if ($deviceToken === '') hidden @endif>개인앱 열고 설치</a>
-            <a class="gate secondary" id="gate-link" href="{{ $gateUrl }}">출근 화면 열기</a>
+            <a class="gate" id="gate-link" href="{{ $gateUrl }}">출퇴근 화면 열기</a>
+            <p class="privacy" id="no-install">앱 설치 없이 다음에도 현장 QR을 찍으세요.</p>
             <p class="privacy" id="done-paperwork">추가 인사정보와 W-9은 나중에 작성합니다.</p>
         </section>
         <script src="{{ asset('js/worker-device-remember.js') }}?v={{ filemtime(public_path('js/worker-device-remember.js')) }}"></script>
@@ -65,19 +63,18 @@
 
                 var words = {
                     ko: shared
-                        ? ['등록되었습니다', '이 휴대폰은 공용으로 사용 중입니다. 본인 휴대폰에서 현장 QR을 찍고 전화번호 뒷 4자리로 들어오세요.', '개인앱 열고 설치', '출근 화면 열기', '추가 인사정보와 W-9은 인사담당자의 안내를 받아 나중에 작성합니다.']
-                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다.', '개인앱 열고 설치', '출근 화면 열기', '추가 인사정보와 W-9은 인사담당자의 안내를 받아 나중에 작성합니다.'],
+                        ? ['등록되었습니다', '이 휴대폰은 공용으로 사용 중입니다. 본인 휴대폰에서 현장 QR을 찍고 전화번호 뒷 4자리로 들어오세요.', '앱 설치 없이 다음에도 현장 QR을 찍으세요.', '출퇴근 화면 열기', '추가 인사정보와 W-9은 인사담당자의 안내를 받아 나중에 작성합니다.']
+                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다.', '앱 설치 없이 다음에도 현장 QR을 찍으세요.', '출퇴근 화면 열기', '추가 인사정보와 W-9은 인사담당자의 안내를 받아 나중에 작성합니다.'],
                     en: shared
-                        ? ['Registration complete', 'This is a shared phone. Scan the site QR on your own phone and enter the last 4 digits of your number.', 'Open and install my app', 'Open attendance', 'Complete your W-9 and other HR details later when HR sends instructions.']
-                        : ['Registration complete', 'This phone is linked for attendance.', 'Open and install my app', 'Open attendance', 'Complete your W-9 and other HR details later when HR sends instructions.'],
+                        ? ['Registration complete', 'This is a shared phone. Scan the site QR on your own phone and enter the last 4 digits of your number.', 'No app installation needed. Scan the site QR next time.', 'Open attendance', 'Complete your W-9 and other HR details later when HR sends instructions.']
+                        : ['Registration complete', 'This phone is linked for attendance.', 'No app installation needed. Scan the site QR next time.', 'Open attendance', 'Complete your W-9 and other HR details later when HR sends instructions.'],
                     es: shared
-                        ? ['Registro completo', 'Este teléfono es compartido. Escanee el QR de la obra en su propio teléfono e ingrese los últimos 4 dígitos de su número.', 'Abrir e instalar mi app', 'Abrir asistencia', 'Complete el W-9 y otros datos después de recibir las instrucciones de Recursos Humanos.']
-                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia.', 'Abrir e instalar mi app', 'Abrir asistencia', 'Complete el W-9 y otros datos después de recibir las instrucciones de Recursos Humanos.']
+                        ? ['Registro completo', 'Este teléfono es compartido. Escanee el QR de la obra en su propio teléfono e ingrese los últimos 4 dígitos de su número.', 'No necesita instalar una app. Escanee el QR de la obra la próxima vez.', 'Abrir asistencia', 'Complete el W-9 y otros datos después de recibir las instrucciones de Recursos Humanos.']
+                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia.', 'No necesita instalar una app. Escanee el QR de la obra la próxima vez.', 'Abrir asistencia', 'Complete el W-9 y otros datos después de recibir las instrucciones de Recursos Humanos.']
                 }[@json($lang)];
                 document.getElementById('done-title').textContent = words[0];
                 document.getElementById('done-copy').textContent = words[1];
-                document.getElementById('install-link').textContent = words[2];
-                document.getElementById('install-link').hidden = shared;
+                document.getElementById('no-install').textContent = words[2];
                 document.getElementById('gate-link').textContent = words[3];
                 document.getElementById('done-paperwork').textContent = words[4];
             })();

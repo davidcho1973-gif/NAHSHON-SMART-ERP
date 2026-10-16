@@ -16,6 +16,7 @@ use App\Services\DailyCrewReportService;
 use App\Services\Hr\SelfEmployeeLink;
 use App\Support\AppLocale;
 use App\Support\MaterialReceiptAccess;
+use App\Support\PersonalAppAccess;
 use App\Support\PurchaseAccess;
 use App\Support\QrSvg;
 use App\Support\WorkerLang;
@@ -48,7 +49,7 @@ class AttendanceAppController extends Controller
             'employee' => $employee,
             'canReceiveMaterials' => ! $request->filled('as') && MaterialReceiptAccess::canManage($user),
             'canRequestPurchases' => ! $request->filled('as') && PurchaseAccess::canRequest($user),
-            'isManagerApp' => ! $request->filled('as') && PurchaseAccess::eligible($user),
+            'isManagerApp' => ! $request->filled('as') && PersonalAppAccess::eligible($user),
             'isPersonalAppOnly' => $request->session()->has(PersonalAppAccessService::SESSION)
                 || $request->session()->has(PersonalAppAccessService::LEGACY_SESSION),
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,
@@ -468,6 +469,10 @@ class AttendanceAppController extends Controller
         $url = route('attendance-app.index');
         $account = User::query()->where('employee_id', $employee->getKey())->first();
 
+        if (! PersonalAppAccess::eligible($account)) {
+            return $this->workerGateGuide($employee, $request);
+        }
+
         return view('attendance-app.share', [
             'employee' => $employee->loadMissing('site'),
             'url' => $url,
@@ -505,6 +510,10 @@ class AttendanceAppController extends Controller
         // 계정이 있어야 로그인이 된다. 없으면 카드에 그 사실을 적는다.
         $account = User::query()->where('employee_id', $employee->getKey())->first();
 
+        if (! PersonalAppAccess::eligible($account)) {
+            return $this->workerGateGuide($employee, $request);
+        }
+
         return view('attendance-app.install-card', [
             'employee' => $employee->loadMissing('site'),
             'url' => $url,
@@ -515,6 +524,15 @@ class AttendanceAppController extends Controller
             // 보이지 않아 원인을 못 찾는다. 여기서 말해 준다.
             'employeeEmail' => $employee->email,
             'langs' => WorkerLang::installCard(),
+        ]);
+    }
+
+    private function workerGateGuide(Employee $employee, Request $request): View
+    {
+        return view('worker-app.access', [
+            'gateUrl' => PersonalAppAccess::gateUrl($employee),
+            'loginUrl' => route('login', ['app' => 1]),
+            'lang' => WorkerLang::resolve($request->query('lang', $employee->preferred_language)),
         ]);
     }
 

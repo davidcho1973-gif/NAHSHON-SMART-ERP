@@ -432,7 +432,8 @@ class TradeReportReflectionTest extends TestCase
         $this->assertNull(app(TradeReportService::class)->forUser($user, self::DATE));
         $this->assertSame(0, DailyTradeReport::query()->count());
 
-        $this->actingAs($user)->get(route('attendance-app.ops-room'))->assertOk();
+        $user->forceFill(['access_role' => 'foreman'])->save();
+        $this->actingAsPersonalAppUser($user)->get(route('attendance-app.ops-room'))->assertOk();
 
         $this->assertSame(0, DailyTradeReport::query()->count());
     }

@@ -39,13 +39,13 @@ class MobileDocumentUploadTest extends TestCase
         ]);
 
         return User::factory()->create([
-            'access_role' => 'worker', 'account_status' => 'active', 'employee_id' => $employee->id,
+            'access_role' => 'foreman', 'account_status' => 'active', 'employee_id' => $employee->id,
         ]);
     }
 
     public function test_the_screen_opens_and_says_what_to_do(): void
     {
-        $this->actingAs($this->worker())->get(route('attendance-app.docs'))
+        $this->actingAsPersonalAppUser($this->worker())->get(route('attendance-app.docs'))
             ->assertOk()
             ->assertSee('문서 올리기')
             ->assertSee('파일 고르기');
@@ -77,7 +77,7 @@ class MobileDocumentUploadTest extends TestCase
             'size' => 100, 'status' => 'analyzing', 'uploaded_by_id' => $someoneElse->id,
         ]);
 
-        $res = $this->actingAs($me)->get(route('attendance-app.docs'));
+        $res = $this->actingAsPersonalAppUser($me)->get(route('attendance-app.docs'));
 
         $res->assertOk()->assertSee('내 도면', false);
         $res->assertDontSee('남의 도면', false);
@@ -86,7 +86,7 @@ class MobileDocumentUploadTest extends TestCase
     public function test_the_home_screen_links_to_it(): void
     {
         // 「통합」은 링크가 있다는 뜻이다. 화면이 있어도 닿을 길이 없으면 없는 것과 같다.
-        $this->actingAs($this->worker())->get(route('attendance-app.index'))
+        $this->actingAsPersonalAppUser($this->worker())->get(route('attendance-app.index'))
             ->assertOk()
             ->assertSee(route('attendance-app.docs'), false);
     }

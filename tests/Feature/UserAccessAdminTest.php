@@ -335,11 +335,11 @@ class UserAccessAdminTest extends TestCase
 
     public function test_the_api_blocks_a_worker_from_mutating_even_though_it_is_not_read_only(): void
     {
-        // worker 는 열람 전용 역할이 아니라 컨트롤러를 통과한다 — 그래서 서비스가 막아야 한다.
+        // A verified worker identity still cannot enter business account-management routes.
         $this->actingAsPurchaseUser($this->user('worker', 'active', 'self'));
 
         $this->api('api_saveUserAccess', [['name' => '침입', 'email' => 'w@example.test', 'role' => 'admin']])
-            ->assertOk()->assertJsonPath('success', false);
+            ->assertForbidden()->assertJsonPath('success', false);
         $this->assertSame(0, User::where('email', 'w@example.test')->count());
     }
 

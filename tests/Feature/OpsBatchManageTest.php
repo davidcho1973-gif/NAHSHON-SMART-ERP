@@ -74,7 +74,7 @@ class OpsBatchManageTest extends TestCase
         $batch = $this->batch('천장 배간 12개 완료');   // 오타
         $user = $this->admin();
 
-        $this->actingAs($user)->api('api_updateOpsBatch', [$batch->id, '천장 배관 12개 완료'])
+        $this->actingAsPersonalAppUser($user)->api('api_updateOpsBatch', [$batch->id, '천장 배관 12개 완료'])
             ->assertStatus(200)->assertJson(['success' => true]);
 
         $batch->refresh();
@@ -122,7 +122,7 @@ class OpsBatchManageTest extends TestCase
         $batch = $this->batch();
         $item = $this->item($batch, 'pending');
 
-        $this->actingAs($this->admin())->api('api_deleteOpsBatch', [$batch->id])
+        $this->actingAsPersonalAppUser($this->admin())->api('api_deleteOpsBatch', [$batch->id])
             ->assertStatus(200)->assertJson(['success' => true, 'deletedItems' => 1]);
 
         $this->assertDatabaseMissing('ops_intake_batches', ['id' => $batch->id]);
@@ -134,7 +134,7 @@ class OpsBatchManageTest extends TestCase
         $batch = $this->batch();
         $this->item($batch, 'applied');
 
-        $res = $this->actingAs($this->admin())->api('api_deleteOpsBatch', [$batch->id]);
+        $res = $this->actingAsPersonalAppUser($this->admin())->api('api_deleteOpsBatch', [$batch->id]);
 
         $res->assertStatus(200)->assertJson(['success' => false, 'appliedCount' => 1]);
         $this->assertStringContainsString('되돌린', $res->json('error'));
@@ -146,12 +146,12 @@ class OpsBatchManageTest extends TestCase
         $batch = $this->batch('원문');
 
         foreach (['foreman', 'worker', 'payroll'] as $role) {
-            $this->actingAs($this->admin($role))
+            $this->actingAsPersonalAppUser($this->admin($role))
                 ->api('api_updateOpsBatch', [$batch->id, '바꿈'])
-                ->assertStatus(200)->assertJson(['success' => false]);
-            $this->actingAs($this->admin($role))
+                ->assertStatus($role === 'worker' ? 403 : 200)->assertJson(['success' => false]);
+            $this->actingAsPersonalAppUser($this->admin($role))
                 ->api('api_deleteOpsBatch', [$batch->id])
-                ->assertStatus(200)->assertJson(['success' => false]);
+                ->assertStatus($role === 'worker' ? 403 : 200)->assertJson(['success' => false]);
         }
 
         $this->assertSame('원문', $batch->refresh()->raw_text);
@@ -161,7 +161,7 @@ class OpsBatchManageTest extends TestCase
     {
         $batch = $this->batch();
 
-        $this->actingAs($this->admin('client'))
+        $this->actingAsPersonalAppUser($this->admin('client'))
             ->api('api_deleteOpsBatch', [$batch->id])
             ->assertStatus(403);
     }
@@ -172,13 +172,13 @@ class OpsBatchManageTest extends TestCase
         $this->item($batch, 'applied');
         app(OpsIntakeService::class)->updateBatch($batch->id, '고친 원문');
 
-        $res = $this->actingAs($this->admin())->api('api_getOpsBatches');
+        $res = $this->actingAsPersonalAppUser($this->admin())->api('api_getOpsBatches');
 
         $res->assertStatus(200)->assertJson(['canManage' => true]);
         $this->assertTrue($res->json('batches.0.edited'));
         $this->assertSame(1, $res->json('batches.0.applied'));
 
-        $this->actingAs($this->admin('foreman'))->api('api_getOpsBatches')
+        $this->actingAsPersonalAppUser($this->admin('foreman'))->api('api_getOpsBatches')
             ->assertJson(['canManage' => false]);
     }
 
@@ -188,7 +188,7 @@ class OpsBatchManageTest extends TestCase
         $user = $this->admin();
         app(OpsIntakeService::class)->updateBatch($batch->id, '고침', $user->id);
 
-        $res = $this->actingAs($user)->api('api_getOpsBatch', [$batch->id]);
+        $res = $this->actingAsPersonalAppUser($user)->api('api_getOpsBatch', [$batch->id]);
 
         $res->assertStatus(200)->assertJson([
             'success' => true,
@@ -201,9 +201,9 @@ class OpsBatchManageTest extends TestCase
 
     public function test_missing_batch_is_reported(): void
     {
-        $this->actingAs($this->admin())->api('api_updateOpsBatch', [999999, 'x'])
+        $this->actingAsPersonalAppUser($this->admin())->api('api_updateOpsBatch', [999999, 'x'])
             ->assertStatus(200)->assertJson(['success' => false]);
-        $this->actingAs($this->admin())->api('api_deleteOpsBatch', [999999])
+        $this->actingAsPersonalAppUser($this->admin())->api('api_deleteOpsBatch', [999999])
             ->assertStatus(200)->assertJson(['success' => false]);
     }
 }

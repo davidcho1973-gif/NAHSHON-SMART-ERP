@@ -59,7 +59,7 @@ class SelfEmployeeLinkTest extends TestCase
     {
         $admin = $this->actor('super_admin');
 
-        $res = $this->actingAs($admin)->postJson(route('attendance-app.self-link'), $this->payload());
+        $res = $this->actingAsPersonalAppUser($admin)->postJson(route('attendance-app.self-link'), $this->payload());
 
         $res->assertOk()->assertJson(['success' => true]);
 
@@ -80,7 +80,7 @@ class SelfEmployeeLinkTest extends TestCase
         // 최고 관리자가 자기 손으로 자기 권한을 떨어뜨리는 일이 생기면 안 된다.
         $admin = $this->actor('super_admin');
 
-        $this->actingAs($admin)->postJson(route('attendance-app.self-link'), $this->payload())->assertOk();
+        $this->actingAsPersonalAppUser($admin)->postJson(route('attendance-app.self-link'), $this->payload())->assertOk();
 
         $this->assertSame('super_admin', $admin->fresh()->access_role);
     }
@@ -89,7 +89,7 @@ class SelfEmployeeLinkTest extends TestCase
     {
         $admin = $this->actor('admin');
 
-        $this->actingAs($admin)->postJson(route('attendance-app.self-link'), $this->payload([
+        $this->actingAsPersonalAppUser($admin)->postJson(route('attendance-app.self-link'), $this->payload([
             'trade' => 'Piping',
         ]))->assertOk();
 
@@ -102,8 +102,8 @@ class SelfEmployeeLinkTest extends TestCase
         // 구글 계정 하나로 급여 대장에 줄을 만들 수 있다는 뜻이 된다.
         $worker = $this->actor('worker');
 
-        $this->actingAs($worker)->postJson(route('attendance-app.self-link'), $this->payload())
-            ->assertOk()->assertJson(['success' => false]);
+        $this->actingAsPersonalAppUser($worker)->postJson(route('attendance-app.self-link'), $this->payload())
+            ->assertForbidden()->assertJson(['success' => false, 'code' => 'personal_app_role_required']);
 
         $this->assertNull($worker->fresh()->employee_id);
         $this->assertSame(0, Employee::query()->count());
@@ -118,7 +118,7 @@ class SelfEmployeeLinkTest extends TestCase
             'name' => '조사장', 'email' => 'boss@example.com', 'employment_status' => 'active',
         ]);
 
-        $res = $this->actingAs($admin)->postJson(route('attendance-app.self-link'), $this->payload());
+        $res = $this->actingAsPersonalAppUser($admin)->postJson(route('attendance-app.self-link'), $this->payload());
 
         $res->assertOk()->assertJson(['success' => true, 'linkedExisting' => true]);
         $this->assertSame($existing->id, $admin->fresh()->employee_id);
@@ -129,7 +129,7 @@ class SelfEmployeeLinkTest extends TestCase
     {
         $admin = $this->actor('super_admin');
 
-        $this->actingAs($admin)->postJson(route('attendance-app.self-link'), $this->payload(['siteId' => 0]))
+        $this->actingAsPersonalAppUser($admin)->postJson(route('attendance-app.self-link'), $this->payload(['siteId' => 0]))
             ->assertOk()->assertJson(['success' => false]);
 
         $this->assertNull($admin->fresh()->employee_id);
@@ -139,8 +139,8 @@ class SelfEmployeeLinkTest extends TestCase
     {
         $admin = $this->actor('super_admin');
 
-        $this->actingAs($admin)->postJson(route('attendance-app.self-link'), $this->payload())->assertOk();
-        $this->actingAs($admin->fresh())->postJson(route('attendance-app.self-link'), $this->payload())
+        $this->actingAsPersonalAppUser($admin)->postJson(route('attendance-app.self-link'), $this->payload())->assertOk();
+        $this->actingAsPersonalAppUser($admin->fresh())->postJson(route('attendance-app.self-link'), $this->payload())
             ->assertOk()->assertJson(['success' => false]);
 
         $this->assertSame(1, Employee::query()->count());
@@ -150,19 +150,22 @@ class SelfEmployeeLinkTest extends TestCase
     {
         $admin = $this->actor('super_admin');
 
-        $res = $this->actingAs($admin)->getJson(route('attendance-app.home'));
+        $res = $this->actingAsPersonalAppUser($admin)->getJson(route('attendance-app.home'));
 
         $res->assertStatus(422)->assertJson(['code' => 'no_employee', 'canSelfLink' => true]);
         // 현장 목록이 함께 와야 화면이 고를 것을 그릴 수 있다.
         $this->assertNotEmpty($res->json('selfLink.sites'));
     }
 
-    public function test_a_worker_is_still_told_to_ask_someone(): void
+    public function test_an_unlinked_worker_cannot_open_the_personal_app_or_self_link_form(): void
     {
         $worker = $this->actor('worker');
 
-        $this->actingAs($worker)->getJson(route('attendance-app.home'))
-            ->assertStatus(422)
-            ->assertJson(['code' => 'no_employee', 'canSelfLink' => false]);
+        $this->actingAsPersonalAppUser($worker)->getJson(route('attendance-app.home'))
+            ->assertForbidden()
+            ->assertJson(['code' => 'personal_app_role_required', 'redirect' => route('worker-app.entry')])
+            ->assertJsonMissingPath('selfLink');
+        $this->assertNull($worker->fresh()->employee_id);
+        $this->assertDatabaseCount('employees', 0);
     }
 }

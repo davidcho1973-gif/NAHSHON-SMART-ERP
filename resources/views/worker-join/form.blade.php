@@ -92,10 +92,13 @@
                 <div class="shared" id="t-shared" style="display:none">
                     <b id="t-sharedTitle"></b><br><span id="t-sharedBody"></span>
                 </div>
-                {{-- 등록 후 사용할 앱은 attendance-app이다. 게이트 설치로 연결하면
-                     출퇴근 전용 화면이 홈 화면에 저장되어 직원 앱으로 돌아오지 못한다. --}}
-                <a class="install-cta" id="t-install" href="{{ route('worker-app.entry') }}"></a>
-                <p class="note" id="t-installHint" style="margin-top:8px;text-align:center"></p>
+                @if (\App\Support\PersonalAppAccess::eligible($employee?->user))
+                    <a class="install-cta" id="t-install" href="{{ route('login', ['app' => 1]) }}"></a>
+                    <p class="note" id="t-installHint" style="margin-top:8px;text-align:center"></p>
+                @elseif ($site)
+                    <a class="install-cta" href="{{ route('gate.show', $site) }}">{{ ['ko' => '출퇴근 화면 열기', 'en' => 'Open attendance', 'es' => 'Abrir asistencia'][$lang] }}</a>
+                    <p class="note" style="margin-top:8px;text-align:center">{{ ['ko' => '앱 설치 없이 현장 QR로 출퇴근합니다.', 'en' => 'Use the site QR for attendance. No app installation needed.', 'es' => 'Use el QR de la obra para registrar asistencia, sin instalar una app.'][$lang] }}</p>
+                @endif
                 @if (!$site)
                     <p class="note" id="global-done"></p>
                 @endif
@@ -131,7 +134,6 @@
                     if (inst) { inst.textContent = T.installApp; }
                     var instHint = document.getElementById('t-installHint');
                     if (instHint) { instHint.textContent = T.installHint; }
-                    // 기존 게이트 아이콘에서 등록했어도 직원 앱으로 이동할 수 있어야 한다.
                     var badge = document.getElementById('t-doneBadge');
                     if (badge) badge.textContent = T.doneBadge;
 

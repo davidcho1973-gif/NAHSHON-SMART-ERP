@@ -25,6 +25,7 @@ class ChatRoomManagementTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
 
     protected function setUp(): void
@@ -47,7 +48,7 @@ class ChatRoomManagementTest extends TestCase
 
         return User::factory()->create([
             'employee_id' => $employee->id, 'email' => $role.'@example.com',
-            'access_role' => $role, 'account_status' => 'active',
+            'access_role' => $role, 'access_scope' => 'self', 'account_status' => 'active',
         ]);
     }
 
@@ -55,7 +56,7 @@ class ChatRoomManagementTest extends TestCase
     {
         $manager = $this->user('site_manager');
 
-        $this->actingAs($manager)->post(route('communication.room.store'), [
+        $this->actingAsPersonalAppUser($manager)->post(route('communication.room.store'), [
             'name' => '3층 배관팀',
             'type' => CommunicationRoom::TYPE_TEAM,
             'site_id' => $this->site->id,
@@ -68,10 +69,10 @@ class ChatRoomManagementTest extends TestCase
         $this->assertTrue($room->activeMembers()->where('employee_id', $manager->employee_id)->exists());
     }
 
-    public function test_a_worker_cannot_create_rooms(): void
+    public function test_a_foreman_cannot_create_rooms(): void
     {
         // 아무나 방을 만들면 난립한다 — 목록이 쓰레기가 되면 아무도 안 본다.
-        $this->actingAs($this->user('worker'))->post(route('communication.room.store'), [
+        $this->actingAsPersonalAppUser($this->user('foreman'))->post(route('communication.room.store'), [
             'name' => '내 마음대로 방', 'type' => CommunicationRoom::TYPE_TEAM,
         ])->assertRedirect();
 
@@ -86,7 +87,7 @@ class ChatRoomManagementTest extends TestCase
             'type' => CommunicationRoom::TYPE_TEAM, 'name' => '빈 방', 'status' => 'active',
         ]);
 
-        $this->actingAs($manager)
+        $this->actingAsPersonalAppUser($manager)
             ->delete(route('communication.room.destroy', ['room' => $room]))
             ->assertRedirect(route('communication.index'));
 
@@ -103,7 +104,7 @@ class ChatRoomManagementTest extends TestCase
         app(CommunicationService::class)->ensureRoomMember($room, $manager->employee);
         app(CommunicationService::class)->postMessage($manager, $room, '원청 지시: 내일 07시 안전교육');
 
-        $this->actingAs($manager)
+        $this->actingAsPersonalAppUser($manager)
             ->delete(route('communication.room.destroy', ['room' => $room]))
             ->assertRedirect(route('communication.index'));
 
@@ -112,14 +113,14 @@ class ChatRoomManagementTest extends TestCase
         $this->assertDatabaseHas('communication_messages', ['communication_room_id' => $room->id]);
     }
 
-    public function test_a_worker_cannot_take_a_room_down(): void
+    public function test_a_foreman_cannot_take_a_room_down(): void
     {
         $room = CommunicationRoom::query()->create([
             'company_id' => $this->company->id, 'site_id' => $this->site->id,
             'type' => CommunicationRoom::TYPE_TEAM, 'name' => '남의 방', 'status' => 'active',
         ]);
 
-        $this->actingAs($this->user('worker'))
+        $this->actingAsPersonalAppUser($this->user('foreman'))
             ->delete(route('communication.room.destroy', ['room' => $room]))
             ->assertRedirect();
 
@@ -130,12 +131,35 @@ class ChatRoomManagementTest extends TestCase
     public function test_the_button_only_shows_for_those_who_may_use_it(): void
     {
         // 눌러도 막히는 버튼은 만들지 않는다.
-        $managerHtml = $this->actingAs($this->user('site_manager'))
+        $managerHtml = $this->actingAsPersonalAppUser($this->user('site_manager'))
             ->get(route('communication.index'))->assertOk()->getContent();
         $this->assertStringContainsString('id="btn-new-room"', $managerHtml);
 
-        $workerHtml = $this->actingAs($this->user('worker'))
+        $foremanHtml = $this->actingAsPersonalAppUser($this->user('foreman'))
             ->get(route('communication.index'))->assertOk()->getContent();
-        $this->assertStringNotContainsString('id="btn-new-room"', $workerHtml);
+        $this->assertStringNotContainsString('id="btn-new-room"', $foremanHtml);
+    }
+
+    public function test_a_worker_cannot_open_chat_or_mutate_rooms_even_with_a_verified_login(): void
+    {
+        $worker = $this->user('worker');
+        $room = CommunicationRoom::query()->create([
+            'company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'type' => CommunicationRoom::TYPE_TEAM, 'name' => '기존 방', 'status' => 'active',
+        ]);
+        app(CommunicationService::class)->ensureRoomMember($room, $worker->employee);
+
+        $this->actingAsPersonalAppUser($worker)
+            ->get(route('communication.index'))->assertRedirect('/app');
+        $this->actingAsPersonalAppUser($worker)
+            ->postJson(route('communication.room.store'), [
+                'name' => '허용되지 않은 방', 'type' => CommunicationRoom::TYPE_TEAM,
+            ])->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+        $this->actingAsPersonalAppUser($worker)
+            ->deleteJson(route('communication.room.destroy', ['room' => $room]))
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+
+        $this->assertDatabaseMissing('communication_rooms', ['name' => '허용되지 않은 방']);
+        $this->assertSame('active', $room->fresh()->status);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Support\PhoneInstallGuide;
 use App\Support\WorkerLang;
 use Tests\TestCase;
@@ -26,13 +27,52 @@ class InstallGuideTest extends TestCase
         $this->get('/app/install')->assertOk()->assertSee('홈 화면에 추가하는 방법');
     }
 
-    public function test_install_guide_opens_the_permanent_app_before_installation(): void
+    public function test_anonymous_install_guide_requires_normal_staff_login_before_installation(): void
     {
         $this->get('/app/install?return_to=https://untrusted.example/token')->assertOk()
-            ->assertSee(route('attendance-app.index', ['install' => 1]), false)
-            ->assertSee(route('worker-app.manifest'), false)
-            ->assertSee('먼저 아래 버튼으로 개인앱을 여세요')
+            ->assertSee(route('login', ['app' => 1]), false)
+            ->assertSee('관리직원·반장 로그인')
+            ->assertDontSee(route('attendance-app.index', ['install' => 1]), false)
+            ->assertDontSee(route('worker-app.manifest'), false)
             ->assertDontSee('untrusted.example');
+    }
+
+    public function test_workers_get_qr_attendance_guidance_without_install_controls_even_with_purchase_permission(): void
+    {
+        $this->actingAs(new User(['access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'purchase_request_enabled' => true, 'purchase_buy_enabled' => true]));
+
+        $this->view('worker-app.install-guide', $this->guideData())->assertSee('현장 QR로 출퇴근하세요')
+            ->assertSee('앱 설치 없이')->assertDontSee('class="open-app"', false)
+            ->assertDontSee(route('worker-app.manifest'), false)->assertDontSee('class="steps"', false);
+        $this->view('partials.install-app')->assertDontSee('id="app-install"', false)->assertDontSee('window.AppInstall', false);
+        $this->view('partials.personal-app-meta')->assertDontSee('rel="manifest"', false)
+            ->assertDontSee('apple-mobile-web-app-capable');
+    }
+
+    public function test_active_staff_and_foremen_can_install_without_purchase_permission(): void
+    {
+        foreach (['admin', 'foreman'] as $role) {
+            $this->actingAs(new User(['access_role' => $role, 'account_status' => 'active',
+                'purchase_request_enabled' => false, 'purchase_buy_enabled' => false]));
+            $this->view('worker-app.install-guide', $this->guideData())
+                ->assertSee(route('attendance-app.index', ['install' => 1]), false)
+                ->assertSee(route('worker-app.manifest'), false)->assertSee('개인앱 열고 설치하기');
+            $this->view('partials.install-app')->assertSee('id="app-install"', false)->assertSee('window.AppInstall', false);
+        }
+    }
+
+    public function test_inactive_staff_cannot_receive_install_controls(): void
+    {
+        $this->actingAs(new User(['access_role' => 'admin', 'account_status' => 'suspended']));
+        $this->view('partials.install-app')->assertDontSee('id="app-install"', false);
+        $this->view('partials.personal-app-meta')->assertDontSee('rel="manifest"', false);
+    }
+
+    private function guideData(): array
+    {
+        return ['case' => PhoneInstallGuide::ANDROID, 'detected' => true, 'lang' => 'ko',
+            'langOptions' => WorkerLang::OPTIONS, 'dict' => WorkerLang::installGuide(), 'order' => PhoneInstallGuide::ALL];
     }
 
     public function test_kakaotalk_is_told_to_leave_the_in_app_browser_first(): void

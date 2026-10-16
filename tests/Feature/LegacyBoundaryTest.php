@@ -44,13 +44,14 @@ class LegacyBoundaryTest extends TestCase
     public function test_boundary_worker_cannot_read_money_document_original(): void
     {
         $d = $this->document('payroll_record');
-        $this->actingAs($this->worker())->get('/docs-api/file/'.$d->id)->assertNotFound();
+        $this->actingAs($this->worker())->getJson('/docs-api/file/'.$d->id)
+            ->assertForbidden()->assertDontSee('AUDIT SYNTHETIC CONTENT');
     }
 
     public function test_boundary_worker_cannot_delete_another_document(): void
     {
         $d = $this->document();
-        $this->actingAs($this->worker())->postJson('/smart-company-api/api_deleteDoc', ['args' => [$d->id]])->assertOk()->assertJson(['success' => false]);
+        $this->actingAs($this->worker())->postJson('/smart-company-api/api_deleteDoc', ['args' => [$d->id]])->assertForbidden()->assertJson(['success' => false]);
         $this->assertDatabaseHas('integrated_documents', ['id' => $d->id]);
     }
 
@@ -58,14 +59,14 @@ class LegacyBoundaryTest extends TestCase
     {
         $d = $this->document();
         $d->update(['status' => 'needs_review']);
-        $this->actingAs($this->worker())->postJson('/smart-company-api/api_confirmDoc', ['args' => [$d->id, '01']])->assertOk()->assertJson(['success' => false]);
+        $this->actingAs($this->worker())->postJson('/smart-company-api/api_confirmDoc', ['args' => [$d->id, '01']])->assertForbidden()->assertJson(['success' => false]);
         $this->assertSame('needs_review', $d->fresh()->status);
     }
 
     public function test_boundary_worker_cannot_delete_ops_action(): void
     {
         $a = OpsActionItem::create(['title' => 'Audit action', 'kind' => 'todo', 'status' => 'open']);
-        $this->actingAs($this->worker())->postJson('/smart-company-api/api_deleteOpsAction', ['args' => [$a->id]])->assertOk()->assertJson(['success' => false]);
+        $this->actingAs($this->worker())->postJson('/smart-company-api/api_deleteOpsAction', ['args' => [$a->id]])->assertForbidden()->assertJson(['success' => false]);
         $this->assertDatabaseHas('ops_action_items', ['id' => $a->id]);
     }
 
@@ -74,7 +75,7 @@ class LegacyBoundaryTest extends TestCase
         $d = $this->document();
         $u = $this->worker();
         $u->update(['account_status' => 'suspended']);
-        $this->actingAs($u)->get('/docs-api/file/'.$d->id)->assertForbidden();
+        $this->actingAs($u)->getJson('/docs-api/file/'.$d->id)->assertForbidden()->assertDontSee('AUDIT SYNTHETIC CONTENT');
     }
 
     public function test_boundary_worker_cannot_browse_other_site_documents(): void
@@ -85,14 +86,16 @@ class LegacyBoundaryTest extends TestCase
         $d->update(['site_id' => $b->id, 'folder_code' => '03']);
         $u = $this->worker();
         $u->update(['access_scope' => 'site', 'allowed_site_id' => $a->id]);
-        $this->actingAs($u)->postJson('/smart-company-api/api_getDocFolder', ['siteId' => (string) $b->id, 'args' => ['03']])->assertOk()->assertJsonPath('success', false);
+        $this->actingAs($u)->postJson('/smart-company-api/api_getDocFolder', ['siteId' => (string) $b->id, 'args' => ['03']])
+            ->assertForbidden()->assertJsonPath('success', false)->assertDontSee($d->title);
     }
 
-    public function test_boundary_document_status_exposes_other_money_summary(): void
+    public function test_boundary_document_status_does_not_expose_other_money_summary(): void
     {
         $d = $this->document('payroll_record');
         $d->update(['summary' => ['AUDIT payroll synthetic']]);
-        $this->actingAs($this->worker())->getJson('/docs-api/status?ids='.$d->id)->assertOk()->assertJsonPath('documents', []);
+        $this->actingAs($this->worker())->getJson('/docs-api/status?ids='.$d->id)
+            ->assertForbidden()->assertJsonMissingPath('documents')->assertDontSee('AUDIT payroll synthetic');
     }
 
     public function test_boundary_worker_cannot_delete_equipment(): void
@@ -111,7 +114,7 @@ class LegacyBoundaryTest extends TestCase
 
     public function test_boundary_unknown_write_endpoint_rejects_operation(): void
     {
-        $this->actingAs($this->worker())->postJson('/smart-company-api/api_auditNotImplemented', ['args' => []])->assertOk()->assertJson(['success' => false]);
+        $this->actingAs($this->worker())->postJson('/smart-company-api/api_auditNotImplemented', ['args' => []])->assertForbidden()->assertJson(['success' => false]);
     }
 
     public function test_boundary_shared_ai_answer_does_not_expose_admin_financial_facts(): void
@@ -142,7 +145,7 @@ class LegacyBoundaryTest extends TestCase
         Project::create(['project_code' => 'AUD-P', 'name' => 'Audit', 'construction_type' => 'equipment_setting']);
         $w = WbsItem::create(['project_code' => 'AUD-P', 'site_id' => $s->id, 'level' => 'subtask', 'wbs_code' => 'AUD-P-W1', 'activity_id' => 'W1', 'node_no' => '1.1', 'name' => 'Audit synthetic', 'status' => '검수완료', 'progress' => 0]);
         $i = OpsIntakeItem::create(['site_id' => $s->id, 'source' => 'paste', 'raw_text' => 'Audit', 'category' => 'progress', 'confidence' => 90, 'summary' => 'Audit', 'target_type' => 'wbs', 'target_code' => $w->wbs_code, 'proposed' => ['progress' => 60], 'status' => 'pending']);
-        $this->actingAs($this->worker())->postJson('/smart-company-api/api_applyOpsItem', ['args' => [$i->id]])->assertOk()->assertJson(['success' => false]);
-        $this->assertSame(0,(int) $w->fresh()->progress);
+        $this->actingAs($this->worker())->postJson('/smart-company-api/api_applyOpsItem', ['args' => [$i->id]])->assertForbidden()->assertJson(['success' => false]);
+        $this->assertSame(0, (int) $w->fresh()->progress);
     }
 }

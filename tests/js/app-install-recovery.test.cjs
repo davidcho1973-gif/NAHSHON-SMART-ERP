@@ -59,3 +59,71 @@ test('standalone launch suppresses installation; iPhone and blocked storage stil
     ios.el('[data-di-dismiss]:1').click(); assert.equal(ios.el('app-install').hidden, true);
     assert.equal(ios.app.show(), true);
 });
+
+async function employeeAdmin(rows) {
+    const actions = new Map(), calls = [], forms = [];
+    const window = { location: {}, AdminUI: {
+        esc: value => String(value || ''), badge: label => label,
+        rowButton: (label, action) => label + ' ' + action,
+        pageHeader: () => '', primaryButton: () => '', bindSearch() {},
+        formModal: value => forms.push(value),
+        table: table => {
+            const render = table.columns.find(column => column.key === 'act').render;
+            table.rows.forEach(row => actions.set(row.id, render(row)));
+            return '';
+        },
+    }, gsRun: async method => {
+        calls.push(method);
+        if (method === 'api_getEmployeeAdminOptions') return { canGrantAccount: true };
+        if (method === 'api_getEmployeeAdminList') return { rows, canManage: true };
+        if (method === 'api_grantEmployeeAccount') return { success: false, error: 'Synthetic stop after save' };
+        throw Error('Unexpected API: ' + method);
+    } };
+    vm.runInNewContext(fs.readFileSync('public/js/admin-employees.js', 'utf8'), {
+        window, document: { getElementById: () => ({ innerHTML: '' }) },
+    });
+    window.AdminEmployees.render();
+    await new Promise(resolve => setImmediate(resolve));
+    return { window, actions, calls, forms };
+}
+
+test('employee actions offer installation only for active eligible accounts, never job titles or purchase grants', async () => {
+    const base = { hasAccount: true, status: 'active', accountStatus: 'active', siteQrUrl: '/gate/4/qr' };
+    const rows = [
+        { ...base, id: 1, accountRole: 'worker', position: 'foreman', purchaseRequestEnabled: true },
+        { ...base, id: 2, accountRole: 'foreman', position: 'worker' },
+        { ...base, id: 3, accountRole: 'admin' },
+        { ...base, id: 4, accountRole: 'admin', accountStatus: 'suspended' },
+        { ...base, id: 5, accountRole: 'admin', status: 'terminated' },
+        { ...base, id: 6, accountRole: 'company_admin' },
+        { ...base, id: 7 },
+    ];
+    const { actions } = await employeeAdmin(rows);
+    assert.match(actions.get(1), /현장 QR 출퇴근/);
+    for (const id of [1, 4, 5, 6, 7]) {
+        assert.doesNotMatch(actions.get(id), /앱 설치 카드|앱 링크 공유|개인앱 보기|install-card|attendance-app\?as=/);
+    }
+    for (const id of [2, 3]) {
+        assert.match(actions.get(id), new RegExp('attendance-app/employee/' + id + '/install-card'));
+        assert.match(actions.get(id), new RegExp('attendance-app/employee/' + id + '/share'));
+    }
+    assert.match(actions.get(7), /접속 안내/);
+    assert.match(actions.get(7), /attendance-app\/employee\/7\/share/);
+});
+
+test('employee account form keeps its save flow and distinguishes worker QR from management login', async () => {
+    const h = await employeeAdmin([{ id: 8, name: 'Foreman', status: 'active', hasAccount: false }]);
+    h.window.AdminEmployees.grantAccount(8);
+    await new Promise(resolve => setImmediate(resolve));
+    const form = h.forms[0];
+    const email = form.fields.find(field => field.name === 'email');
+    const role = form.fields.find(field => field.name === 'role');
+    assert.match(role.hint, /앱 설치 없이 현장 QR/);
+    assert.match(role.hint, /역할·이메일을 바꾸기 전에 초대/);
+    assert.match(email.hint, /이 이메일과 같은 Google 계정으로 처음 로그인/);
+    assert.match(email.hint, /비밀번호는 이 화면에서 설정되지 않습니다/);
+    assert.doesNotMatch(email.hint, /뒷 4자리/);
+    assert.match(form.subtitle, /계정 · 권한 관리 → 관리자로 초대를 먼저/);
+    await form.onSave({ email: '', role: 'worker', scope: 'self' });
+    assert.equal(h.calls.includes('api_grantEmployeeAccount'), true);
+});

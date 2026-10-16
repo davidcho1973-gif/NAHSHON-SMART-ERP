@@ -20,7 +20,9 @@ class GeofenceSiteSelectionTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $siteA;
+
     private Site $siteB;
 
     protected function setUp(): void
@@ -37,11 +39,11 @@ class GeofenceSiteSelectionTest extends TestCase
         $emp = Employee::create([
             'company_id' => $this->company->id, 'site_id' => $site?->id,
             'first_name' => ucfirst($role), 'last_name' => 'Tester',
-            'email' => $role . '@example.com', 'employment_status' => 'active',
+            'email' => $role.'@example.com', 'employment_status' => 'active',
         ]);
 
         return User::factory()->create([
-            'email' => $role . '@example.com', 'employee_id' => $emp->id,
+            'email' => $role.'@example.com', 'employee_id' => $emp->id,
             'access_role' => $role, 'account_status' => 'active',
         ]);
     }
@@ -138,7 +140,7 @@ class GeofenceSiteSelectionTest extends TestCase
 
         $res = $this->actingAs($worker)->postJson('/smart-company-api/api_getGeofenceSites', ['args' => [], 'siteId' => 'ALL']);
 
-        $res->assertStatus(200)->assertJsonPath('canManage', false);
+        $res->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
     }
 
     public function test_admin_can_manually_finalize_attendance_as_scheduler_fallback(): void
@@ -161,6 +163,6 @@ class GeofenceSiteSelectionTest extends TestCase
             'args' => ['2026-07-21'], 'siteId' => 'ALL',
         ]);
 
-        $res->assertStatus(200)->assertJsonPath('success', false);
+        $res->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
     }
 }

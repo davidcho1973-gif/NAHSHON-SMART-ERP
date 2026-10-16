@@ -494,7 +494,7 @@ final class WorkerLang
     }
 
     /**
-     * 작업자에게 보내는 문자 한 통.
+     * 관리직원·반장에게 보내는 업무 개인앱 안내.
      *
      * 링크만 덜렁 보내면 안 누른다 — 모르는 주소이기 때문이다. 무엇인지, 무엇으로
      * 로그인하는지, 두 줄이면 충분하다. 길면 안 읽는다.
@@ -504,20 +504,20 @@ final class WorkerLang
     public static function shareMessage(string $url): array
     {
         return [
-            'ko' => "내 출퇴근 앱입니다. 출퇴근 기록과 근무시간을 휴대폰에서 바로 볼 수 있어요.\n"
+            'ko' => "관리직원·반장용 업무 개인앱입니다. 본인에게 허용된 업무를 휴대폰에서 이용합니다.\n"
                 ."{$url}\n"
                 ."열어서 등록 이메일 또는 Google로 로그인한 뒤 '홈 화면에 추가'를 눌러 주세요.",
-            'en' => "This is your attendance app. See your attendance and hours on your phone.\n"
+            'en' => "This work app is for management staff and foremen. Use your assigned work tools on your phone.\n"
                 ."{$url}\n"
                 .'Open it, sign in with your registered email or Google, then tap "Add to Home Screen".',
-            'es' => "Esta es su aplicación de asistencia. Vea sus registros de asistencia y horas en su teléfono.\n"
+            'es' => "Esta app de trabajo es para personal administrativo y capataces. Use sus herramientas autorizadas en el teléfono.\n"
                 ."{$url}\n"
                 .'Ábrala, inicie sesión con su correo registrado o Google y toque "Agregar a la pantalla de inicio".',
         ];
     }
 
     /**
-     * 직영 작업자에게 건네는 앱 설치 카드 문구.
+     * 관리직원·반장에게 건네는 업무 개인앱 설치 카드 문구.
      *
      * 게이트(협력사)와 다르다 — 이쪽은 사람이 정해져 있고 계정이 있다. 그래서 가장 흔한
      * 실패는 "설치를 못 한다"가 아니라 <b>어느 구글 계정으로 로그인해야 하는지 모른다</b>
@@ -530,34 +530,34 @@ final class WorkerLang
     {
         return [
             'ko' => [
-                'title' => '내 출퇴근 앱',
-                'hint' => '내 출퇴근 기록과 근무시간을 내 휴대폰에서 바로 봅니다.',
+                'title' => '업무 개인앱',
+                'hint' => '관리직원·반장이 본인에게 허용된 업무를 휴대폰에서 이용합니다.',
                 'account' => '로그인할 등록 이메일',
                 'steps' => [
                     '휴대폰 카메라로 위 QR 을 스캔합니다.',
-                    '위에 적힌 이메일과 비밀번호 또는 Google로 로그인합니다. 최초 이메일 로그인은 화면의 전화번호 끝 4자리 안내를 따르세요.',
+                    '위에 적힌 이메일과 설정한 비밀번호 또는 연결한 Google 계정으로 로그인합니다.',
                     '"홈 화면에 추가" 안내가 뜨면 추가합니다. 다음부터는 아이콘만 누르면 됩니다.',
                 ],
                 'trouble' => '로그인이 안 되면 현장 관리자에게 말씀하세요. 계정 등록이 필요할 수 있습니다.',
             ],
             'en' => [
-                'title' => 'My Attendance App',
-                'hint' => 'See your attendance and hours on your own phone.',
+                'title' => 'Personal Work App',
+                'hint' => 'Management staff and foremen use their assigned work tools on their phones.',
                 'account' => 'Your registered sign-in email',
                 'steps' => [
                     'Scan the QR code above with your phone camera.',
-                    'Use the email printed above and your password, or Google. For first-time email sign-in, follow the phone last-4-digits instructions on screen.',
+                    'Sign in with the email printed above and your password, or your linked Google account.',
                     'When it offers "Add to Home Screen", add it. Next time just tap the icon.',
                 ],
                 'trouble' => 'If sign-in fails, tell your site manager. Your account may need to be set up.',
             ],
             'es' => [
-                'title' => 'Mi aplicación de asistencia',
-                'hint' => 'Vea sus registros de asistencia y horas en su propio teléfono.',
+                'title' => 'App personal de trabajo',
+                'hint' => 'El personal administrativo y los capataces usan sus herramientas autorizadas en el teléfono.',
                 'account' => 'Su correo registrado para iniciar sesión',
                 'steps' => [
                     'Escanee el código QR de arriba con la cámara de su teléfono.',
-                    'Use el correo de arriba y su contraseña, o Google. La primera vez, siga las instrucciones de los últimos 4 dígitos del teléfono.',
+                    'Inicie sesión con el correo de arriba y su contraseña, o con su cuenta de Google vinculada.',
                     'Cuando ofrezca "Agregar a la pantalla de inicio", agréguelo. La próxima vez solo toque el ícono.',
                 ],
                 'trouble' => 'Si no puede iniciar sesión, avise a su supervisor. Puede que falte registrar su cuenta.',
@@ -579,8 +579,11 @@ final class WorkerLang
         return [
             'ko' => [
                 'title' => '홈 화면에 추가하는 방법',
-                'lead' => '먼저 아래 버튼으로 개인앱을 여세요. 개인앱 화면에서 홈 화면에 추가합니다.',
+                'lead' => '관리직원·반장용 업무 개인앱입니다. 로그인한 뒤 개인앱 화면에서 홈 화면에 추가하세요.',
                 'openApp' => '개인앱 열고 설치하기',
+                'managerLogin' => '관리직원·반장 로그인',
+                'workerTitle' => '현장 QR로 출퇴근하세요',
+                'workerBody' => '업무 개인앱은 관리직원과 반장이 사용합니다. 일반 작업자는 앱 설치 없이 현장 QR을 찍고 출근 또는 퇴근을 눌러 주세요.',
                 'yours' => '지금 쓰시는 휴대폰',
                 'others' => '다른 휴대폰은 이렇게 합니다',
                 'why' => '왜 하나요?',
@@ -636,8 +639,8 @@ final class WorkerLang
                         'name' => '컴퓨터로 보고 계십니다',
                         'note' => '홈 화면 추가는 휴대폰에서 합니다.',
                         'steps' => [
-                            '휴대폰 카메라로 현장에 붙은 <b>QR</b> 을 찍습니다.',
-                            '등록 후 <b>개인앱 열고 설치하기</b>를 누릅니다.',
+                            '휴대폰에서 이 주소를 열고 <b>관리직원·반장 계정</b>으로 로그인합니다.',
+                            '로그인 후 <b>개인앱 열고 설치하기</b>를 누릅니다.',
                             '위의 자기 휴대폰 방법대로 추가합니다.',
                         ],
                     ],
@@ -645,8 +648,11 @@ final class WorkerLang
             ],
             'en' => [
                 'title' => 'How to add this to your home screen',
-                'lead' => 'Open your personal app with the button below first. Add it to your home screen from the app screen.',
+                'lead' => 'This work app is for management staff and foremen. Sign in, then add it to your home screen from the app screen.',
                 'openApp' => 'Open personal app to install',
+                'managerLogin' => 'Staff and foreman sign-in',
+                'workerTitle' => 'Use the site QR for attendance',
+                'workerBody' => 'The work app is for management staff and foremen. Workers do not need an app: scan the site QR and tap Clock in or Clock out.',
                 'yours' => 'Your phone',
                 'others' => 'Other phones',
                 'why' => 'Why?',
@@ -702,8 +708,8 @@ final class WorkerLang
                         'name' => 'You are on a computer',
                         'note' => 'Adding to a home screen is done on a phone.',
                         'steps' => [
-                            'Scan the <b>QR</b> posted on site with your phone camera.',
-                            'After registering, tap <b>Open personal app to install</b>.',
+                            'Open this address on your phone and sign in with your <b>staff or foreman account</b>.',
+                            'After signing in, tap <b>Open personal app to install</b>.',
                             'Follow the steps for your phone above.',
                         ],
                     ],
@@ -711,8 +717,11 @@ final class WorkerLang
             ],
             'es' => [
                 'title' => 'Cómo agregarlo a la pantalla de inicio',
-                'lead' => 'Primero abra su app personal con el botón de abajo. Agréguela a inicio desde la pantalla de la app.',
+                'lead' => 'Esta app de trabajo es para personal administrativo y capataces. Inicie sesión y agréguela a inicio desde la pantalla de la app.',
                 'openApp' => 'Abrir app personal para instalar',
+                'managerLogin' => 'Acceso de personal y capataces',
+                'workerTitle' => 'Use el QR de la obra para marcar asistencia',
+                'workerBody' => 'La app de trabajo es para personal administrativo y capataces. Los trabajadores no necesitan una app: escanee el QR de la obra y toque Entrada o Salida.',
                 'yours' => 'Su teléfono',
                 'others' => 'Otros teléfonos',
                 'why' => '¿Para qué?',
@@ -768,8 +777,8 @@ final class WorkerLang
                         'name' => 'Está en una computadora',
                         'note' => 'Agregar a la pantalla de inicio se hace en el teléfono.',
                         'steps' => [
-                            'Escanee con la cámara el <b>QR</b> puesto en la obra.',
-                            'Después de registrarse, toque <b>Abrir app personal para instalar</b>.',
+                            'Abra esta dirección en su teléfono e inicie sesión con su <b>cuenta de personal o capataz</b>.',
+                            'Después de iniciar sesión, toque <b>Abrir app personal para instalar</b>.',
                             'Siga los pasos de su teléfono, arriba.',
                         ],
                     ],
@@ -781,9 +790,8 @@ final class WorkerLang
     /**
      * "홈 화면에 추가" 안내 문구.
      *
-     * 이 문구가 필요한 이유 — 작업자에게 이건 웹사이트가 아니라 앱이어야 한다. 매번
-     * 게이트 QR 을 찾아 스캔하게 두면 셋째 날부터 안 찍는다. 홈 화면에 아이콘이 있으면
-     * 한 번 눌러서 열고, 주소창도 안 보여서 앱과 구별되지 않는다.
+     * 관리직원·반장이 업무 화면을 쉽게 다시 열도록 안내한다.
+     * 일반 작업자는 앱을 설치하지 않고 현장 QR로 등록·출퇴근한다.
      *
      * 안드로이드와 아이폰의 문구가 다른 이유 — 안드로이드는 브라우저가 설치 버튼을
      * 우리에게 넘겨주지만(누르면 끝), 아이폰 사파리는 그런 것을 주지 않는다. 사람이
@@ -795,8 +803,8 @@ final class WorkerLang
     {
         return [
             'ko' => [
-                'title' => '이 화면을 앱처럼 쓰세요',
-                'body' => '휴대폰 홈 화면에 아이콘이 생깁니다. 다음부터는 QR 을 찾지 않고 아이콘만 누르면 됩니다.',
+                'title' => '업무 개인앱 추가',
+                'body' => '관리직원·반장이 사용하는 업무 앱입니다. 추가한 아이콘을 눌러 본인 이름이 나오는지 확인하세요.',
                 'install' => '홈 화면에 추가',
                 'later' => '나중에',
                 'iosTitle' => '아이폰에서 추가하는 방법',
@@ -810,8 +818,8 @@ final class WorkerLang
                 'close' => '닫기',
             ],
             'en' => [
-                'title' => 'Use this like an app',
-                'body' => 'An icon is added to your phone\'s home screen. Next time just tap the icon — no QR to find.',
+                'title' => 'Add your work app',
+                'body' => 'For management staff and foremen. Tap the new icon and check that your name appears.',
                 'install' => 'Add to Home Screen',
                 'later' => 'Later',
                 'iosTitle' => 'How to add it on iPhone',
@@ -825,8 +833,8 @@ final class WorkerLang
                 'close' => 'Close',
             ],
             'es' => [
-                'title' => 'Úselo como una aplicación',
-                'body' => 'Se agrega un ícono a la pantalla de inicio de su teléfono. La próxima vez solo toque el ícono — sin buscar el código QR.',
+                'title' => 'Agregue su app de trabajo',
+                'body' => 'Para personal administrativo y capataces. Toque el nuevo ícono y verifique que aparezca su nombre.',
                 'install' => 'Agregar a la pantalla de inicio',
                 'later' => 'Más tarde',
                 'iosTitle' => 'Cómo agregarlo en iPhone',

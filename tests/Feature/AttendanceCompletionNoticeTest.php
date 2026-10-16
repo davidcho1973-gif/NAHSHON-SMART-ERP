@@ -122,7 +122,7 @@ class AttendanceCompletionNoticeTest extends TestCase
     public function test_authorized_manager_can_publish_and_view_confirmation_but_worker_cannot(): void
     {
         $admin = User::factory()->create(['access_role' => 'super_admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
-        $this->actingAs($admin)->postJson(route('communication.store', $this->room), [
+        $this->actingAsPersonalAppUser($admin)->postJson(route('communication.store', $this->room), [
             'body' => 'Tomorrow schedule', 'attendance_event' => 'clock_out', 'attendance_required' => true,
             'attendance_expires' => now()->addDays(2)->toDateString(),
         ])->assertOk();
@@ -130,6 +130,7 @@ class AttendanceCompletionNoticeTest extends TestCase
         $this->assertSame('clock_out', $m->payload['attendance_notice']['event']);
         $this->get(route('communication.attendance-report', $this->room))->assertOk()->assertSee('clock_out');
         $worker = User::factory()->create(['employee_id' => $this->worker->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
-        $this->actingAs($worker)->get(route('communication.attendance-report', $this->room))->assertForbidden();
+        $this->actingAs($worker)->getJson(route('communication.attendance-report', $this->room))
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
     }
 }

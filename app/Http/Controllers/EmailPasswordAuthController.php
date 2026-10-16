@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\PersonalAppAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ class EmailPasswordAuthController extends Controller
     {
         $erpLogin = EmailPasswordAuthService::rememberErpLogin($request);
         $appLogin = EmailPasswordAuthService::rememberAppLogin($request);
-        if ($request->user() && ! WorkerDeviceSession::isDeviceOnly($request) && ! $erpLogin) {
+        if ($request->user() && ! WorkerDeviceSession::isDeviceOnly($request) && ! $erpLogin
+            && (! $appLogin || PersonalAppAccess::authenticated($request))) {
             return redirect(EmailPasswordAuthService::takeAppDestination($request) ?? $request->user()->landingPath());
         }
         $data = $request->validate([

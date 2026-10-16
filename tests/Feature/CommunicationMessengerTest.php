@@ -27,7 +27,7 @@ class CommunicationMessengerTest extends TestCase
 
     private Employee $employee;
 
-    private User $workerUser;
+    private User $foremanUser;
 
     private CommunicationService $communicationService;
 
@@ -51,20 +51,20 @@ class CommunicationMessengerTest extends TestCase
         $this->employee = Employee::query()->create([
             'company_id' => $this->company->id,
             'site_id' => $this->site->id,
-            'name' => 'John Worker',
+            'name' => 'John Foreman',
             'employee_number' => 'EMP-COMM-001',
             'employment_status' => 'active',
         ]);
 
-        $this->workerUser = User::factory()->create([
+        $this->foremanUser = User::factory()->create([
             'employee_id' => $this->employee->id,
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'access_scope' => 'self',
             'account_status' => 'active',
         ]);
     }
 
-    public function test_worker_only_sees_own_site_rooms(): void
+    public function test_foreman_only_sees_own_site_rooms(): void
     {
         $otherSite = Site::query()->create([
             'company_id' => $this->company->id,
@@ -75,7 +75,7 @@ class CommunicationMessengerTest extends TestCase
         $this->communicationService->ensureSiteRooms($this->site);
         $this->communicationService->ensureSiteRooms($otherSite);
 
-        $response = $this->actingAs($this->workerUser)
+        $response = $this->actingAsPersonalAppUser($this->foremanUser)
             ->get(route('communication.index'));
 
         $response->assertOk();
@@ -83,11 +83,29 @@ class CommunicationMessengerTest extends TestCase
         $response->assertDontSee('TX-01', false);
     }
 
-    public function test_worker_can_post_message_and_room_read_is_tracked(): void
+    public function test_worker_cannot_read_or_post_messages_even_with_a_verified_login(): void
+    {
+        $room = $this->communicationService->ensureSiteRooms($this->site)['chat'];
+        $this->foremanUser->update(['access_role' => 'worker']);
+        $messageCount = CommunicationMessage::count();
+        $readCount = CommunicationMessageRead::count();
+
+        $this->actingAsPersonalAppUser($this->foremanUser)
+            ->getJson(route('communication.show', ['room' => $room]))
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+        $this->postJson(route('communication.store', ['room' => $room]), ['body' => 'Blocked worker message'])
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
+
+        $this->assertDatabaseCount('communication_messages', $messageCount);
+        $this->assertDatabaseCount('communication_message_reads', $readCount);
+        $this->assertDatabaseMissing('communication_messages', ['body' => 'Blocked worker message']);
+    }
+
+    public function test_foreman_can_post_message_and_room_read_is_tracked(): void
     {
         $room = $this->communicationService->ensureSiteRooms($this->site)['chat'];
 
-        $response = $this->actingAs($this->workerUser)
+        $response = $this->actingAsPersonalAppUser($this->foremanUser)
             ->post(route('communication.store', ['room' => $room]), [
                 'body' => 'Morning crew update',
             ]);
@@ -114,7 +132,7 @@ class CommunicationMessengerTest extends TestCase
         $room = $this->communicationService->ensureSiteRooms($this->site)['chat'];
         $message = CommunicationMessage::query()->create([
             'communication_room_id' => $room->id,
-            'sender_user_id' => $this->workerUser->id,
+            'sender_user_id' => $this->foremanUser->id,
             'kind' => CommunicationMessage::KIND_MESSAGE,
             'body' => 'Existing message',
             'status' => 'active',
@@ -124,12 +142,12 @@ class CommunicationMessengerTest extends TestCase
         CommunicationMessageRead::query()->create([
             'communication_message_id' => $message->id,
             'communication_room_id' => $room->id,
-            'user_id' => $this->workerUser->id,
+            'user_id' => $this->foremanUser->id,
             'employee_id' => null,
             'read_at' => now()->subMinute(),
         ]);
 
-        $this->actingAs($this->workerUser)
+        $this->actingAsPersonalAppUser($this->foremanUser)
             ->get(route('communication.show', ['room' => $room]))
             ->assertOk();
 
@@ -167,7 +185,7 @@ class CommunicationMessengerTest extends TestCase
     {
         $announcementRoom = $this->communicationService->ensureSiteRooms($this->site)['announcements'];
 
-        $this->actingAs($this->workerUser)
+        $this->actingAsPersonalAppUser($this->foremanUser)
             ->post(route('communication.store', ['room' => $announcementRoom]), [
                 'title' => 'Safety meeting',
                 'body' => 'Meet at the office at 9 AM.',
@@ -190,7 +208,7 @@ class CommunicationMessengerTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $this->actingAs($managerUser)
+        $this->actingAsPersonalAppUser($managerUser)
             ->post(route('communication.store', ['room' => $announcementRoom]), [
                 'title' => 'Safety meeting',
                 'body' => 'Meet at the office at 9 AM.',
@@ -205,7 +223,7 @@ class CommunicationMessengerTest extends TestCase
         ]);
     }
 
-    public function test_worker_can_start_private_direct_message(): void
+    public function test_foreman_can_start_private_direct_message(): void
     {
         $coworkerEmployee = Employee::query()->create([
             'company_id' => $this->company->id,
@@ -215,13 +233,13 @@ class CommunicationMessengerTest extends TestCase
             'employment_status' => 'active',
         ]);
 
-        $this->actingAs($this->workerUser)
+        $this->actingAsPersonalAppUser($this->foremanUser)
             ->post(route('communication.direct.start'), ['employee_id' => $coworkerEmployee->id])
             ->assertRedirect();
 
         $ids = [$this->employee->id, $coworkerEmployee->id];
         sort($ids);
-        $room = CommunicationRoom::query()->where('dm_key', $ids[0] . '-' . $ids[1])->firstOrFail();
+        $room = CommunicationRoom::query()->where('dm_key', $ids[0].'-'.$ids[1])->firstOrFail();
 
         $this->assertSame(CommunicationRoom::TYPE_DIRECT, $room->type);
         $this->assertDatabaseHas('communication_room_members', [
@@ -255,12 +273,12 @@ class CommunicationMessengerTest extends TestCase
         ]);
         $outsiderUser = User::factory()->create([
             'employee_id' => $outsiderEmployee->id,
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'access_scope' => 'self',
             'account_status' => 'active',
         ]);
 
-        $this->actingAs($outsiderUser)
+        $this->actingAsPersonalAppUser($outsiderUser)
             ->get(route('communication.show', ['room' => $room]))
             ->assertForbidden();
     }
@@ -306,14 +324,14 @@ class CommunicationMessengerTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $this->actingAs($managerUser)
+        $this->actingAsPersonalAppUser($managerUser)
             ->post(route('communication.store', ['room' => $announcementRoom]), [
                 'title' => 'Payday',
                 'body' => 'Payday moved to Friday.',
             ])
             ->assertRedirect();
 
-        // the worker (a member) is notified; the author is not
+        // The foreman (a member) is notified; the author is not.
         $this->assertDatabaseHas('communication_notifications', [
             'employee_id' => $this->employee->id,
             'type' => CommunicationNotification::TYPE_ANNOUNCEMENT,
@@ -335,7 +353,7 @@ class CommunicationMessengerTest extends TestCase
         ]);
         $this->employee->update(['team_id' => $team->id]);
 
-        $rooms = $this->communicationService->roomsForUser($this->workerUser);
+        $rooms = $this->communicationService->roomsForUser($this->foremanUser);
 
         $this->assertTrue($rooms->contains(fn (CommunicationRoom $room) => $room->type === CommunicationRoom::TYPE_COMPANY));
         $this->assertTrue($rooms->contains(fn (CommunicationRoom $room) => $room->type === CommunicationRoom::TYPE_TEAM && (int) $room->team_id === (int) $team->id));

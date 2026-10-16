@@ -60,7 +60,7 @@ class AttendanceShowsTheSiteClockTest extends TestCase
         User::query()->create([
             'name' => 'John Smith', 'email' => null, 'password' => Hash::make('x'),
             'employee_id' => $employee->id,
-            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
         return $employee;

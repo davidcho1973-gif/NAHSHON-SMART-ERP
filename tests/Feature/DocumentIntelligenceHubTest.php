@@ -237,7 +237,7 @@ class DocumentIntelligenceHubTest extends TestCase
             ->assertSessionHasErrors('project_id');
 
         $this->actingAs($this->user('worker', 'self'))
-            ->get(route('document-intelligence.index'))
+            ->getJson(route('document-intelligence.index'))
             ->assertForbidden();
     }
 

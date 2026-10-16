@@ -54,7 +54,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'name' => '김성훈', 'employment_status' => 'active', 'role' => '배관',
         ]);
         $this->user = User::factory()->create([
-            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
             'employee_id' => $this->employee->id,
         ]);
     }
@@ -77,7 +77,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $week = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('week');
+        $week = $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))->json('week');
 
         $this->assertEqualsWithDelta(8.0, $week['regularHours'], 0.01);
         $this->assertEqualsWithDelta(1.5, $week['overtimeHours'], 0.01);
@@ -97,7 +97,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'status' => 'draft',
         ]);
 
-        $week = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('week');
+        $week = $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))->json('week');
 
         $this->assertFalse($week['days'][0]['settled']);
     }
@@ -120,17 +120,23 @@ class WorkerAttendanceScreenTest extends TestCase
 
         foreach (['worker', 'foreman'] as $role) {
             $this->user->update(['access_role' => $role]);
-            $response = $this->actingAs($this->user)->getJson(route('attendance-app.home'));
+            $response = $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'));
+            if ($role === 'worker') {
+                $response->assertForbidden()->assertJsonPath('code', 'personal_app_role_required')->assertJsonMissingPath('pay');
+                $this->actingAsPersonalAppUser($this->user)->getJson(route('payroll.payslip', $slip))->assertForbidden();
+
+                continue;
+            }
             $response->assertOk()->assertJsonMissingPath('pay');
             $this->assertEqualsWithDelta(10.0, $response->json('week.regularHours'), 0.01);
             $this->assertEqualsWithDelta(2.0, $response->json('week.overtimeHours'), 0.01);
-            $this->actingAs($this->user)->get(route('payroll.payslip', $slip))->assertForbidden();
+            $this->actingAsPersonalAppUser($this->user)->get(route('payroll.payslip', $slip))->assertForbidden();
         }
 
         $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
-        $this->actingAs($admin)->getJson(route('attendance-app.home', ['as' => $this->employee->id]))
+        $this->actingAsPersonalAppUser($admin)->getJson(route('attendance-app.home', ['as' => $this->employee->id]))
             ->assertOk()->assertJsonMissingPath('pay');
-        $this->actingAs($admin)->get(route('payroll.payslip', $slip))->assertOk()->assertSee('460.00');
+        $this->actingAsPersonalAppUser($admin)->get(route('payroll.payslip', $slip))->assertOk()->assertSee('460.00');
         $this->assertEquals(40, $this->employee->payrollProfile->base_rate);
         $this->assertEquals(460, $slip->fresh()->net_pay);
     }
@@ -140,20 +146,20 @@ class WorkerAttendanceScreenTest extends TestCase
         // 미설정 급여 안내도 제거한다. 출퇴근 앱에는 금액 자체를 내려주지 않는다.
         EmployeePayrollProfile::where('employee_id', $this->employee->id)->update(['base_rate' => 0]);
 
-        $this->actingAs($this->user)->getJson(route('attendance-app.home'))
+        $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))
             ->assertOk()->assertJsonMissingPath('pay')->assertJsonStructure(['week', 'logs']);
     }
 
     public function test_elapsed_time_counts_from_the_clock_in(): void
     {
         // 화면이 초를 세려면 "지금까지 몇 초"가 한 숫자로 와야 한다.
-        $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+        $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'in',
             'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
         ]);
 
         Carbon::setTestNow(Carbon::parse('2026-08-10 09:30:00'));   // 출근 07:00 기준 2시간 30분
-        $res = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json();
+        $res = $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))->json();
 
         $this->assertTrue($res['clockedIn']);
         $this->assertSame(9000, $res['elapsedSeconds']);
@@ -167,14 +173,14 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_the_screen_opens(): void
     {
-        $this->actingAs($this->user)->get(route('attendance-app.index'))->assertOk();
+        $this->actingAsPersonalAppUser($this->user)->get(route('attendance-app.index'))->assertOk();
     }
 
     public function test_the_badge_qr_is_baked_into_the_page(): void
     {
         // 3단은 인터넷이 끊겼을 때 쓰는 마지막 수단이다. 그때 QR 을 받으러 서버에 다녀올
         // 수는 없다 — 끊긴 게 인터넷이기 때문이다. 그림째로 페이지에 들어 있어야 한다.
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->get(route('attendance-app.index'))
             ->assertOk()
             ->assertSee('id="qr-tpl"', escape: false)
@@ -188,7 +194,7 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_the_screen_has_only_attendance_work_and_profile_tabs(): void
     {
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->get(route('attendance-app.index', ['tab' => 'pay']))
             ->assertOk()
             ->assertSee('data-tab="home"', escape: false)
@@ -200,7 +206,7 @@ class WorkerAttendanceScreenTest extends TestCase
 
         // Secondary worker screens use the shared footer, not the home page buttons.
         foreach (['/attendance-app/ask', '/attendance-app/docs', '/attendance-app/ops-room', '/attendance-app/messages', '/expense-app'] as $url) {
-            $this->actingAs($this->user)->get($url)->assertOk()
+            $this->actingAsPersonalAppUser($this->user)->get($url)->assertOk()
                 ->assertSee(route('attendance-app.index', ['tab' => 'work']), escape: false)
                 ->assertSee(route('attendance-app.index', ['tab' => 'me']), escape: false)
                 ->assertDontSee(route('attendance-app.index', ['tab' => 'pay']), escape: false);
@@ -211,7 +217,7 @@ class WorkerAttendanceScreenTest extends TestCase
     {
         // 예전에는 "내 QR 보여주기"가 같은 주소로 이동만 했다 — 오프라인에서는 아무 데도
         // 못 가고, 온라인이어도 같은 화면이 다시 뜰 뿐이었다.
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->get(route('attendance-app.index'))
             ->assertOk()
             ->assertDontSee("window.location.href = '".route('attendance-app.index')."'", escape: false);
@@ -219,7 +225,7 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_home_tells_the_screen_what_it_needs_to_pick_a_tier(): void
     {
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->getJson(route('attendance-app.home'))
             ->assertOk()
             ->assertJsonPath('success', true)
@@ -239,7 +245,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'bssid' => '203.0.113.0/24',
         ]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->getJson(route('attendance-app.home'))
             ->assertJsonPath('site.hasNetwork', true);
     }
@@ -247,10 +253,10 @@ class WorkerAttendanceScreenTest extends TestCase
     public function test_an_account_without_an_employee_gets_a_plain_explanation(): void
     {
         $orphan = User::factory()->create([
-            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($orphan)
+        $this->actingAsPersonalAppUser($orphan)
             ->getJson(route('attendance-app.home'))
             ->assertStatus(422)
             ->assertJsonPath('success', false);
@@ -258,7 +264,7 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_manual_punch_inside_the_fence_is_approved_immediately(): void
     {
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), [
                 'direction' => 'in',
                 'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 12,
@@ -276,7 +282,7 @@ class WorkerAttendanceScreenTest extends TestCase
     public function test_manual_punch_from_far_away_waits_for_approval(): void
     {
         // 집에서 눌러도 막지는 않는다. 다만 반장이 한 번 본다.
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), [
                 'direction' => 'in',
                 'gate_site' => $this->site->id, 'lat' => 33.9, 'lng' => -112.9, 'accuracy' => 12,
@@ -293,7 +299,7 @@ class WorkerAttendanceScreenTest extends TestCase
         // 이 경로로 오려면 <b>그 현장 출입구의 QR 을 찍어야만</b> 한다(gate_site 필수).
         // 그 사실을 판정에서 안 쓰는 바람에, 실내에서 GPS 를 못 잡는 사람 전원이 매일
         // 대기로 쌓이고 반장이 하나씩 눌렀다. 이제 QR 을 증거로 인정한다.
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id])
             ->assertJsonPath('verified', true);
 
@@ -309,7 +315,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'bssid' => '203.0.113.0/24',
         ]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->withServerVariables(['REMOTE_ADDR' => '203.0.113.44'])
             ->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id])
             ->assertJsonPath('verified', true);
@@ -324,7 +330,7 @@ class WorkerAttendanceScreenTest extends TestCase
         //
         // 다만 결과는 승인이다 — 출입구 QR 을 찍었기 때문이다. 승인의 근거가
         // GPS 가 아니라 QR 이라는 사실이 기록에 남아야 나중에 설명할 수 있다.
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), [
                 'direction' => 'in',
                 'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 900,
@@ -339,9 +345,9 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_you_cannot_clock_in_twice(): void
     {
-        $this->actingAs($this->user)->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id]);
+        $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id]);
 
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id])
             ->assertJsonPath('success', false);
 
@@ -350,7 +356,7 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_you_cannot_clock_out_before_clocking_in(): void
     {
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), ['direction' => 'out', 'gate_site' => $this->site->id])
             ->assertJsonPath('success', false);
 
@@ -359,18 +365,18 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_clocking_out_closes_the_day(): void
     {
-        $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+        $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'in',
             'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
         ]);
 
         Carbon::setTestNow(Carbon::parse('2026-08-10 16:30:00'));
-        $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+        $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'out',
             'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
         ])->assertJsonPath('success', true);
 
-        $res = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json();
+        $res = $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))->json();
         $this->assertFalse($res['clockedIn']);
         $this->assertCount(2, $res['logs']);
         $this->assertSame('출근', $res['logs'][0]['typeLabel']);
@@ -386,7 +392,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'source' => 'geo_auto', 'status' => 'approved',
         ]);
 
-        $logs = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('logs');
+        $logs = $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))->json('logs');
 
         $this->assertSame('자동', $logs[0]['sourceLabel']);
         $this->assertFalse($logs[0]['needsReview']);
@@ -398,7 +404,7 @@ class WorkerAttendanceScreenTest extends TestCase
     {
         // 탭은 이 화면의 뼈대다. 하나라도 사라지면 근무·내 QR 로 갈 길이 없어지는데,
         // 화면은 안 깨지고 멀쩡해 보인다 — 아무도 오류를 못 본 채 기능만 없어진다.
-        $html = $this->actingAs($this->user)->get(route('attendance-app.index'))->assertOk()->getContent();
+        $html = $this->actingAsPersonalAppUser($this->user)->get(route('attendance-app.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString('<nav class="tabs"', $html, '탭 바가 없습니다.');
 
@@ -416,7 +422,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($orphan)
+        $this->actingAsPersonalAppUser($orphan)
             ->get(route('attendance-app.index'))
             ->assertOk()
             ->assertSee('<nav class="tabs"', false);
@@ -443,7 +449,7 @@ class WorkerAttendanceScreenTest extends TestCase
             'account_status' => 'active', 'email' => 'davidcho@example.com',
         ]);
 
-        $res = $this->actingAs($admin)->getJson(route('attendance-app.home'));
+        $res = $this->actingAsPersonalAppUser($admin)->getJson(route('attendance-app.home'));
 
         $res->assertStatus(422);
         $res->assertJsonPath('code', 'no_employee');
@@ -460,16 +466,16 @@ class WorkerAttendanceScreenTest extends TestCase
             'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($orphan)
+        $this->actingAsPersonalAppUser($orphan)
             ->getJson(route('attendance-app.home'))
-            ->assertStatus(422)
-            ->assertJsonPath('canManage', false);
+            ->assertForbidden()
+            ->assertJsonPath('code', 'personal_app_role_required');
     }
 
     public function test_the_screen_can_draw_the_unlinked_state(): void
     {
         // 화면 쪽에 그리는 코드가 있어야 한다 — 서버만 고치면 여전히 빨간 상자가 뜬다.
-        $html = $this->actingAs($this->user)->get(route('attendance-app.index'))->assertOk()->getContent();
+        $html = $this->actingAsPersonalAppUser($this->user)->get(route('attendance-app.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString("d.code === 'no_employee'", $html);
         $this->assertStringContainsString('작업자와 연결되지 않았습니다', $html);
@@ -496,7 +502,7 @@ class WorkerAttendanceScreenTest extends TestCase
         ]);
         // 타임시트 동기화가 만든 0시간짜리 줄(퇴근 전)은 살아 있는 줄로 대체된다.
 
-        $week = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('week');
+        $week = $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))->json('week');
 
         $today = collect($week['days'])->firstWhere('date', '2026-08-10');
         $this->assertNotNull($today, '오늘 줄이 근무 탭에 없습니다 — 카드와 탭이 다른 말을 합니다.');
@@ -508,7 +514,7 @@ class WorkerAttendanceScreenTest extends TestCase
 
     public function test_punch_replies_in_the_language_the_screen_chose(): void
     {
-        $response = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'in',
             'gate_site' => $this->site->id,
             'lat' => self::SITE_LAT,
@@ -527,7 +533,7 @@ class WorkerAttendanceScreenTest extends TestCase
         // 타임시트·급여까지 흘러가는 길이었다.
         $this->employee->update(['employment_status' => 'terminated']);
 
-        $response = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'in',
             'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG,
         ]);

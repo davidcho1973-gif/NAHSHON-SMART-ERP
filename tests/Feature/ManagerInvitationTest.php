@@ -127,7 +127,7 @@ class ManagerInvitationTest extends TestCase
         $other = User::factory()->create(['access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
         $this->guest();
         $this->actingAs($other)->get($invite['url'])->assertRedirect(route('login', ['app' => 1]));
-        $this->get(route('login', ['app' => 1]))->assertRedirect('/attendance-app');
+        $this->get(route('login', ['app' => 1]))->assertOk()->assertViewHas('appLogin', true);
         $this->assertAuthenticatedAs($other);
         $this->assertSame('worker', $other->fresh()->access_role);
         $this->assertSame('self', $other->fresh()->access_scope);

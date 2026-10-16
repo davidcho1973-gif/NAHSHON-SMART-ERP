@@ -37,13 +37,13 @@ class WebManifestController extends Controller
         );
     }
 
-    /** 로그인해서 쓰는 작업자 앱(반장·계정이 있는 작업자). */
+    /** 관리직원·반장 업무앱. 기존 아이콘의 identity/start URL은 보존한다. */
     public function worker(): JsonResponse
     {
         return $this->manifest(
             id: 'worker-app',
-            name: '내 출퇴근 · '.Org::name(),
-            shortName: '내 출퇴근',
+            name: '업무 개인앱 · '.Org::name(),
+            shortName: '업무 개인앱',
             start: route('attendance-app.index'),
             // Login, device recovery and receipts belong to the same installed app.
             // Scope only controls browser chrome; authorization is still server-side.

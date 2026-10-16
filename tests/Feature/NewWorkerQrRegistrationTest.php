@@ -44,7 +44,7 @@ class NewWorkerQrRegistrationTest extends TestCase
             ->assertDontSee('name="email"', false);
     }
 
-    public function test_registration_confirms_worker_and_offers_installation_from_the_permanent_app(): void
+    public function test_registration_confirms_worker_and_returns_to_site_attendance_without_app_installation(): void
     {
         $response = $this->withHeader('User-Agent', 'New worker phone')->post(
             route('worker-join.store', $this->site),
@@ -60,11 +60,12 @@ class NewWorkerQrRegistrationTest extends TestCase
             // 첫 출근 앞에 PIN 화면을 두지 않는다 — 등록이 이 휴대폰을 이미 연결했다.
             ->assertDontSee('/auth/pin/setup/', false)
             ->assertSee('등록되었습니다')
-            ->assertSee('개인앱 열고 설치')
-            ->assertSee('href="'.route('attendance-app.index', ['install' => 1]).'"', false)
-            ->assertSee('href="'.route('worker-app.manifest').'"', false)
+            ->assertDontSee('id="install-link"', false)
+            ->assertDontSee('href="'.route('attendance-app.index', ['install' => 1]).'"', false)
+            ->assertDontSee('rel="manifest"', false)
+            ->assertSee('id="gate-link"', false)
             ->assertDontSee('window.setTimeout(', false)
-            ->assertSee('출근 화면 열기')
+            ->assertSee('출퇴근 화면 열기')
             // 이 폰을 기억하는 규칙은 worker-device-remember.js 한 곳에 있다(등록 화면 둘이 같이 쓴다).
             // 화면이 그 파일을 싣고 부르는지를 본다 — 저장 코드가 화면 안에 박혀 있는지가 아니라.
             ->assertSee('js/worker-device-remember.js', false)
@@ -84,7 +85,8 @@ class NewWorkerQrRegistrationTest extends TestCase
         $this->assertNotNull(WorkerDevice::sole()->identity_verified_at, '연결된 휴대폰이어야 그 자리에서 찍을 수 있다');
         $this->assertSame('worker', $employee->user?->access_role);
         $this->assertSame('self', $employee->user?->access_scope);
-        $this->assertSame(route('attendance-app.index', ['install' => 1]), $response->viewData('installUrl'));
+        $this->assertStringContainsString('/gate/'.$this->site->id, $response->viewData('gateUrl'));
+        $this->getJson(route('attendance-app.home'))->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
         // 등록 완료는 출근 완료가 아니다. 실제 출근 버튼을 누르기 전에는 근태를 쓰지 않는다.
         $this->assertDatabaseCount('attendance_logs', 0);
         // 15분짜리 링크는 첫 출근의 길목에서 사라졌다. PIN 은 나중에 본인이 정한다.

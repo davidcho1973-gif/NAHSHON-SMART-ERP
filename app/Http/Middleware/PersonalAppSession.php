@@ -4,7 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Auth\PersonalAppAccessService;
-use App\Support\PurchaseAccess;
+use App\Support\PersonalAppAccess;
 use App\Support\WorkerDeviceSession;
 use Closure;
 use Illuminate\Http\Request;
@@ -29,7 +29,8 @@ class PersonalAppSession
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
             }
-            if (! $request->user() && ! $this->authenticationPath($request)) {
+            if (! $request->user() && ! $this->authenticationPath($request)
+                && ! $this->publicAttendanceOrHrPath($request)) {
                 $loginMode = $request->is('app', 'app/*', 'attendance-app', 'attendance-app/*', 'expense-app', 'expense-app/*')
                     ? ['app' => 1] : ['erp' => 1];
 
@@ -45,9 +46,14 @@ class PersonalAppSession
             return $next($request);
         }
         // Preserve the boundary for old remember cookies of unknown authentication origin.
-        if ($request->user() && Auth::viaRemember() && PurchaseAccess::eligible($request->user())) {
+        if ($request->user() && Auth::viaRemember() && PersonalAppAccess::eligible($request->user())) {
             WorkerDeviceSession::markDeviceOnly($request);
             $request->session()->put(PersonalAppAccessService::LEGACY_SESSION, true);
+        }
+        // Revoked app eligibility must not leave a worker trapped behind the old
+        // app-only allowlist. The device-only boundary still protects ERP routes.
+        if (! PersonalAppAccess::eligible($request->user())) {
+            $request->session()->forget(PersonalAppAccessService::LEGACY_SESSION);
         }
         if ($request->session()->get(PersonalAppAccessService::LEGACY_SESSION) === true) {
             return $this->allowed($request) ? $next($request) : $this->deny($request);
@@ -70,6 +76,15 @@ class PersonalAppSession
 
     private function allowed(Request $request): bool
     {
+        if ($this->publicAttendanceOrHrPath($request)) {
+            return true;
+        }
+        // Home links and their scoped supporting routes are part of the app;
+        // equipment administration and HR approval routes remain outside it.
+        if ($request->routeIs('equipment-checklist.show', 'equipment-checklist.submit',
+            'equipment-checklist.photo', 'user-manual', 'worker-enrollment.index', 'material-receipts.file')) {
+            return true;
+        }
         if ($request->is('app', 'app/install', 'app/connect/*', 'personal-app-access/*',
             'attendance-app', 'attendance-app/home', 'attendance-app/language', 'attendance-app/self-link',
             'attendance-app/punch', 'attendance-app/correction', 'attendance-app/manager-access',
@@ -96,5 +111,13 @@ class PersonalAppSession
         }
 
         return false;
+    }
+
+    private function publicAttendanceOrHrPath(Request $request): bool
+    {
+        // These routes identify attendees or validate their own signed HR links;
+        // a remembered business-app session must not change their public access.
+        return $request->routeIs('gate.*', 'worker-join.*', 'w9.show', 'w9.store',
+            'worker-profile.show', 'worker-profile.store');
     }
 }
