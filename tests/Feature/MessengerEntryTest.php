@@ -33,7 +33,7 @@ class MessengerEntryTest extends TestCase
             'employee_id' => $employee->id, 'access_role' => 'admin', 'account_status' => 'active',
         ]);
 
-        $html = $this->actingAs($admin)->get('/')->assertOk()->getContent();
+        $html = $this->actingAsPersonalAppUser($admin)->get('/')->assertOk()->getContent();
 
         $this->assertStringContainsString('data-view="messenger"', $html,
             '사이드바에 채팅방으로 들어가는 항목이 없습니다 — 주소를 직접 쳐야만 들어갈 수 있습니다.');
@@ -64,10 +64,10 @@ class MessengerEntryTest extends TestCase
             'employment_status' => 'active',
         ]);
         $user = User::factory()->create([
-            'employee_id' => $employee->id, 'access_role' => 'worker', 'account_status' => 'active',
+            'employee_id' => $employee->id, 'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $html = $this->actingAs($user)->get(route('communication.index'))->assertOk()->getContent();
+        $html = $this->actingAsPersonalAppUser($user)->get(route('communication.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString('id="push-bell"', $html, '알림 상태를 보여주는 종이 없습니다.');
         $this->assertStringContainsString('알림 켜짐', $html, '켜짐/꺼짐 상태 문구가 없습니다.');

@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\AttendanceSignature;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -15,8 +16,11 @@ class GpsGeofencingSecurityTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Company $company;
+
     private Site $site;
+
     private Employee $employee;
 
     protected function setUp(): void
@@ -52,14 +56,14 @@ class GpsGeofencingSecurityTest extends TestCase
         $this->user = User::factory()->create([
             'email' => 'secure.worker@example.com',
             'employee_id' => $this->employee->id,
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'account_status' => 'active',
         ]);
     }
 
     public function test_it_blocks_mocked_gps_location(): void
     {
-        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
             'args' => ['clock_in', 33.4255, -111.9400, 10.0, true, time()], // isMocked = true
             'siteId' => 'ALL',
         ]);
@@ -73,7 +77,7 @@ class GpsGeofencingSecurityTest extends TestCase
 
     public function test_it_blocks_low_accuracy_gps_signals(): void
     {
-        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
             'args' => ['clock_in', 33.4255, -111.9400, 600.0, false, time()], // accuracy = 600m (> 500m 임계값)
             'siteId' => 'ALL',
         ]);
@@ -88,7 +92,7 @@ class GpsGeofencingSecurityTest extends TestCase
     public function test_it_allows_accuracy_within_relaxed_500m_threshold(): void
     {
         // 200m → 500m 완화: 현장 좌표·반경 내, 정확도 450m 는 이제 허용된다.
-        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
             'args' => ['clock_in', 33.4255, -111.9400, 450.0, false, time()],
             'siteId' => 'ALL',
         ]);
@@ -119,7 +123,7 @@ class GpsGeofencingSecurityTest extends TestCase
         ]);
 
         // 데스크톱: 끔찍한 정확도(5000m) + 현장에서 멀리 떨어진 좌표 → 관리자라 통과해야 함.
-        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_clockInWithGps', [
+        $response = $this->actingAsPersonalAppUser($admin)->postJson('/smart-company-api/api_clockInWithGps', [
             'args' => ['clock_in', 40.7128, -74.0060, 5000.0, false, time()],
             'siteId' => 'ALL',
         ]);
@@ -135,7 +139,7 @@ class GpsGeofencingSecurityTest extends TestCase
     public function test_it_blocks_commute_with_manipulated_client_time(): void
     {
         $manipulatedTime = time() - 600; // 10 minutes ago
-        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
             'args' => ['clock_in', 33.4255, -111.9400, 15.0, false, $manipulatedTime],
             'siteId' => 'ALL',
         ]);
@@ -161,7 +165,7 @@ class GpsGeofencingSecurityTest extends TestCase
             'token' => $fakeToken,
         ];
 
-        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_syncOfflineAttendance', [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson('/smart-company-api/api_syncOfflineAttendance', [
             'args' => [[$queueItem]],
             'siteId' => 'ALL',
         ]);
@@ -178,11 +182,11 @@ class GpsGeofencingSecurityTest extends TestCase
     {
         $eventTime = Carbon::now()->subMinutes(10); // 10 minutes ago (offline event)
         $eventAtStr = $eventTime->toDateTimeString();
-        
+
         // APP_KEY 가 아니라 거기서 파생한 키로 서명한다. APP_KEY 를 브라우저로
         // 보내면 화면 소스만 봐도 세션·쿠키를 여는 열쇠가 넘어간다.
-        $validToken = \App\Support\AttendanceSignature::sign(
-            $this->employee->id . '_clock_in_' . $eventAtStr . '_33.4255_-111.94_' // empty team code suffix
+        $validToken = AttendanceSignature::sign(
+            $this->employee->id.'_clock_in_'.$eventAtStr.'_33.4255_-111.94_' // empty team code suffix
         );
 
         $queueItem = [
@@ -194,7 +198,7 @@ class GpsGeofencingSecurityTest extends TestCase
             'token' => $validToken,
         ];
 
-        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_syncOfflineAttendance', [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson('/smart-company-api/api_syncOfflineAttendance', [
             'args' => [[$queueItem]],
             'siteId' => 'ALL',
         ]);

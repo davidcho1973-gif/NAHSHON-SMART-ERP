@@ -60,7 +60,7 @@
         u.esc(current ? current.name + ' · 소속 인원' : '현장 등록 인원') + '</h3>' +
         (current ? action('전체 인원','AdminCrew.chooseTeam(0)') : '') + '</div>';
       var rows = current ? people.filter(function(e){return same(e.teamId, current.id);}) : people;
-      html += '<p style="color:var(--text-secondary)">팀·반장 수정에서 팀장 앱 권한까지 함께 적용할 수 있습니다. 반장·작업자는 전화번호 뒷 4자리로 작업자 앱에 들어옵니다 — 따로 초대할 것이 없습니다.</p>';
+      html += '<p style="color:var(--text-secondary)">일반 작업자는 앱 설치 없이 현장 QR로 출퇴근합니다. 관리직원·반장은 권한과 로그인 정보를 설정한 뒤 Google 또는 이메일·비밀번호로 개인앱을 사용합니다.</p>';
       html += u.table({id:'crew-people',emptyText:'등록된 인원이 없습니다. 직원 등록·관리에서 먼저 등록하세요.',columns:[
         {key:'name',label:'이름'},
         {key:'teamId',label:'팀',render:function(e){var t=list.find(function(t){return same(t.id,e.teamId);});return u.esc(t?t.name:'미배치');}},

@@ -33,7 +33,7 @@ class EveryWorkerScreenSpeaksThreeLanguagesTest extends TestCase
             '팀 출퇴근' => ['resources/views/attendance-app/crew.blade.php'],
             '팀 QR' => ['resources/views/attendance-app/team.blade.php'],
             '작업자 QR' => ['resources/views/attendance-app/badge.blade.php'],
-            '앱 문' => ['resources/views/worker-app/entry.blade.php'],
+            '앱 문' => ['resources/views/worker-app/access.blade.php'],
             '현장 출퇴근' => ['resources/views/gate/index.blade.php'],
             '새 작업자 등록' => ['resources/views/worker-join/quick.blade.php'],
         ];

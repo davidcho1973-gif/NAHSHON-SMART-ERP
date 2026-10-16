@@ -27,7 +27,8 @@ class DebugLogAccessTest extends TestCase
             'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($worker)->get('/debug-logs-sec-53298bfd9a')->assertForbidden();
+        $this->actingAs($worker)->get('/debug-logs-sec-53298bfd9a')->assertRedirect(route('worker-app.entry'));
+        $this->getJson('/debug-logs-sec-53298bfd9a')->assertForbidden();
     }
 
     public function test_an_admin_can_read_it(): void

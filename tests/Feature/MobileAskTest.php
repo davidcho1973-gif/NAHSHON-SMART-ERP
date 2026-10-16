@@ -96,7 +96,7 @@ class MobileAskTest extends TestCase
             'sources' => [$doc->id],
         ], $prompt);
 
-        $res = $this->actingAs($user)->postJson(route('ask.question'), ['question' => '주방 바닥 양생 며칠이야?']);
+        $res = $this->actingAsPersonalAppUser($user)->postJson(route('ask.question'), ['question' => '주방 바닥 양생 며칠이야?']);
 
         $res->assertOk()->assertJson(['success' => true, 'found' => true]);
         $this->assertStringContainsString('09 6723', $res->json('answer'));
@@ -126,7 +126,7 @@ class MobileAskTest extends TestCase
         $user = $this->manager();
         $this->fakeClaude(['answer' => '답', 'found' => true, 'sources' => [$doc->id, 99999]]);
 
-        $res = $this->actingAs($user)->postJson(route('ask.question'), ['question' => '양생 며칠이야?']);
+        $res = $this->actingAsPersonalAppUser($user)->postJson(route('ask.question'), ['question' => '양생 며칠이야?']);
 
         $this->assertCount(1, $res->json('sources'));
         $this->assertSame($doc->id, $res->json('sources.0.document_id'));
@@ -137,21 +137,21 @@ class MobileAskTest extends TestCase
         $user = $this->manager();
         $this->fakeClaude(['answer' => '등록된 문서에서 확인되지 않습니다. 배기 덕트 시방(23 3113)을 올리면 답할 수 있습니다.', 'found' => false, 'sources' => []]);
 
-        $res = $this->actingAs($user)->postJson(route('ask.question'), ['question' => '배기 덕트 두께 얼마야?']);
+        $res = $this->actingAsPersonalAppUser($user)->postJson(route('ask.question'), ['question' => '배기 덕트 두께 얼마야?']);
 
         $res->assertOk()->assertJson(['success' => true, 'found' => false, 'sources' => []]);
         $this->assertFalse(DocumentQuestion::query()->sole()->found);
     }
 
-    public function test_a_worker_gets_the_answer_but_cannot_open_the_source(): void
+    public function test_a_foreman_gets_the_answer_but_cannot_open_the_source(): void
     {
         // 조회 규칙은 대화방과 같다 — 작업자도 시방 사실은 들을 수 있다. 다만 문서함
         // 원본은 관리자만 여는 곳이라 출처는 «열람 권한 없음» 으로 보인다. 숨기지 않는다.
         $doc = $this->spec();
-        $worker = $this->manager('worker');
+        $worker = $this->manager('foreman');
         $this->fakeClaude(['answer' => '양생 대기일 없음', 'found' => true, 'sources' => [$doc->id]]);
 
-        $res = $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '양생 며칠이야?']);
+        $res = $this->actingAsPersonalAppUser($worker)->postJson(route('ask.question'), ['question' => '양생 며칠이야?']);
 
         $res->assertOk();
         $this->assertFalse($res->json('sources.0.can_open'));
@@ -160,7 +160,7 @@ class MobileAskTest extends TestCase
 
     public function test_money_questions_from_someone_without_finance_rights_are_marked_denied(): void
     {
-        $worker = $this->manager('worker');
+        $worker = $this->manager('foreman');
         $mock = \Mockery::mock(AnthropicChat::class);
         $mock->shouldReceive('available')->andReturn(true);
         $mock->shouldReceive('model')->andReturn('test');
@@ -168,7 +168,7 @@ class MobileAskTest extends TestCase
         $mock->shouldNotReceive('raw');
         $this->app->instance(AnthropicChat::class, $mock);
 
-        $res = $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '이번 달 경비 얼마 썼어?']);
+        $res = $this->actingAsPersonalAppUser($worker)->postJson(route('ask.question'), ['question' => '이번 달 경비 얼마 썼어?']);
 
         $this->assertNotEmpty($res->json('denied'));
         $res->assertOk()->assertJson(['found' => false, 'answer' => AiInformationAccess::DENIED, 'sources' => []]);
@@ -182,7 +182,7 @@ class MobileAskTest extends TestCase
         DocumentQuestion::create(['user_id' => $me->id, 'question' => '내 질문', 'answer' => 'y', 'found' => true, 'access_context' => AiInformationAccess::context($me)]);
         config(['services.anthropic.api_key' => 'test-key']);
 
-        $res = $this->actingAs($me)->get(route('attendance-app.ask'));
+        $res = $this->actingAsPersonalAppUser($me)->get(route('attendance-app.ask'));
 
         $res->assertOk()->assertSee('내 질문')->assertDontSee('남의 질문')->assertSee('id="go"', false);
     }
@@ -191,16 +191,16 @@ class MobileAskTest extends TestCase
     {
         config(['services.anthropic.api_key' => '']);
 
-        $this->actingAs($this->manager())->get(route('attendance-app.ask'))
+        $this->actingAsPersonalAppUser($this->manager())->get(route('attendance-app.ask'))
             ->assertOk()->assertSee('켜져 있지 않습니다')->assertDontSee('id="go"', false);
 
-        $this->actingAs($this->manager())->postJson(route('ask.question'), ['question' => '뭐야'])
+        $this->actingAsPersonalAppUser($this->manager())->postJson(route('ask.question'), ['question' => '뭐야'])
             ->assertStatus(422)->assertJson(['success' => false]);
     }
 
     public function test_the_home_screen_has_the_ask_tile(): void
     {
-        $this->actingAs($this->manager())->get(route('attendance-app.index'))
+        $this->actingAsPersonalAppUser($this->manager())->get(route('attendance-app.index'))
             ->assertOk()->assertSee(route('attendance-app.ask'))->assertSee('qAsk');
     }
 
@@ -227,7 +227,7 @@ class MobileAskTest extends TestCase
         $this->assertSame(781.23, $finance['facts']['물량/BOQ']['해당 품목'][0]['단가($)']);
     }
 
-    public function test_worker_prompt_excludes_money_confidential_mixed_and_unreviewed_sources(): void
+    public function test_foreman_prompt_excludes_money_confidential_mixed_and_unreviewed_sources(): void
     {
         $safe = $this->spec();
         $hiddenIds = [];
@@ -248,22 +248,22 @@ class MobileAskTest extends TestCase
             'intelligent_document_id' => $safe->id, 'doc_title' => $safe->title, 'document_type' => 'specification',
             'fact' => '양생 추가비용 974321.25']);
         $this->fakeClaude(['answer' => '양생 대기일 없음', 'found' => true, 'sources' => [$safe->id, ...$hiddenIds]], $prompt);
-        $response = $this->actingAs($this->manager('worker'))->postJson(route('ask.question'), ['question' => '주방 양생 도면 알려줘']);
+        $response = $this->actingAsPersonalAppUser($this->manager('foreman'))->postJson(route('ask.question'), ['question' => '주방 양생 도면 알려줘']);
         $response->assertOk()->assertJsonCount(1, 'sources');
         $this->assertStringContainsString('양생 대기일 없음', $prompt);
         $this->assertStringNotContainsString('974321.25', $prompt);
         $this->assertStringNotContainsString('비공개', $prompt);
     }
 
-    public function test_worker_can_use_assigned_site_without_an_employee_link(): void
+    public function test_foreman_can_use_assigned_site_without_an_employee_link(): void
     {
-        $worker = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active', 'access_scope' => 'all_sites',
+        $worker = User::factory()->create(['access_role' => 'foreman', 'account_status' => 'active', 'access_scope' => 'all_sites',
             'allowed_company_id' => $this->company->id, 'allowed_site_id' => $this->site->id]);
         WbsItem::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
             'project_code' => 'TEST', 'wbs_code' => '1', 'name' => '배관 설치', 'progress' => 62]);
         $this->spec();
         $this->fakeClaude(['answer' => '배관 설치 진행률 62%', 'found' => true, 'sources' => []], $prompt);
-        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '배관 공정 진행률?'])->assertOk();
+        $this->actingAsPersonalAppUser($worker)->postJson(route('ask.question'), ['question' => '배관 공정 진행률?'])->assertOk();
         $this->assertStringContainsString('배관 설치', $prompt);
         $this->assertStringContainsString('62', $prompt);
         $this->assertSame($this->site->id, DocumentQuestion::query()->sole()->site_id);
@@ -298,11 +298,11 @@ class MobileAskTest extends TestCase
         }
     }
 
-    public function test_financial_model_output_is_not_returned_to_worker(): void
+    public function test_financial_model_output_is_not_returned_to_foreman(): void
     {
         $this->spec();
         $this->fakeClaude(['answer' => '설치 대금 $974321.25', 'found' => true, 'sources' => []]);
-        $this->actingAs($this->manager('worker'))->postJson(route('ask.question'), ['question' => '양생 알려줘'])
+        $this->actingAsPersonalAppUser($this->manager('foreman'))->postJson(route('ask.question'), ['question' => '양생 알려줘'])
             ->assertOk()->assertJson(['answer' => AiInformationAccess::DENIED, 'found' => false, 'sources' => []]);
     }
 
@@ -347,9 +347,9 @@ class MobileAskTest extends TestCase
     public function test_history_rechecks_changed_source_confidentiality(): void
     {
         $doc = $this->spec();
-        $worker = $this->manager('worker');
+        $worker = $this->manager('foreman');
         $this->fakeClaude(['answer' => '양생 대기일 없음', 'found' => true, 'sources' => [$doc->id]]);
-        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])->assertOk();
+        $this->actingAsPersonalAppUser($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])->assertOk();
         $this->assertCount(1, app(DocumentAsk::class)->recent($worker));
         $doc->update(['confidentiality' => 'confidential']);
         $this->assertSame([], app(DocumentAsk::class)->recent($worker));
@@ -358,9 +358,9 @@ class MobileAskTest extends TestCase
     public function test_uncited_facts_are_also_rechecked_in_history(): void
     {
         $doc = $this->spec();
-        $worker = $this->manager('worker');
+        $worker = $this->manager('foreman');
         $this->fakeClaude(['answer' => '양생 대기일 없음', 'found' => true, 'sources' => []]);
-        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])->assertOk();
+        $this->actingAsPersonalAppUser($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])->assertOk();
         $this->assertSame([$doc->id], DocumentQuestion::query()->sole()->source_document_ids);
         $doc->update(['confidentiality' => 'confidential']);
         $this->assertSame([], app(DocumentAsk::class)->recent($worker));
@@ -369,7 +369,7 @@ class MobileAskTest extends TestCase
     public function test_permission_change_while_model_answers_withholds_the_reply(): void
     {
         $doc = $this->spec();
-        $worker = $this->manager('worker');
+        $worker = $this->manager('foreman');
         $mock = \Mockery::mock(AnthropicChat::class);
         $mock->shouldReceive('available')->andReturn(true);
         $mock->shouldReceive('json')->once()->andReturnUsing(function () use ($doc): array {
@@ -378,7 +378,7 @@ class MobileAskTest extends TestCase
             return ['answer' => '양생 대기일 없음', 'found' => true, 'sources' => []];
         });
         $this->app->instance(AnthropicChat::class, $mock);
-        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])
+        $this->actingAsPersonalAppUser($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])
             ->assertStatus(422)->assertJson(['success' => false])->assertJsonMissing(['answer' => '양생 대기일 없음']);
         $this->assertDatabaseCount('document_questions', 0);
     }
@@ -387,7 +387,7 @@ class MobileAskTest extends TestCase
     {
         $worker = $this->manager('worker');
         $worker->update(['account_status' => 'suspended']);
-        $this->actingAs($worker)->get(route('attendance-app.ask'))->assertForbidden();
+        $this->actingAsPersonalAppUser($worker)->getJson(route('attendance-app.ask'))->assertForbidden();
         $this->postJson(route('ask.question'), ['question' => '공정 알려줘'])->assertForbidden();
     }
 }

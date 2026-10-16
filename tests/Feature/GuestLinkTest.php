@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Models\WbsItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -57,7 +58,7 @@ class GuestLinkTest extends TestCase
         return User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
     }
 
-    private function api(User $user, string $method, array $args): \Illuminate\Testing\TestResponse
+    private function api(User $user, string $method, array $args): TestResponse
     {
         return $this->actingAs($user)->postJson('/smart-company-api/'.$method, ['args' => $args, 'siteId' => 'ALL']);
     }
@@ -117,14 +118,14 @@ class GuestLinkTest extends TestCase
         $client = User::factory()->create(['access_role' => 'client', 'account_status' => 'active']);
         $this->api($client, 'api_createGuestLink', ['HFF-02', null, 30])->assertStatus(403);
 
-        // 작업자는 관문은 지나지만 서비스가 거절한다.
+        // 일반 작업자는 업무 API 관문에서 거절한다.
         $worker = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']);
         $this->api($worker, 'api_createGuestLink', ['HFF-02', null, 30])
-            ->assertOk()->assertJson(['success' => false]);
+            ->assertForbidden()->assertJson(['success' => false]);
         $this->assertSame(0, GuestLink::query()->count());
     }
 
-    public function test_QR_카드는_관리자만_연다(): void
+    public function test_q_r_카드는_관리자만_연다(): void
     {
         $link = GuestLink::issue($this->site->id, '발주처 GC', 30, null);
 
@@ -132,6 +133,6 @@ class GuestLinkTest extends TestCase
             ->assertOk()->assertSee('수소충전소 2호')->assertSee($link->token);
 
         $worker = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']);
-        $this->actingAs($worker)->get(route('guest-link.qr', $link))->assertForbidden();
+        $this->actingAs($worker)->getJson(route('guest-link.qr', $link))->assertForbidden();
     }
 }

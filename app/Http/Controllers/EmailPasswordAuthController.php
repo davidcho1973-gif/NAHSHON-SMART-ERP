@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\PersonalAppAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,8 +15,10 @@ class EmailPasswordAuthController extends Controller
     public function login(Request $request, EmailPasswordAuthService $service): RedirectResponse
     {
         $erpLogin = EmailPasswordAuthService::rememberErpLogin($request);
-        if ($request->user() && ! WorkerDeviceSession::isDeviceOnly($request) && ! $erpLogin) {
-            return redirect($request->user()->landingPath());
+        $appLogin = EmailPasswordAuthService::rememberAppLogin($request);
+        if ($request->user() && ! WorkerDeviceSession::isDeviceOnly($request) && ! $erpLogin
+            && (! $appLogin || PersonalAppAccess::authenticated($request))) {
+            return redirect(EmailPasswordAuthService::takeAppDestination($request) ?? $request->user()->landingPath());
         }
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
@@ -26,12 +29,13 @@ class EmailPasswordAuthController extends Controller
             return redirect()->route('password.setup');
         }
         if ($result === 'login') {
+            $destination = EmailPasswordAuthService::takeAppDestination($request) ?? $request->user()->landingPath();
             $request->session()->forget([EmailPasswordAuthService::ERP_LOGIN_SESSION, 'url.intended']);
 
-            return redirect($request->user()->landingPath());
+            return redirect($destination);
         }
 
-        return redirect()->route('login', $erpLogin ? ['erp' => 1] : [])->withInput(['email' => $data['email']])->withErrors([
+        return redirect()->route('login', $erpLogin ? ['erp' => 1] : ($appLogin ? ['app' => 1] : []))->withInput(['email' => $data['email']])->withErrors([
             'email_login' => '로그인할 수 없습니다. 이메일·비밀번호와 계정 활성 상태를 확인해 주세요. 반복 실패 시 15분 후 다시 시도하세요. / Unable to sign in. Check your details or ask your administrator. After repeated failures, wait 15 minutes.',
         ]);
     }
@@ -61,7 +65,7 @@ class EmailPasswordAuthController extends Controller
             return back()->withErrors(['password' => '현재 비밀번호 또는 계정 상태를 확인하세요. / Check your current password and account status.']);
         }
 
-        return $user ? redirect($user->landingPath())
+        return $user ? redirect(EmailPasswordAuthService::takeAppDestination($request) ?? $user->landingPath())
             : redirect()->route('login')->withErrors(['email_login' => '설정 시간이 만료되었거나 계정 상태가 변경되었습니다. 다시 로그인해 주세요. / Please sign in again.']);
     }
 }

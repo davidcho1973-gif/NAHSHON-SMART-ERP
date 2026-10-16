@@ -100,7 +100,7 @@ class DocumentBridgeTest extends TestCase
 
     public function test_문서함_업로드_한_번으로_양쪽에_모두_생긴다(): void
     {
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
 
         $this->post('/docs-api/upload', [
             'file' => UploadedFile::fake()->create('계약서_회신기한.pdf', 120, 'application/pdf'),
@@ -114,7 +114,7 @@ class DocumentBridgeTest extends TestCase
     {
         // Laravel Cloud 로컬 디스크는 배포마다 초기화된다. 원본이 사라진 레코드를
         // "중복"으로 거부하면 같은 파일을 다시 올릴 유일한 길이 막힌다.
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
         $file = UploadedFile::fake()->create('08_배관_위생.pdf', 200, 'application/pdf');
 
         $this->post('/document-hub/api/upload', ['files' => [$file]])->assertSuccessful();
@@ -137,7 +137,7 @@ class DocumentBridgeTest extends TestCase
 
     public function test_원본이_살아있는_진짜_중복은_여전히_거부된다(): void
     {
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
 
         $this->post('/document-hub/api/upload', [
             'files' => [UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf')],
@@ -159,7 +159,7 @@ class DocumentBridgeTest extends TestCase
         // 될 수 없어 쓰기가 반드시 실패한다. /proc/nope 같은 리눅스 경로는 윈도우
         // 로컬에서 C:\proc 이 그냥 만들어져 쓰기가 성공해 버린다.
         config(['filesystems.disks.broken' => ['driver' => 'local', 'root' => __FILE__.'/nope', 'throw' => false]]);
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
 
         $res = $this->post('/document-hub/api/upload', [
             'files' => [UploadedFile::fake()->create('08_배관_위생.pdf', 200, 'application/pdf')],
@@ -175,7 +175,7 @@ class DocumentBridgeTest extends TestCase
     {
         // 사용자가 같은 파일을 또 올리는 이유는 대개 "분석 실패"를 풀려는 것이다.
         // 원본이 멀쩡하다고 그냥 "중복"으로 돌려보내면 아무 일도 일어나지 않는다.
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
         $make = fn () => UploadedFile::fake()->create('08_배관_위생.pdf', 200, 'application/pdf');
 
         $this->post('/document-hub/api/upload', ['files' => [$make()]])->assertSuccessful();
@@ -193,7 +193,7 @@ class DocumentBridgeTest extends TestCase
 
     public function test_형식이_안_맞는_파일_하나가_나머지_업로드를_막지_않는다(): void
     {
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
 
         $res = $this->post('/document-hub/api/upload', [
             'files' => [
@@ -212,7 +212,7 @@ class DocumentBridgeTest extends TestCase
         // 레코드는 남고 파일만 사라진 상태 — 사용자가 다운로드를 눌러 보고 나서야
         // 404 를 만나면 원인을 알 수 없다. 목록에서 미리 알려 주고, 눌렀을 때도
         // "다시 올리면 복원된다"고 말해 준다.
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
         $this->post('/document-hub/api/upload', [
             'files' => [UploadedFile::fake()->create('06_전기.pdf', 300, 'application/pdf')],
         ])->assertSuccessful();
@@ -231,7 +231,7 @@ class DocumentBridgeTest extends TestCase
 
     public function test_문서_정보를_수정할_수_있다(): void
     {
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
         $this->post('/document-hub/api/upload', [
             'files' => [UploadedFile::fake()->create('rfi.pdf', 100, 'application/pdf')],
         ])->assertSuccessful();
@@ -255,7 +255,7 @@ class DocumentBridgeTest extends TestCase
 
     public function test_문서를_삭제하면_원본과_후속조치도_함께_지워진다(): void
     {
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
         $this->post('/document-hub/api/upload', [
             'files' => [UploadedFile::fake()->create('버릴문서.pdf', 100, 'application/pdf')],
         ])->assertSuccessful();
@@ -284,13 +284,13 @@ class DocumentBridgeTest extends TestCase
 
     public function test_권한_없는_사용자는_수정도_삭제도_못_한다(): void
     {
-        $this->actingAs($this->admin());
+        $this->actingAsPersonalAppUser($this->admin());
         $this->post('/document-hub/api/upload', [
             'files' => [UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf')],
         ])->assertSuccessful();
         $doc = IntelligentDocument::firstOrFail();
 
-        $this->actingAs(User::factory()->create([
+        $this->actingAsPersonalAppUser(User::factory()->create([
             'access_role' => 'worker', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]));
 

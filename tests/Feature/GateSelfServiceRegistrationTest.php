@@ -66,7 +66,7 @@ class GateSelfServiceRegistrationTest extends TestCase
 
         // 15분짜리 링크는 첫 출근의 길목에서 사라졌다.
         $this->assertDatabaseCount('auth_setup_tokens', 0);
-        $response->assertSee($employee->user->id ? '출근 화면 열기' : '출근 화면 열기');
+        $response->assertSee('출퇴근 화면 열기')->assertDontSee('rel="manifest"', false);
     }
 
     public function test_the_very_next_thing_a_new_worker_does_is_clock_in(): void
@@ -111,6 +111,9 @@ class GateSelfServiceRegistrationTest extends TestCase
         $this->assertSame('', $response->viewData('deviceToken'), '공용 휴대폰은 누구의 것으로도 연결하지 않는다');
         $this->assertSame(0, WorkerDevice::query()->where('employee_id', $second->id)->count());
         $this->assertNull($response->viewData('pinSetupUrl'));
+        // 남을 등록한 공용 휴대폰에서는 개인앱 설치를 권하지 않는다.
+        $response->assertDontSee('id="install-link"', false)->assertDontSee('rel="manifest"', false);
+        $this->assertNotSame($second->id, auth()->user()?->employee_id);
         // 그 사람은 명단에는 올라간다 — 현장에 서 있는 사람이니까.
         $this->assertSame('active', $second->employment_status);
     }

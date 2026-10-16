@@ -141,11 +141,11 @@ class ProjectContractManagementTest extends TestCase
         $this->assertSame([$allowedContract->id], $ids);
 
         // 목록에서 안 보이는 계약의 서류는 링크로도 못 받는다.
-        $this->get(route('project-contract-document.download', $blockedDocument))->assertForbidden();
+        $this->getJson(route('project-contract-document.download', $blockedDocument))->assertForbidden();
 
         $worker = $this->user('worker', 'self');
         $this->actingAs($worker);
-        $this->get(route('project-contract-document.download', $blockedDocument))->assertForbidden();
+        $this->getJson(route('project-contract-document.download', $blockedDocument))->assertForbidden();
     }
 
     public function test_deleting_document_removes_the_private_file(): void

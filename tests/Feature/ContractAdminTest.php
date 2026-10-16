@@ -428,7 +428,7 @@ class ContractAdminTest extends TestCase
 
         $this->postJson(route('admin.contract-document.upload', ['contract' => $c->id]), [
             'file' => UploadedFile::fake()->create('x.pdf', 10, 'application/pdf'),
-        ])->assertOk()->assertJsonPath('success', false);
+        ])->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
 
         $this->assertSame(0, ProjectContractDocument::count());
     }

@@ -30,8 +30,11 @@ class ChatMentionsAndNotifyTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private CommunicationRoom $room;
+
     private CommunicationService $chat;
 
     protected function setUp(): void
@@ -53,7 +56,7 @@ class ChatMentionsAndNotifyTest extends TestCase
         ]);
     }
 
-    private function person(string $name, string $role = 'worker', ?CommunicationRoom $room = null): User
+    private function person(string $name, string $role = 'foreman', ?CommunicationRoom $room = null): User
     {
         static $n = 0;
         $n++;
@@ -63,7 +66,7 @@ class ChatMentionsAndNotifyTest extends TestCase
         ]);
         $user = User::factory()->create([
             'employee_id' => $employee->id, 'email' => "p{$n}@example.com",
-            'access_role' => $role, 'account_status' => 'active',
+            'access_role' => $role, 'access_scope' => 'self', 'account_status' => 'active',
         ]);
         $this->chat->ensureRoomMember($room ?? $this->room, $employee);
 
@@ -156,18 +159,18 @@ class ChatMentionsAndNotifyTest extends TestCase
 
     public function test_calling_everyone_is_for_leads_only(): void
     {
-        $worker = $this->person('김철수');
+        $foreman = $this->person('김철수');
         $lee = $this->person('이영희');
         $boss = $this->person('박반장', 'site_manager');
 
-        // 작업자의 "@모두" 는 그냥 글자다 — 아무나 쓰면 알림 설정이 무의미해진다.
-        $plain = $this->chat->postMessage($worker, $this->room, '@모두 점심 뭐 먹어요');
+        // 반장의 "@모두" 는 그냥 글자다 — 아무나 쓰면 알림 설정이 무의미해진다.
+        $plain = $this->chat->postMessage($foreman, $this->room, '@모두 점심 뭐 먹어요');
         $this->assertFalse((bool) ($plain->payload['mention_everyone'] ?? false));
         $this->assertSame(0, $this->mentionsOf($lee));
 
         $this->chat->postMessage($boss, $this->room, '@모두 13시 안전교육 집합');
         $this->assertSame(1, $this->mentionsOf($lee));
-        $this->assertSame(1, $this->mentionsOf($worker));
+        $this->assertSame(1, $this->mentionsOf($foreman));
         $this->assertSame(0, $this->mentionsOf($boss));
     }
 
@@ -225,7 +228,7 @@ class ChatMentionsAndNotifyTest extends TestCase
             'name' => '회사방', 'status' => 'active',
         ]);
         $boss = $this->person('박반장', 'site_manager', $companyRoom);
-        $lee = $this->person('이영희', 'worker', $companyRoom);
+        $lee = $this->person('이영희', 'foreman', $companyRoom);
 
         $this->assertSame(CommunicationRoom::NOTIFY_MENTIONS, $this->chat->notifyLevelFor($lee, $companyRoom));
 
@@ -292,15 +295,15 @@ class ChatMentionsAndNotifyTest extends TestCase
 
     public function test_only_leads_can_send_urgent(): void
     {
-        $worker = $this->person('김철수');
+        $foreman = $this->person('김철수');
         $boss = $this->person('박반장', 'site_manager');
 
-        $this->actingAs($worker)->post(route('communication.store', ['room' => $this->room]), [
+        $this->actingAsPersonalAppUser($foreman)->post(route('communication.store', ['room' => $this->room]), [
             'body' => '긴급인 척', 'urgent' => '1',
         ])->assertRedirect();
         $this->assertSame('normal', CommunicationMessage::query()->where('body', '긴급인 척')->value('priority'));
 
-        $this->actingAs($boss)->post(route('communication.store', ['room' => $this->room]), [
+        $this->actingAsPersonalAppUser($boss)->post(route('communication.store', ['room' => $this->room]), [
             'body' => '전원 대피', 'urgent' => '1',
         ])->assertRedirect();
         $this->assertSame('urgent', CommunicationMessage::query()->where('body', '전원 대피')->value('priority'));
@@ -312,11 +315,11 @@ class ChatMentionsAndNotifyTest extends TestCase
     {
         $lee = $this->person('이영희');
 
-        $this->actingAs($lee)->postJson(route('communication.notify', ['room' => $this->room]), ['level' => 'mentions'])
+        $this->actingAsPersonalAppUser($lee)->postJson(route('communication.notify', ['room' => $this->room]), ['level' => 'mentions'])
             ->assertOk()->assertJsonPath('level', 'mentions');
         $this->assertSame('mentions', $this->chat->notifyLevelFor($lee, $this->room));
 
-        $this->actingAs($lee)->postJson(route('communication.notify', ['room' => $this->room]), ['level' => 'loud'])
+        $this->actingAsPersonalAppUser($lee)->postJson(route('communication.notify', ['room' => $this->room]), ['level' => 'loud'])
             ->assertStatus(422);
     }
 
@@ -328,10 +331,10 @@ class ChatMentionsAndNotifyTest extends TestCase
             'name' => '외부인', 'email' => 'out@example.com', 'employment_status' => 'active',
         ]);
         $outsider = User::factory()->create([
-            'employee_id' => $employee->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'employee_id' => $employee->id, 'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($outsider)->postJson(route('communication.notify', ['room' => $this->room]), ['level' => 'none'])
+        $this->actingAsPersonalAppUser($outsider)->postJson(route('communication.notify', ['room' => $this->room]), ['level' => 'none'])
             ->assertForbidden();
     }
 
@@ -343,11 +346,11 @@ class ChatMentionsAndNotifyTest extends TestCase
         $lee = $this->person('이영희');
         $message = $this->chat->postMessage($boss, $this->room, '@이영희 도면 Rev.3 확인');
 
-        $this->actingAs($lee)->get(route('communication.activity'))
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.activity'))
             ->assertOk()->assertSee('박반장')->assertSee('도면 Rev.3 확인');
 
         $notification = CommunicationNotification::query()->where('employee_id', $lee->employee_id)->firstOrFail();
-        $this->actingAs($lee)->get(route('communication.activity.open', ['notification' => $notification]))
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.activity.open', ['notification' => $notification]))
             ->assertRedirect(route('communication.show', ['room' => $this->room, 'focus' => $message->id]));
 
         $this->assertNotNull($notification->fresh()->read_at);
@@ -362,7 +365,7 @@ class ChatMentionsAndNotifyTest extends TestCase
 
         $notification = CommunicationNotification::query()->where('employee_id', $lee->employee_id)->firstOrFail();
 
-        $this->actingAs($kim)->get(route('communication.activity.open', ['notification' => $notification]))->assertNotFound();
+        $this->actingAsPersonalAppUser($kim)->get(route('communication.activity.open', ['notification' => $notification]))->assertNotFound();
         $this->assertNull($notification->fresh()->read_at);
     }
 
@@ -374,7 +377,7 @@ class ChatMentionsAndNotifyTest extends TestCase
 
         $this->assertSame([$this->room->id => 1], $this->chat->personalUnreadByRoom($lee));
 
-        $this->actingAs($lee)->get(route('communication.show', ['room' => $this->room]))->assertOk();
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.show', ['room' => $this->room]))->assertOk();
 
         $this->assertSame([], $this->chat->personalUnreadByRoom($lee), '방을 열어 봤는데 활동함에 안 읽음으로 남았습니다.');
     }
@@ -385,7 +388,7 @@ class ChatMentionsAndNotifyTest extends TestCase
         $lee = $this->person('이영희');
         $this->chat->postMessage($boss, $this->room, '@이영희 확인');
 
-        $html = $this->actingAs($lee)->get(route('communication.index'))->assertOk()->getContent();
+        $html = $this->actingAsPersonalAppUser($lee)->get(route('communication.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString('id="link-activity"', $html);
         $this->assertStringContainsString('<span class="badge">@</span>', $html, '나를 부른 방에 @ 표시가 없습니다.');
@@ -415,7 +418,7 @@ class ChatMentionsAndNotifyTest extends TestCase
         $lee = $this->person('이영희');
         $this->chat->postMessage($boss, $this->room, '@이영희 확인');
 
-        $row = $this->actingAs($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
+        $row = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
             ->assertOk()->json('messages.0');
 
         $this->assertSame(['이영희'], $row['mentions']);
@@ -433,7 +436,7 @@ class ChatMentionsAndNotifyTest extends TestCase
             ])->id;
         }
 
-        $data = $this->actingAs($lee)
+        $data = $this->actingAsPersonalAppUser($lee)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0, 'focus' => $ids[30]]))
             ->assertOk()->json();
 
@@ -453,18 +456,18 @@ class ChatMentionsAndNotifyTest extends TestCase
             ]);
         }
 
-        $first = $this->actingAs($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))->json();
+        $first = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))->json();
         $this->assertCount(60, $first['messages']);
         $this->assertTrue($first['hasOlder']);
 
         $oldest = min(array_column($first['messages'], 'id'));
-        $older = $this->actingAs($lee)->getJson(route('communication.stream', ['room' => $this->room, 'before' => $oldest]))->json();
+        $older = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', ['room' => $this->room, 'before' => $oldest]))->json();
 
         $this->assertCount(60, $older['messages']);
         $this->assertLessThan($oldest, max(array_column($older['messages'], 'id')));
         $this->assertTrue($older['hasOlder']);
 
-        $last = $this->actingAs($lee)->getJson(route('communication.stream', [
+        $last = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', [
             'room' => $this->room, 'before' => min(array_column($older['messages'], 'id')),
         ]))->json();
         $this->assertCount(10, $last['messages']);
@@ -477,12 +480,12 @@ class ChatMentionsAndNotifyTest extends TestCase
         $kim = $this->person('김철수');
         $message = $this->chat->postMessage($kim, $this->room, '처음 글');
 
-        $first = $this->actingAs($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))->json();
+        $first = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))->json();
 
         $this->travel(10)->seconds();
         $this->chat->editMessage($kim, $message, '고친 글');
 
-        $next = $this->actingAs($lee)->getJson(route('communication.stream', [
+        $next = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', [
             'room' => $this->room, 'after' => $first['lastId'], 'changed' => $first['cursor'],
         ]))->json();
 

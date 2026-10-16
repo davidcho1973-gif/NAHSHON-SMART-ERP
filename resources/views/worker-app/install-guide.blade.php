@@ -9,12 +9,15 @@
 --}}
 @php($t = $dict[$lang] ?? $dict['ko'])
 @php($mine = $t['cases'][$case])
+@php($installEligible = \App\Support\PersonalAppAccess::eligible(auth()->user()))
+@php($showInstallGuide = $installEligible || !auth()->check())
 <!DOCTYPE html>
 <html lang="{{ $lang }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>{{ $t['title'] }}</title>
+    <title>{{ $showInstallGuide ? $t['title'] : $t['workerTitle'] }}</title>
+    @include('partials.personal-app-meta')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         :root {
@@ -62,13 +65,17 @@
         .why h3 { margin: 0 0 6px; font-size: 1rem; font-weight: 800; }
         .why p { margin: 0; color: var(--ink-2); font-size: .97rem; line-height: 1.65; }
         .ask { text-align: center; color: var(--ink-2); font-size: .93rem; line-height: 1.6; margin: 20px 4px 0; }
+        .open-app { display:block;background:var(--blue);color:#fff;text-align:center;text-decoration:none;border-radius:12px;padding:16px;font-weight:800;margin:16px 0; }
         h3.others { margin: 24px 2px 12px; font-size: .95rem; color: var(--ink-2); font-weight: 800; }
     </style>
 </head>
 <body>
 <div class="wrap">
-    <h1>{{ $t['title'] }}</h1>
-    <p class="lead">{{ $t['lead'] }}</p>
+    <h1>{{ $showInstallGuide ? $t['title'] : $t['workerTitle'] }}</h1>
+    <p class="lead">{{ $showInstallGuide ? $t['lead'] : $t['workerBody'] }}</p>
+    @if ($showInstallGuide)
+        <a class="open-app" href="{{ $installEligible ? route('attendance-app.index', ['install' => 1]) : route('login', ['app' => 1]) }}">{{ $installEligible ? $t['openApp'] : $t['managerLogin'] }}</a>
+    @endif
 
     <div class="langs">
         @foreach ($langOptions as $code => $label)
@@ -77,6 +84,7 @@
         @endforeach
     </div>
 
+    @if ($showInstallGuide)
     {{-- 지금 이 폰의 방법을 맨 위에, 펼친 채로. 찾아 들어가게 하지 않는다. --}}
     <div class="card">
         <span class="tag">{{ $t['yours'] }}</span>
@@ -111,6 +119,7 @@
     @endforeach
 
     <p class="ask">{{ $t['ask'] }}</p>
+    @endif
 </div>
 </body>
 </html>

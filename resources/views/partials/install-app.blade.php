@@ -1,19 +1,18 @@
 {{--
-    "홈 화면에 추가" 안내. 게이트 화면과 작업자 앱이 같은 것을 쓴다.
+    관리직원·반장의 업무 개인앱 설치 안내. 일반 작업자는 현장 QR만 사용한다.
 
     필요한 변수:
       $installLang  현재 언어 코드(ko|en|es)
 
-    설계 하나 — 처음 열자마자 띄우지 않는다. 아무것도 해 보지 않은 사람에게 설치를
-    권하면 대부분 닫는다. 출퇴근을 한 번 찍고 나서, 그러니까 이 화면이 쓸모 있다는 걸
-    안 다음에 올라온다. 부르는 쪽에서 window.AppInstall.offer() 를 호출한다.
+    처음 열자마자 띄우지 않는다. 사용자가 직접 설치를 누르거나 업무를 마친 뒤
+    부르는 쪽에서 window.AppInstall.offer() 를 호출한다.
 
     설계 둘 — 이미 홈 화면에서 연 사람에게는 영원히 안 뜬다. 닫은 사람에게도 안 뜬다.
     현장에서 같은 안내를 두 번 보는 것만큼 앱을 미워하게 만드는 건 없다.
 
-    스타일이 이 파일 안에 다 들어 있는 이유 — 게이트(남색·흰 카드)와 작업자 앱(종이색)의
-    디자인이 완전히 다르다. 두 곳에 얹히려면 남의 CSS 에 기대지 않아야 한다.
+    개인앱과 영수증 화면에서 같은 안내를 쓴다. 접근 대상은 서버의 공통 정책을 따른다.
 --}}
+@if (\App\Support\PersonalAppAccess::eligible(auth()->user()))
 @php
     $installDict = \App\Support\WorkerLang::install();
     $installLang = \App\Support\WorkerLang::resolve($installLang ?? null);
@@ -52,6 +51,11 @@
             <p class="di-note" id="di-safari"></p>
             {{-- 여기까지 읽고도 안 되는 사람이 갈 곳. 현장에서 막히는 대부분은
                  «카카오톡으로 열어서» 인데, 그건 단계를 더 적어서 풀리지 않는다. --}}
+            <a class="di-help" href="{{ route('install-guide') }}" target="_blank" rel="noopener"></a>
+            <button type="button" class="di-later" data-di-dismiss></button>
+        </div>
+        <div class="di-manual" hidden>
+            <p class="di-note" id="di-manual-note"></p>
             <a class="di-help" href="{{ route('install-guide') }}" target="_blank" rel="noopener"></a>
             <button type="button" class="di-later" data-di-dismiss></button>
         </div>
@@ -129,8 +133,7 @@
         try { localStorage.setItem(KEY, '1'); } catch (e) {}
     }
 
-    // 사파리만 홈 화면 추가가 된다. 아이폰의 크롬·파이어폭스는 껍데기만 사파리라
-    // 판별이 안 되므로, 아이폰이면 일단 안내하고 "사파리에서 열어야 한다"고 덧붙인다.
+    // iOS uses its share menu. Other browsers may also support home-screen installation.
     function isIos() {
         return /iPad|iPhone|iPod/.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -147,6 +150,7 @@
         document.getElementById('di-s2').innerHTML = T.iosStep2;
         document.getElementById('di-s3').innerHTML = T.iosStep3;
         document.getElementById('di-safari').innerHTML = T.iosSafari;
+        document.getElementById('di-manual-note').textContent = T.manual;
         Array.prototype.forEach.call(root.querySelectorAll('.di-help'), function (a) {
             a.textContent = T.help;
             // 안내서도 지금 보고 있는 언어로 연다.
@@ -160,12 +164,13 @@
     function open(force) {
         if (installed()) return false;
         if (!force && dismissed()) return false;
-        // 안드로이드가 아직 설치 권한을 안 넘겼고 아이폰도 아니면, 보여 줄 방법이 없다.
-        if (!deferred && !isIos()) return false;
+        // Automatic suggestions wait for browser support; explicit taps always get help.
+        if (!force && !deferred && !isIos()) return false;
 
         paint();
         root.querySelector('.di-auto').hidden = !deferred;
-        root.querySelector('.di-ios').hidden = !!deferred;
+        root.querySelector('.di-ios').hidden = !!deferred || !isIos();
+        root.querySelector('.di-manual').hidden = !!deferred || isIos();
         root.hidden = false;
         return true;
     }
@@ -187,6 +192,7 @@
     window.addEventListener('beforeinstallprompt', function (ev) {
         ev.preventDefault();   // 브라우저 기본 배너를 막고 우리 시점에 띄운다.
         deferred = ev;
+        if (!root.hidden) open(true);
     });
 
     window.addEventListener('appinstalled', function () {
@@ -196,11 +202,13 @@
     });
 
     document.getElementById('di-go').addEventListener('click', function () {
-        if (!deferred) { close(true); return; }
+        if (!deferred) { open(true); return; }
         var p = deferred;
         deferred = null;             // 한 번 쓴 프롬프트는 다시 못 쓴다.
         close(false);
-        p.prompt();
+        try {
+            Promise.resolve(p.prompt()).catch(function () { open(true); });
+        } catch (e) { open(true); }
     });
 
     Array.prototype.forEach.call(root.querySelectorAll('[data-di-dismiss]'), function (el) {
@@ -221,3 +229,4 @@
     };
 })();
 </script>
+@endif

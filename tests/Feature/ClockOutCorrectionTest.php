@@ -57,7 +57,7 @@ class ClockOutCorrectionTest extends TestCase
         ]);
         User::query()->create([
             'name' => 'A B', 'email' => 'ab@example.test', 'password' => Hash::make('x'),
-            'access_role' => 'worker', 'access_scope' => 'assigned_sites',
+            'access_role' => 'foreman', 'access_scope' => 'assigned_sites',
             'account_status' => 'active', 'employee_id' => $this->employee->id,
         ]);
     }
@@ -212,7 +212,7 @@ class ClockOutCorrectionTest extends TestCase
         // 서버가 받을 준비가 돼 있어도 경로가 방향을 버리면 화면은 아무것도 못 한다.
         $this->log('clock_out', '15:30');
 
-        $this->actingAs(User::query()->firstOrFail())
+        $this->actingAsPersonalAppUser(User::query()->firstOrFail())
             ->postJson(route('attendance-app.correction'), [
                 'time' => '16:00', 'lang' => 'ko', 'direction' => 'out',
             ])->assertOk()->assertJson(['success' => true]);

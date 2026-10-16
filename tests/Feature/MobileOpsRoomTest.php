@@ -66,7 +66,7 @@ class MobileOpsRoomTest extends TestCase
     {
         $this->batch('천장 배관 12개 완료');
 
-        $res = $this->actingAs($this->user('site_manager'))->get('/attendance-app/ops-room');
+        $res = $this->actingAsPersonalAppUser($this->user('site_manager'))->get('/attendance-app/ops-room');
 
         $res->assertStatus(200);
         $res->assertSee('천장 배관 12개 완료', false);   // 목록은 화면이 그린다(JSON 으로 실려 나간다)
@@ -78,10 +78,10 @@ class MobileOpsRoomTest extends TestCase
     {
         $this->batch('원문');
 
-        $this->actingAs($this->user('site_manager'))->get('/attendance-app/ops-room')
+        $this->actingAsPersonalAppUser($this->user('site_manager'))->get('/attendance-app/ops-room')
             ->assertStatus(200)->assertSee('var CAN_MANAGE = true;', false);
 
-        $this->actingAs($this->user('foreman'))->get('/attendance-app/ops-room')
+        $this->actingAsPersonalAppUser($this->user('foreman'))->get('/attendance-app/ops-room')
             ->assertStatus(200)->assertSee('var CAN_MANAGE = false;', false);
     }
 
@@ -90,7 +90,7 @@ class MobileOpsRoomTest extends TestCase
         // 화면을 여는 순간 «지금 뭘 해야 하나» 가 읽혀야 한다.
         config(['services.gemini.api_key' => 'test-key']);
 
-        $this->actingAs($this->user('admin'))->get('/attendance-app/ops-room')
+        $this->actingAsPersonalAppUser($this->user('admin'))->get('/attendance-app/ops-room')
             ->assertStatus(200)
             ->assertSee('눌러서 말하기')
             ->assertSee('글로 쓰기');
@@ -101,7 +101,7 @@ class MobileOpsRoomTest extends TestCase
         // 눌러 보고 나서 «옮기지 못했습니다» 를 아는 것보다, 누르기 전에 아는 편이 낫다.
         config(['services.gemini.api_key' => '']);
 
-        $this->actingAs($this->user('admin'))->get('/attendance-app/ops-room')
+        $this->actingAsPersonalAppUser($this->user('admin'))->get('/attendance-app/ops-room')
             ->assertStatus(200)
             ->assertSee('음성이 아직 안 켜졌습니다')
             // 누를 수 있는 버튼 자체가 없어야 한다(안내 문구는 JS 안에도 남아 있으므로
@@ -111,7 +111,7 @@ class MobileOpsRoomTest extends TestCase
 
     public function test_home_links_to_the_ops_room(): void
     {
-        $this->actingAs($this->user('site_manager'))->get('/attendance-app')
+        $this->actingAsPersonalAppUser($this->user('site_manager'))->get('/attendance-app')
             ->assertStatus(200)
             ->assertSee(route('attendance-app.ops-room'), false)
             ->assertSee('현장 상황실');

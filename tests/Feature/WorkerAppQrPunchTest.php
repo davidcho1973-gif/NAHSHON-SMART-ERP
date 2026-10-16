@@ -47,17 +47,17 @@ class WorkerAppQrPunchTest extends TestCase
             'name' => '김성훈', 'employment_status' => 'active', 'role' => '배관',
         ]);
         $this->user = User::factory()->create([
-            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+            'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
             'employee_id' => $this->employee->id,
         ]);
     }
 
     // ── QR 로만 찍힌다 ──────────────────────────────────────────────
 
-    public function test_QR_없이는_찍히지_않는다(): void
+    public function test_q_r_없이는_찍히지_않는다(): void
     {
         // 누르기만 하면 되는 버튼은 어디서든 눌리고, 그 기록이 그대로 급여가 된다.
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), ['direction' => 'in'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('gate_site');
@@ -65,9 +65,9 @@ class WorkerAppQrPunchTest extends TestCase
         $this->assertSame(0, AttendanceLog::query()->count());
     }
 
-    public function test_남의_현장_QR_로는_찍히지_않는다(): void
+    public function test_남의_현장_q_r_로는_찍히지_않는다(): void
     {
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->postJson(route('attendance-app.punch'), [
                 'direction' => 'in', 'gate_site' => $this->otherSite->id,
             ])
@@ -77,9 +77,9 @@ class WorkerAppQrPunchTest extends TestCase
         $this->assertSame(0, AttendanceLog::query()->count(), '찍었다면 그 사람은 거기 없었다');
     }
 
-    public function test_내_현장_QR_을_찍으면_기록되고_그_사실이_남는다(): void
+    public function test_내_현장_q_r_을_찍으면_기록되고_그_사실이_남는다(): void
     {
-        $res = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+        $res = $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'in', 'gate_site' => $this->site->id,
             'lat' => 33.453316, 'lng' => -112.177502, 'accuracy' => 10,
         ]);
@@ -91,10 +91,10 @@ class WorkerAppQrPunchTest extends TestCase
         $this->assertSame($this->site->id, $log->payload['gate_scanned'], '어느 QR 로 들어온 기록인지 남는다');
     }
 
-    public function test_QR_을_찍었다고_현장_확인이_되지는_않는다(): void
+    public function test_q_r_을_찍었다고_현장_확인이_되지는_않는다(): void
     {
         // QR 은 벽에 붙은 종이라 사진으로도 찍힌다. 승인 여부는 위치·WiFi 가 정한다.
-        $res = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+        $res = $this->actingAsPersonalAppUser($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'in', 'gate_site' => $this->site->id,
             'lat' => 33.9, 'lng' => -112.9, 'accuracy' => 12,
         ]);
@@ -108,7 +108,7 @@ class WorkerAppQrPunchTest extends TestCase
     /** @return array<string, mixed> */
     private function home(): array
     {
-        return $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json();
+        return $this->actingAsPersonalAppUser($this->user)->getJson(route('attendance-app.home'))->json();
     }
 
     private function announce(string $title, string $body, ?Site $site = null, bool $pinned = false): CommunicationMessage

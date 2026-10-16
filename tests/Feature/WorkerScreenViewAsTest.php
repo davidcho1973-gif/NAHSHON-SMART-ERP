@@ -51,7 +51,7 @@ class WorkerScreenViewAsTest extends TestCase
 
     public function test_a_super_admin_sees_the_workers_real_screen(): void
     {
-        $res = $this->actingAs($this->superAdmin())
+        $res = $this->actingAsPersonalAppUser($this->superAdmin())
             ->getJson(route('attendance-app.home', ['as' => $this->worker->id]));
 
         $res->assertOk();
@@ -62,7 +62,7 @@ class WorkerScreenViewAsTest extends TestCase
     public function test_the_screen_says_out_loud_whose_screen_it_is(): void
     {
         // 남의 화면을 보고 있다는 사실이 한순간도 숨겨지면 안 된다.
-        $this->actingAs($this->superAdmin())
+        $this->actingAsPersonalAppUser($this->superAdmin())
             ->get(route('attendance-app.index', ['as' => $this->worker->id]))
             ->assertOk()
             ->assertSee('Cristian rosas 화면')
@@ -72,7 +72,7 @@ class WorkerScreenViewAsTest extends TestCase
     public function test_punching_while_looking_at_someone_else_is_refused(): void
     {
         // 이게 이 기능에서 가장 중요한 한 줄이다.
-        $this->actingAs($this->superAdmin())
+        $this->actingAsPersonalAppUser($this->superAdmin())
             ->postJson(route('attendance-app.punch', ['as' => $this->worker->id]), ['direction' => 'in'])
             ->assertStatus(403);
 
@@ -83,7 +83,7 @@ class WorkerScreenViewAsTest extends TestCase
     {
         // 관리자가 사무실에서 열어 본 것이 그 작업자의 "현장 재실" 로 기록되면
         // 자동 퇴근 시각이 통째로 틀어진다.
-        $html = $this->actingAs($this->superAdmin())
+        $html = $this->actingAsPersonalAppUser($this->superAdmin())
             ->get(route('attendance-app.index', ['as' => $this->worker->id]))
             ->assertOk()->getContent();
 
@@ -99,7 +99,7 @@ class WorkerScreenViewAsTest extends TestCase
                 'access_role' => $role, 'access_scope' => 'all_sites', 'account_status' => 'active',
             ]);
 
-            $this->actingAs($user)
+            $this->actingAsPersonalAppUser($user)
                 ->getJson(route('attendance-app.home', ['as' => $this->worker->id]))
                 ->assertOk()
                 ->assertJsonPath('employee.name', 'Cristian rosas');
@@ -116,7 +116,7 @@ class WorkerScreenViewAsTest extends TestCase
             'access_role' => 'site_manager', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]);
 
-        $res = $this->actingAs($siteManager)
+        $res = $this->actingAsPersonalAppUser($siteManager)
             ->getJson(route('attendance-app.home', ['as' => $this->worker->id]));
 
         $res->assertStatus(422);
@@ -133,43 +133,44 @@ class WorkerScreenViewAsTest extends TestCase
             'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->getJson(route('attendance-app.home'))
             ->assertStatus(422)
             ->assertJsonPath('code', 'no_employee');
     }
 
-    public function test_the_button_is_not_hidden_by_permission(): void
+    public function test_personal_app_preview_is_offered_only_for_eligible_staff(): void
     {
-        // 권한으로 버튼을 감추면 "왜 안 보이지" 가 되고, 아무도 답할 수 없다.
-        // 이유는 열린 화면이 말한다.
+        // 일반 작업자는 현장 QR 안내, 관리직원·반장은 개인앱 미리보기를 제공한다.
         $js = file_get_contents(public_path('js/admin-employees.js'));
 
-        $this->assertStringContainsString('작업자 화면 보기', $js);
+        $this->assertStringContainsString('개인앱 보기', $js);
+        $this->assertStringContainsString('if (hasPersonalApp(r))', $js);
+        $this->assertStringContainsString('현장 QR 출퇴근', $js);
         $this->assertStringNotContainsString('canViewAsWorker', $js);
     }
 
     public function test_the_screen_can_draw_the_refusal(): void
     {
-        $html = $this->actingAs($this->superAdmin())
+        $html = $this->actingAsPersonalAppUser($this->superAdmin())
             ->get(route('attendance-app.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString("d.code === 'view_as_denied'", $html);
         $this->assertStringContainsString('남의 화면을 볼 수 없습니다', $html);
     }
 
-    public function test_a_worker_cannot_look_at_another_worker(): void
+    public function test_a_foreman_with_self_scope_cannot_look_at_another_worker(): void
     {
         $other = Employee::create([
             'company_id' => $this->worker->company_id, 'site_id' => $this->worker->site_id,
             'name' => 'Dhairo Carmona', 'employment_status' => 'active',
         ]);
         $user = User::factory()->create([
-            'employee_id' => $other->id, 'access_role' => 'worker',
+            'employee_id' => $other->id, 'access_role' => 'foreman',
             'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($user)
+        $this->actingAsPersonalAppUser($user)
             ->getJson(route('attendance-app.home', ['as' => $this->worker->id]))
             ->assertOk()
             // 자기 화면이 나온다 — ?as= 가 조용히 무시된다.
@@ -182,7 +183,7 @@ class WorkerScreenViewAsTest extends TestCase
         // ?as= 없이 열면 평소대로다. 이 기능이 자기 출퇴근을 막으면 안 된다.
         $admin = $this->superAdmin();
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->postJson(route('attendance-app.punch'), ['direction' => 'in'])
             ->assertStatus(422);   // 본인에게 직원이 연결 안 된 것 — 403(보는 중)이 아니다
     }

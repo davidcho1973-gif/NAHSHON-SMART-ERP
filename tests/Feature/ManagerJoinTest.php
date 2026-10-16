@@ -125,7 +125,7 @@ class ManagerJoinTest extends TestCase
         $this->assertStringContainsString('value="worker"', $worker);
     }
 
-    public function test_finishing_registration_opens_the_full_employee_app(): void
+    public function test_registration_without_an_approved_account_offers_attendance_not_app_installation(): void
     {
         foreach ([
             'manager' => fn () => $this->submit(),
@@ -136,11 +136,8 @@ class ManagerJoinTest extends TestCase
             ]),
         ] as $door => $submit) {
             $body = $submit()->assertOk()->getContent();
-            $this->assertStringContainsString(
-                'id="t-install" href="'.route('worker-app.entry').'"',
-                $body,
-                "{$door} 등록 완료 화면에 직원 앱 링크가 없습니다",
-            );
+            $this->assertStringNotContainsString('id="t-install"', $body, $door);
+            $this->assertStringContainsString(route('gate.show', $this->site), $body, $door);
             $this->assertStringNotContainsString('?install=1', $body);
             $this->assertStringNotContainsString('inst.hidden = true', $body);
         }

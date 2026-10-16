@@ -69,7 +69,7 @@ class OpsPhotoAsyncTest extends TestCase
         $bytes = $this->bigPhoto();
         $this->assertGreaterThan(1024 * 1024, strlen($bytes), '테스트 사진이 1MB 는 넘어야 의미가 있다');
 
-        $res = $this->actingAs($user)->post('/ops-api/photo', [
+        $res = $this->actingAsPersonalAppUser($user)->post('/ops-api/photo', [
             'photo' => UploadedFile::fake()->createWithContent('site.jpg', $bytes),
         ]);
 
@@ -83,7 +83,7 @@ class OpsPhotoAsyncTest extends TestCase
 
     public function test_non_image_upload_is_rejected(): void
     {
-        $this->actingAs($this->user())->post('/ops-api/photo', [
+        $this->actingAsPersonalAppUser($this->user())->post('/ops-api/photo', [
             'photo' => UploadedFile::fake()->createWithContent('note.txt', 'hello'),
         ])->assertStatus(422);
     }
@@ -93,7 +93,7 @@ class OpsPhotoAsyncTest extends TestCase
         $mine = $this->user();
         $theirs = $this->user();
 
-        $token = $this->actingAs($theirs)->post('/ops-api/photo', [
+        $token = $this->actingAsPersonalAppUser($theirs)->post('/ops-api/photo', [
             'photo' => UploadedFile::fake()->createWithContent('x.jpg', $this->bigPhoto(400, 300)),
         ])->json('token');
 
@@ -111,11 +111,11 @@ class OpsPhotoAsyncTest extends TestCase
         Bus::fake();
         $user = $this->user();
 
-        $token = $this->actingAs($user)->post('/ops-api/photo', [
+        $token = $this->actingAsPersonalAppUser($user)->post('/ops-api/photo', [
             'photo' => UploadedFile::fake()->createWithContent('x.jpg', $this->bigPhoto(800, 600)),
         ])->json('token');
 
-        $res = $this->actingAs($user)->postJson('/smart-company-api/api_opsIngest', [
+        $res = $this->actingAsPersonalAppUser($user)->postJson('/smart-company-api/api_opsIngest', [
             'args' => ['천장 배관 12개 완료', [$token]],
             'siteId' => 'ALL',
         ]);
@@ -140,11 +140,11 @@ class OpsPhotoAsyncTest extends TestCase
         // 현장을 고른 상태로 올린다. 「전체」로 올리면 공정 후보가 아예 없어
         // 대상이 붙지 않는다(다른 현장 공정표에 반영되는 사고를 막는 규칙 —
         // OpsIntakeSiteScopeTest 참고).
-        $batchId = $this->actingAs($user)->postJson('/smart-company-api/api_opsIngest', [
+        $batchId = $this->actingAsPersonalAppUser($user)->postJson('/smart-company-api/api_opsIngest', [
             'args' => ['천장 배관 12개 완료', []], 'siteId' => 'AZ-01',
         ])->json('batchId');
 
-        $this->actingAs($user)->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batchId], 'siteId' => 'AZ-01'])
+        $this->actingAsPersonalAppUser($user)->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batchId], 'siteId' => 'AZ-01'])
             ->assertStatus(200)->assertJson(['status' => 'analyzing']);
 
         // 백그라운드 판독을 직접 돌린다(afterResponse 는 테스트에서 실행되지 않는다).
@@ -163,7 +163,7 @@ class OpsPhotoAsyncTest extends TestCase
         });
         app(OpsIntakeService::class)->analyze($batchId);
 
-        $res = $this->actingAs($user)->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batchId], 'siteId' => 'ALL']);
+        $res = $this->actingAsPersonalAppUser($user)->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batchId], 'siteId' => 'ALL']);
         $res->assertStatus(200)->assertJson(['status' => 'done', 'parsed' => 1, 'actionable' => 1]);
         $this->assertSame('P1-A1', $res->json('items.0.targetCode'));
     }
@@ -191,14 +191,14 @@ class OpsPhotoAsyncTest extends TestCase
         $this->assertSame('failed', $batch->status);
         $this->assertStringContainsString('Gemini', (string) $batch->error);
 
-        $this->actingAs($this->user())->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batch->id], 'siteId' => 'ALL'])
+        $this->actingAsPersonalAppUser($this->user())->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batch->id], 'siteId' => 'ALL'])
             ->assertJson(['status' => 'failed']);
     }
 
     public function test_photos_are_downscaled_for_ai_and_preserved_for_the_situation_room(): void
     {
         $user = $this->user();
-        $token = $this->actingAs($user)->post('/ops-api/photo', [
+        $token = $this->actingAsPersonalAppUser($user)->post('/ops-api/photo', [
             'photo' => UploadedFile::fake()->createWithContent('big.jpg', $this->bigPhoto()),
         ])->json('token');
         $path = OpsPhotoController::pathFor($user->id, $token);

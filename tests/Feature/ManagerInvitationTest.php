@@ -77,8 +77,9 @@ class ManagerInvitationTest extends TestCase
         $this->assertNotNull($user->password_set_at);
         $this->assertDatabaseCount('employees', 1);
         $this->assertDatabaseCount('users', 2);
-        $this->get($invite['url'])->assertGone();
-        $this->get(route('manager-invitation.welcome'))->assertOk();
+        $this->get($invite['url'])->assertRedirect(route('login', ['app' => 1]));
+        $this->get(route('manager-invitation.welcome'))->assertOk()
+            ->assertSee(route('attendance-app.index', ['install' => 1]), false)->assertSee('내 앱 설치하기');
         $this->get('/')->assertOk();
     }
 
@@ -94,25 +95,67 @@ class ManagerInvitationTest extends TestCase
         $this->assertNull($this->worker->fresh()->email);
     }
 
+    public function test_used_shortcut_recovers_normal_login_without_selecting_or_promoting_another_user(): void
+    {
+        $invite = $this->issue();
+        $this->guest();
+        $this->post($invite['url'].'/verify', ['phone' => '2025550147'])->assertRedirect();
+        $this->post($invite['url'].'/complete', ['email' => 'new@example.com', 'password' => 'NewPassword123',
+            'password_confirmation' => 'NewPassword123'])->assertRedirect(route('manager-invitation.welcome'));
+        $accepted = ManagerInvitation::findOrFail($invite['id'])->getRawOriginal();
+
+        $this->guest();
+        $account = $this->worker->fresh()->getRawOriginal();
+        $this->get($invite['url'].'?user_id='.$this->owner->id.'&role=super_admin')
+            ->assertRedirect(route('login', ['app' => 1]))
+            ->assertHeader('Referrer-Policy', 'no-referrer')->assertHeader('Cache-Control', 'no-store, private')
+            ->assertSessionMissing(ManagerInvitationService::SESSION)
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->assertGuest();
+        $this->assertSame($accepted, ManagerInvitation::findOrFail($invite['id'])->getRawOriginal());
+        $this->assertSame($account, $this->worker->fresh()->getRawOriginal());
+        $this->get(route('login', ['app' => 1]))->assertOk()->assertDontSee('Existing Worker');
+        $this->post(route('password.login'), ['email' => 'new@example.com', 'password' => 'NewPassword123'])
+            ->assertRedirect('/attendance-app');
+        $this->assertAuthenticatedAs($this->worker);
+        $this->assertSame('site_manager', $this->worker->fresh()->access_role);
+        $this->assertSame($this->site->id, $this->worker->fresh()->allowed_site_id);
+        $this->assertDatabaseCount('employees', 1);
+        $this->assertDatabaseCount('users', 2);
+
+        // An old shortcut belongs to no current session identity; it must not switch accounts.
+        $other = User::factory()->create(['access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
+        $this->guest();
+        $this->actingAs($other)->get($invite['url'])->assertRedirect(route('login', ['app' => 1]));
+        $this->get(route('login', ['app' => 1]))->assertOk()->assertViewHas('appLogin', true);
+        $this->assertAuthenticatedAs($other);
+        $this->assertSame('worker', $other->fresh()->access_role);
+        $this->assertSame('self', $other->fresh()->access_scope);
+        $this->assertNull(session(ManagerInvitationService::SESSION));
+        $this->assertNull(session(EmailPasswordAuthService::STRONG_AUTH_SESSION));
+        $this->assertSame($accepted, ManagerInvitation::findOrFail($invite['id'])->getRawOriginal());
+        $this->assertDatabaseCount('manager_invitations', 1);
+    }
+
     public function test_reissue_revoke_expiry_and_account_changes_invalidate_invites(): void
     {
         $first = $this->issue();
         $second = $this->issue();
         $this->guest();
-        $this->get($first['url'])->assertGone();
+        $this->get($first['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->get($second['url'])->assertOk();
         $this->actingAsPurchaseUser($this->owner);
         $this->assertTrue(app(ManagerInvitationService::class)->revoke($this->worker->id)['success']);
         $this->guest();
-        $this->get($second['url'])->assertGone();
+        $this->get($second['url'])->assertRedirect(route('login', ['app' => 1]));
         $third = $this->issue();
         ManagerInvitation::find($third['id'])->update(['expires_at' => now()->subMinute()]);
         $this->guest();
-        $this->get($third['url'])->assertGone();
+        $this->get($third['url'])->assertRedirect(route('login', ['app' => 1]));
         $fourth = $this->issue();
         $this->worker->update(['access_scope' => 'all_sites']);
         $this->guest();
-        $this->get($fourth['url'])->assertGone();
+        $this->get($fourth['url'])->assertRedirect(route('login', ['app' => 1]));
     }
 
     public function test_only_strong_superadmin_can_invite_and_registered_accounts_cannot_be_taken_over(): void
@@ -191,7 +234,7 @@ class ManagerInvitationTest extends TestCase
         $this->post($invite['url'].'/complete', ['email' => 'new@example.com', 'password' => 'NewPassword123', 'password_confirmation' => 'NewPassword123'])->assertGone();
         $this->travelBack();
         $this->owner->update(['account_status' => 'suspended']);
-        $this->get($invite['url'])->assertGone();
+        $this->get($invite['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->assertSame('worker', $this->worker->fresh()->access_role);
     }
 
@@ -250,20 +293,21 @@ class ManagerInvitationTest extends TestCase
         $this->get($invite['url'])->assertOk()->assertDontSee('로그인 방법을 선택하세요.');
     }
 
-    public function test_unavailable_invitations_explain_recovery_without_exposing_identity_or_reviving_the_link(): void
+    public function test_unavailable_invitations_redirect_to_login_without_exposing_identity_or_reviving_the_link(): void
     {
         $first = $this->issue();
         $second = $this->issue();
         $this->guest();
-        $this->get($first['url'])->assertGone()->assertSee('이 초대 링크로는 등록을 진행할 수 없습니다')
-            ->assertSee('새 초대 링크')->assertSee('이미 등록을 완료했다면')
-            ->assertSee(route('login', ['erp' => 1]), false)->assertDontSee('Existing Worker')
-            ->assertDontSee(basename($first['url']))->assertDontSee('전화번호 다시 확인')
+        $this->get($first['url'])->assertRedirect(route('login', ['app' => 1]))
+            ->assertSessionHas('status', fn ($status) => str_contains($status, '기존 계정으로 로그인') && str_contains($status, '새 초대 링크'))
+            ->assertDontSee('Existing Worker')->assertDontSee(basename($first['url']))
             ->assertHeader('Referrer-Policy', 'no-referrer')->assertHeader('Cache-Control', 'no-store, private');
+        $this->get(route('login', ['app' => 1]))->assertOk()->assertSee('기존 계정으로 로그인')
+            ->assertDontSee('Existing Worker')->assertDontSee(basename($first['url']))->assertDontSee('2025550147');
         $this->post($first['url'].'/verify', ['phone' => '2025550147'])->assertGone()->assertSee('새 초대 링크');
         $this->get($second['url'])->assertOk();
         $this->worker->update(['access_scope' => 'all_sites']);
-        $this->get($second['url'])->assertGone()->assertSee('새 초대 링크');
+        $this->get($second['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->assertGuest();
         $this->assertDatabaseCount('manager_invitations', 2);
         $this->assertNull(ManagerInvitation::findOrFail($second['id'])->accepted_at);
@@ -291,9 +335,9 @@ class ManagerInvitationTest extends TestCase
         $this->guest();
         ManagerInvitation::findOrFail($invite['id'])->update(['revoked_at' => now()]);
         $this->post($invite['url'].'/complete', [])->assertGone()->assertSee('전화번호 다시 확인');
-        $this->get($invite['url'])->assertGone()->assertSee('새 초대 링크')->assertDontSee('전화번호 다시 확인');
+        $this->get($invite['url'])->assertRedirect(route('login', ['app' => 1]));
         $this->get(route('manager-invitation.show', ['token' => str_repeat('x', 64)]))
-            ->assertGone()->assertSee('새 초대 링크')->assertDontSee('Existing Worker');
+            ->assertRedirect(route('login', ['app' => 1]))->assertDontSee('Existing Worker');
         $this->assertNull(ManagerInvitation::findOrFail($invite['id'])->accepted_at);
         $this->assertDatabaseCount('manager_invitations', 1);
         $this->assertSame('worker', $this->worker->fresh()->access_role);
@@ -307,7 +351,7 @@ class ManagerInvitationTest extends TestCase
         $this->post($invite['url'].'/complete?return_to='.urlencode($external), [])->assertGone()
             ->assertSee('href="'.$invite['url'].'"', false)->assertDontSee($external);
         $this->get(route('manager-invitation.show', ['token' => str_repeat('x', 64), 'return_to' => $external]))
-            ->assertGone()->assertSee('새 초대 링크')->assertDontSee($external)
+            ->assertRedirect(route('login', ['app' => 1]))->assertDontSee($external)
             ->assertDontSee('Existing Worker')->assertDontSee($this->owner->email)
             ->assertDontSee('2025550147')->assertDontSee('account_fingerprint')->assertDontSee('token_hash');
 

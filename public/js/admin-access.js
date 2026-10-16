@@ -66,7 +66,7 @@
 
     return u.pageHeader(
       '계정 · 권한 관리',
-      'ERP 본화면은 여기서 허용한 사람만 들어옵니다. 현장 인력은 전화번호 뒷 4자리로 작업자 앱을 씁니다. — ' + notes.join(' · '),
+      'ERP는 허용된 계정만, 개인앱은 관리직원·반장만 사용합니다. 일반 작업자는 현장 QR로 출퇴근합니다. — ' + notes.join(' · '),
       (state.options && state.options.canIssueInvitations
         ? u.primaryButton('신규 관리자 초대', 'window.AdminAccess.inviteNew()', 'user-plus') + ' ' : '') +
       u.primaryButton('계정 추가', 'window.AdminAccess.openForm()', 'plus')
@@ -104,13 +104,12 @@
             (r.purchaseBuyerAccess ? ' ' + u.badge('구매처리', 'warn') : '') || '—';
         } },
         {
-          // 현장 인력은 전화번호 뒷 4자리로 작업자 앱에 들어오고, ERP 본화면은 승인된
-          // 사람에게만 열린다. 그 «승인» 이 목록에서 보이지 않으면 아무도 관리할 수 없다.
+          // ERP 허용 여부만 표시한다. 개인앱 사용 가능 여부와는 별개다.
           key: 'erpAccess', label: 'ERP 입장', width: '110px',
           render: function (r) {
             return r.erpAccess
               ? u.badge('허용됨', 'ok')
-              : u.badge('작업자 앱만', 'muted');
+              : u.badge('미허용', 'muted');
           },
         },
         {
@@ -214,7 +213,7 @@
         fields: [
           { name: 'name', label: '이름', required: true, group: '기본 정보', value: row ? row.name : '' },
           { name: 'email', label: '이메일', type: 'email', group: '기본 정보',
-            value: row ? row.email : '', hint: '전화번호가 등록된 직원에 연결된 작업자·반장은 선택입니다. 다른 역할은 이메일이 필요합니다.' },
+            value: row ? row.email : '', hint: '일반 작업자는 선택입니다. 관리직원·반장은 정식 로그인에 사용할 이메일을 등록하세요.' },
           { name: 'employeeId', label: '연결할 직원', type: 'select', group: '기본 정보',
             options: o.employees, value: row ? row.employeeId : '',
             hint: '연결하면 출퇴근·급여가 이 계정과 이어집니다.', colSpan: 2 },
@@ -226,7 +225,7 @@
             hint: self
               ? '본인 계정이라 바꿀 수 없습니다.'
               : 'ERP 본화면은 관리자·인사담당·현장소장·안전관리자·급여·협력사관리자·원청·열람전용에게 열립니다. '
-                + '작업자·작업반장은 전화번호 뒷 4자리로 작업자 앱만 씁니다. 자기보다 높은 역할은 부여할 수 없습니다.' },
+                + '관리직원·반장은 Google 또는 이메일·비밀번호로 개인앱을 사용하고, 일반 작업자는 현장 QR로 출퇴근합니다. 자기보다 높은 역할은 부여할 수 없습니다.' },
           { name: 'status', label: '상태', type: 'select', required: true, group: '권한',
             options: o.statuses, value: row ? row.status : 'active',
             hint: self ? '본인 계정이라 바꿀 수 없습니다.' : '' },

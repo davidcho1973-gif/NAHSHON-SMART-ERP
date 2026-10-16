@@ -35,7 +35,7 @@ class IntegratedDocumentUploadSizeTest extends TestCase
         config(['filesystems.documents_max_kb' => 262144]); // 256MB
         $file = UploadedFile::fake()->create('huge.pdf', 300000); // ~293MB
 
-        $res = $this->actingAs($this->admin())->postJson(route('docs.upload'), ['file' => $file]);
+        $res = $this->actingAsPersonalAppUser($this->admin())->postJson(route('docs.upload'), ['file' => $file]);
 
         $res->assertStatus(422);
         $this->assertStringContainsString('최대 256MB', $res->json('message') ?? json_encode($res->json()));
@@ -47,7 +47,7 @@ class IntegratedDocumentUploadSizeTest extends TestCase
         config(['filesystems.documents_max_kb' => 262144, 'filesystems.documents_analyze_max_kb' => 51200]); // 분석 상한 50MB
         $file = UploadedFile::fake()->create('PHASE 10 CITY SUBMITTAL.pdf', 60000); // ~58MB > 50MB
 
-        $res = $this->actingAs($this->admin())->postJson(route('docs.upload'), ['file' => $file]);
+        $res = $this->actingAsPersonalAppUser($this->admin())->postJson(route('docs.upload'), ['file' => $file]);
 
         // AI 분석(analyzing)이 아니라 보관 등록(needs_review)으로 즉시 처리.
         $res->assertStatus(201)->assertJsonPath('status', 'needs_review');
@@ -62,7 +62,7 @@ class IntegratedDocumentUploadSizeTest extends TestCase
         config(['filesystems.documents_max_kb' => 262144, 'filesystems.documents_analyze_max_kb' => 10240]);
         $file = UploadedFile::fake()->create('submittal.pdf', 40000); // ~39MB (구 32MB 초과)
 
-        $res = $this->actingAs($this->admin())->postJson(route('docs.upload'), ['file' => $file]);
+        $res = $this->actingAsPersonalAppUser($this->admin())->postJson(route('docs.upload'), ['file' => $file]);
 
         $res->assertStatus(201)->assertJsonPath('status', 'needs_review');
         $this->assertSame(1, IntegratedDocument::count());

@@ -28,7 +28,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
     {
         $user = $this->worker('ko');
 
-        $this->actingAs($user)
+        $this->actingAsPersonalAppUser($user)
             ->withUnencryptedCookie(AppLocale::COOKIE, 'en')
             ->get('/attendance-app')
             ->assertOk();
@@ -41,7 +41,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         // 쿠키는 화면이 평문으로 쓴다 — 값을 그대로 믿으면 안 된다.
         $user = $this->worker('es');
 
-        $this->actingAs($user)
+        $this->actingAsPersonalAppUser($user)
             ->withUnencryptedCookie(AppLocale::COOKIE, 'zz')
             ->get('/attendance-app')
             ->assertOk();
@@ -53,7 +53,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
     {
         $user = $this->worker('es');
 
-        $response = $this->actingAs($user)->get('/attendance-app')->assertOk();
+        $response = $this->actingAsPersonalAppUser($user)->get('/attendance-app')->assertOk();
 
         $this->assertSame('es', app()->getLocale());
         // 다음 요청부터는 사용자를 몰라도 같은 언어가 나와야 한다.
@@ -74,7 +74,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
             'account_status' => 'active',
         ]);
 
-        $this->actingAs($user)->get('/attendance-app')->assertOk();
+        $this->actingAsPersonalAppUser($user)->get('/attendance-app')->assertOk();
 
         $this->assertSame('en', app()->getLocale());
     }
@@ -83,7 +83,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
     {
         $user = $this->worker('ko');
 
-        $this->actingAs($user)
+        $this->actingAsPersonalAppUser($user)
             ->postJson(route('attendance-app.language'), ['lang' => 'en'])
             ->assertOk()
             ->assertJsonPath('success', true)
@@ -97,7 +97,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
     {
         $user = $this->worker('ko');
 
-        $this->actingAs($user)
+        $this->actingAsPersonalAppUser($user)
             ->postJson(route('attendance-app.language'), ['lang' => 'fr'])
             ->assertStatus(422);
 
@@ -110,7 +110,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         $admin = $this->worker('ko', role: 'super_admin');
         $other = $this->worker('es');
 
-        $this->actingAs($admin)
+        $this->actingAsPersonalAppUser($admin)
             ->postJson(route('attendance-app.language').'?as='.$other->employee->id, ['lang' => 'en'])
             ->assertOk()
             ->assertCookie(AppLocale::COOKIE, 'en', false);
@@ -122,7 +122,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
     {
         // 예전에는 localStorage 에만 두어서 서버가 선택을 몰랐다. 그 구조로 돌아가면
         // 아래 화면들이 다시 한국어가 된다.
-        $html = $this->actingAs($this->worker('ko'))->get('/attendance-app')->assertOk()->getContent();
+        $html = $this->actingAsPersonalAppUser($this->worker('ko'))->get('/attendance-app')->assertOk()->getContent();
 
         $this->assertStringContainsString('rememberLangOnServer', $html);
         $this->assertStringContainsString('app_locale=', $html);
@@ -134,13 +134,13 @@ class AppLocaleFollowsChoiceTest extends TestCase
         // 사장이 겪은 바로 그 화면이다 — 첫 화면에서 EN 을 골랐는데 여기가 한글이었다.
         $user = $this->worker('ko');
 
-        $korean = $this->actingAs($user)
+        $korean = $this->actingAsPersonalAppUser($user)
             ->withUnencryptedCookie(AppLocale::COOKIE, 'ko')
             ->get('/attendance-app/ops-room')->assertOk()->getContent();
         $this->assertStringContainsString('현장 기록', $korean);
         $this->assertStringContainsString('눌러서 말하기', $korean);
 
-        $english = $this->actingAs($user)
+        $english = $this->actingAsPersonalAppUser($user)
             ->withUnencryptedCookie(AppLocale::COOKIE, 'en')
             ->get('/attendance-app/ops-room')->assertOk()->getContent();
         $this->assertStringContainsString('Site log', $english);
@@ -151,7 +151,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         $this->assertStringNotContainsString('>눌러서 말하기<', $english, '영어 화면의 버튼에 한글이 남으면 안 된다.');
         $this->assertStringNotContainsString('>현장 기록<', $english);
 
-        $spanish = $this->actingAs($user)
+        $spanish = $this->actingAsPersonalAppUser($user)
             ->withUnencryptedCookie(AppLocale::COOKIE, 'es')
             ->get('/attendance-app/ops-room')->assertOk()->getContent();
         $this->assertStringContainsString('Registro de obra', $spanish);
@@ -166,7 +166,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         // 봤다. 새 폰으로 열 때마다 그랬다 — localStorage 는 폰마다 따로이기 때문이다.
         $user = $this->worker('es');
 
-        $html = $this->actingAs($user)
+        $html = $this->actingAsPersonalAppUser($user)
             ->withUnencryptedCookie(AppLocale::COOKIE, 'en')
             ->get('/attendance-app')->assertOk()->getContent();
 
@@ -183,7 +183,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         // 이미 자기 말로 보여야 한다 — 쿠키가 없다고 한국어로 떨어지면 안 된다.
         $user = $this->worker('es');
 
-        $html = $this->actingAs($user)->get('/attendance-app')->assertOk()->getContent();
+        $html = $this->actingAsPersonalAppUser($user)->get('/attendance-app')->assertOk()->getContent();
 
         $this->assertStringContainsString('var SERVER_LANG = "es"', $html);
         $this->assertStringContainsString('var LANG_PICKED = false', $html);
@@ -195,7 +195,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         // 이 한글이면, 그 앱은 자기 말로 만들어진 앱이 아니다.
         $user = $this->worker('ko');
 
-        $spanish = $this->actingAs($user)
+        $spanish = $this->actingAsPersonalAppUser($user)
             ->withUnencryptedCookie(AppLocale::COOKIE, 'es')
             ->get('/attendance-app')->assertOk()->getContent();
 
@@ -209,7 +209,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
     public function test_the_screen_and_its_script_read_the_same_dictionary(): void
     {
         // 사전이 두 벌이면 «버튼은 영어인데 알림 문구는 한글» 이 된다.
-        $html = $this->actingAs($this->worker('ko'))
+        $html = $this->actingAsPersonalAppUser($this->worker('ko'))
             ->withUnencryptedCookie(AppLocale::COOKIE, 'en')
             ->get('/attendance-app/ops-room')->assertOk()->getContent();
 
@@ -282,7 +282,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         $this->assertSame([], array_values(array_diff($es, $en)), '영어 사전에 빠진 문구가 있습니다.');
     }
 
-    private function worker(string $lang, string $role = 'worker'): User
+    private function worker(string $lang, string $role = 'foreman'): User
     {
         $company = Company::query()->firstOrCreate(
             ['code' => 'XYZ'],

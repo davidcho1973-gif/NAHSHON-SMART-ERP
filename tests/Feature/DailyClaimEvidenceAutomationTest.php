@@ -23,6 +23,7 @@ class DailyClaimEvidenceAutomationTest extends TestCase
     {
         $company = Company::create(['code' => 'DAILY', 'name' => 'Daily evidence', 'status' => 'active']);
         $site = Site::create(['company_id' => $company->id, 'code' => 'DAILY', 'name' => 'Site', 'status' => 'active']);
+
         return ProjectContract::create(['company_id' => $company->id, 'site_id' => $site->id,
             'direction' => 'receivable', 'title' => 'Daily work', 'status' => 'active',
             'payload' => ['claim_profile' => ['version' => 3], 'existing' => 'preserve']]);
@@ -59,7 +60,7 @@ class DailyClaimEvidenceAutomationTest extends TestCase
         $worker = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']);
         $this->actingAs($worker);
         $this->assertFalse(app(ClaimEvidenceAutomation::class)->enqueue($contract->id)['success']);
-        $this->get('/billing-export/contracts/'.$contract->id.'/daily-evidence/expense/1')->assertForbidden();
+        $this->getJson('/billing-export/contracts/'.$contract->id.'/daily-evidence/expense/1')->assertForbidden();
         $manager = User::factory()->create(['access_role' => 'site_manager', 'access_scope' => 'site', 'allowed_site_id' => null, 'account_status' => 'active']);
         $this->actingAs($manager);
         $this->assertFalse(app(ClaimEvidenceAutomation::class)->enqueue($contract->id)['success']);

@@ -6,23 +6,13 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
-use App\Models\WorkerDevice;
 use App\Services\Auth\PersonalAppAccessService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
-/**
- * 문이 둘이다 — 그리고 그 둘은 서로의 자리를 넘지 않는다.
- *
- * <b>사장님 결정(2026-09-23):</b>
- *   · 작업자앱은 작업반장·관리자도 «본인 핸드폰 뒷자리 4자리» 만으로 들어온다.
- *   · 대신 ERP 본화면은 슈퍼관리자가 권한을 승인한 계정으로 정식 로그인해야 열린다.
- *
- * 앞의 결정만 지키면 벽의 QR 과 남의 뒷 4자리를 아는 사람이 회사 전체 자료 앞에 선다.
- * 뒤의 결정만 지키면 현장 사람이 자기 출퇴근도 못 본다. 둘이 같이 있어야 뜻이 산다.
- */
+/** A phone suffix or employee ID is attendance identification, never an app credential. */
 class FourDigitDoorTest extends TestCase
 {
     use RefreshDatabase;
@@ -61,69 +51,54 @@ class FourDigitDoorTest extends TestCase
         return $employee->fresh();
     }
 
-    private function enterWithDigits(Employee $employee, string $last4): array
-    {
-        $found = $this->postJson(route('worker-app.find'), ['last4' => $last4])->assertOk()->json('workers');
-        $this->assertContains($employee->id, array_column($found, 'id'), '뒷 4자리로 본인이 나와야 한다');
-
-        return $this->postJson(route('worker-app.enter'), ['employee_id' => $employee->id])->assertOk()->json();
-    }
-
-    public function test_a_worker_enters_the_app_with_four_digits_and_nothing_else(): void
+    public function test_phone_suffixes_do_not_disclose_accounts_or_open_the_personal_app(): void
     {
         $worker = $this->person('이대웅', '480-555-0142', 'worker');
-
-        $result = $this->enterWithDigits($worker, '0142');
-
-        $this->assertAuthenticatedAs($worker->user);
-        $this->assertSame(route('attendance-app.index'), $result['redirect']);
-        $this->assertNotEmpty($result['device_token']);
-        $this->assertNotNull(WorkerDevice::query()->sole()->identity_verified_at, '이 휴대폰을 기억해 다음부터는 묻지 않는다');
-        $this->get(route('attendance-app.index'))->assertOk();
+        $this->postJson(route('worker-app.find'), ['last4' => '0142'])
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_sign_in_required')
+            ->assertJsonMissingPath('workers')->assertDontSee($worker->name);
+        $this->postJson(route('worker-app.enter'), ['employee_id' => $worker->id])
+            ->assertForbidden()->assertJsonMissingPath('device_token');
+        $this->assertGuest();
+        $this->assertDatabaseCount('worker_devices', 0);
     }
 
-    public function test_a_foreman_and_a_manager_use_the_same_four_digit_door(): void
+    public function test_a_foreman_and_a_manager_enter_the_app_only_with_an_authenticated_account(): void
     {
         foreach ([['반장', '480-555-0111', 'foreman', 'foreman'], ['소장', '480-555-0122', 'site_manager', 'superintendent']] as [$name, $phone, $role, $position]) {
             $person = $this->person($name, $phone, $role, $position);
 
-            $this->enterWithDigits($person, substr(preg_replace('/\D/', '', $phone), -4));
-
+            $this->postJson(route('worker-app.enter'), ['employee_id' => $person->id])
+                ->assertForbidden()->assertJsonPath('code', 'personal_app_sign_in_required');
+            $this->assertGuest();
+            $this->actingAsPersonalAppUser($person->user);
             $this->assertAuthenticatedAs($person->user);
             $this->get(route('attendance-app.index'))->assertOk();
             $this->post(route('logout'));
         }
     }
 
-    /** 이 문으로는 ERP 본화면이 열리지 않는다 — 권한이 관리자여도 마찬가지다. */
-    public function test_the_four_digit_door_never_opens_the_erp_main_screen(): void
+    public function test_an_employee_id_cannot_impersonate_a_manager_or_create_a_device(): void
     {
         $manager = $this->person('오아현', '480-555-0133', 'admin', 'office');
 
-        $this->enterWithDigits($manager, '0133');
-
-        $this->assertAuthenticatedAs($manager->user);
-        $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
-        // 화면을 거치지 않고 창구를 직접 불러도 마찬가지다 — 권한이 필요한 자료는 안 나간다.
-        $this->postJson(route('api.smart-company', ['method' => 'api_getKakaoReminders']), [])
-            ->assertOk()->assertJsonPath('success', false);
+        $beforeUsers = User::count();
+        $this->postJson(route('worker-app.enter'), ['employee_id' => $manager->id, 'access_role' => 'super_admin'])
+            ->assertForbidden()->assertJsonPath('code', 'personal_app_sign_in_required');
+        $this->assertGuest();
+        $this->assertDatabaseCount('worker_devices', 0);
+        $this->assertDatabaseCount('users', $beforeUsers);
+        $this->get('/')->assertRedirect(route('login'));
     }
 
-    public function test_a_weak_manager_login_clears_the_old_erp_recaller_instead_of_minting_one(): void
+    public function test_an_existing_worker_session_cannot_switch_to_a_manager_by_employee_id(): void
     {
         $manager = $this->person('소장', '480-555-0122', 'site_manager', 'superintendent');
-        $this->actingAs($manager->user);
-        $recaller = Auth::guard()->getRecallerName();
-
-        $response = $this->withCookie($recaller, 'old-browser-credential')
-            ->postJson(route('worker-app.enter'), ['employee_id' => $manager->id])
-            ->assertOk();
-
-        $this->assertAuthenticatedAs($manager->user);
-        $cookie = collect($response->headers->getCookies())->first(fn ($cookie) => $cookie->getName() === $recaller);
-        $this->assertNotNull($cookie, 'The old remember-me cookie must explicitly be removed.');
-        $this->assertLessThan(time(), $cookie->getExpiresTime());
-        $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
+        $worker = $this->person('작업자', '480-555-0144', 'worker');
+        $this->actingAs($worker->user)->postJson(route('worker-app.enter'), ['employee_id' => $manager->id])
+            ->assertForbidden()->assertJsonMissingPath('device_token');
+        $this->assertAuthenticatedAs($worker->user);
+        $this->assertDatabaseCount('worker_devices', 0);
     }
 
     public function test_an_old_manager_recaller_cannot_restore_unrestricted_erp_access(): void
@@ -138,8 +113,22 @@ class FourDigitDoorTest extends TestCase
             ->assertSessionHas(PersonalAppAccessService::LEGACY_SESSION, true);
 
         $this->assertAuthenticatedAs($manager);
+        $this->get(route('attendance-app.index'))->assertOk();
         $this->postJson('/vehicle-api/save', [])->assertForbidden()->assertJsonPath('code', 'personal_app_only');
         $this->postJson('/auth/password/setup', [])->assertForbidden()->assertJsonPath('code', 'personal_app_only');
+    }
+
+    public function test_a_phone_only_manager_session_must_sign_in_before_using_the_business_app(): void
+    {
+        foreach (['foreman', 'site_manager'] as $i => $role) {
+            $manager = $this->person('Manager '.$i, '480555018'.$i, $role)->user;
+            $this->actingAs($manager)->withSession([WorkerDeviceSession::FLAG => true])
+                ->get(route('attendance-app.index'))->assertRedirect(route('login', ['app' => 1]));
+            $this->getJson(route('attendance-app.home'))->assertForbidden()
+                ->assertJsonPath('code', 'personal_app_sign_in_required');
+            $this->get(route('worker-app.entry'))->assertRedirect(route('login', ['app' => 1]));
+            $this->post(route('logout'));
+        }
     }
 
     /** 정식 로그인 + 승인된 권한이면 본화면이 열린다. */
@@ -159,7 +148,7 @@ class FourDigitDoorTest extends TestCase
             $person = $this->person('현장'.$i, '480-555-02'.(10 + $i), $role);
 
             $this->actingAs($person->user);
-            $this->get('/')->assertRedirect(route('attendance-app.index'));
+            $this->get('/')->assertRedirect($role === 'worker' ? route('worker-app.entry') : route('attendance-app.index'));
             $this->getJson('/')->assertForbidden()->assertJsonPath('reauthenticate_url', null);
             $this->post(route('logout'));
         }
@@ -170,8 +159,8 @@ class FourDigitDoorTest extends TestCase
         $gone = $this->person('퇴사자', '480-555-0155', 'worker');
         $gone->update(['employment_status' => 'terminated']);
 
-        $this->postJson(route('worker-app.find'), ['last4' => '0155'])->assertOk()->assertJsonCount(0, 'workers');
-        $this->postJson(route('worker-app.enter'), ['employee_id' => $gone->id])->assertStatus(422);
+        $this->postJson(route('worker-app.find'), ['last4' => '0155'])->assertForbidden()->assertJsonMissingPath('workers');
+        $this->postJson(route('worker-app.enter'), ['employee_id' => $gone->id])->assertForbidden();
         $this->assertGuest();
     }
 
@@ -181,7 +170,7 @@ class FourDigitDoorTest extends TestCase
 
         foreach (['', '4', '42', '142'] as $partial) {
             $this->postJson(route('worker-app.find'), ['last4' => $partial])
-                ->assertOk()->assertJsonCount(0, 'workers');
+                ->assertForbidden()->assertJsonMissingPath('workers');
         }
     }
 }

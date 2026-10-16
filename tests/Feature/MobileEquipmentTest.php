@@ -66,7 +66,7 @@ class MobileEquipmentTest extends TestCase
         $this->user = User::factory()->create([
             'employee_id' => $this->employee->id,
             'email' => 'john.doe@example.com',
-            'access_role' => 'worker',
+            'access_role' => 'foreman',
             'access_scope' => 'self',
             'account_status' => 'active',
         ]);
@@ -119,7 +119,7 @@ class MobileEquipmentTest extends TestCase
             'allowed_company_id' => $this->company->id,
         ]);
 
-        $response = $this->actingAs($this->user)->get(route('mobile-equipment.index'));
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-equipment.index'));
 
         $response->assertStatus(200);
         $response->assertViewHas('totalCount', 2);
@@ -160,14 +160,14 @@ class MobileEquipmentTest extends TestCase
         ]);
 
         // View ALL
-        $response = $this->actingAs($this->user)->get(route('mobile-equipment.index', ['site' => 'ALL']));
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-equipment.index', ['site' => 'ALL']));
         $response->assertStatus(200);
         $response->assertViewHas('totalCount', 2);
         $response->assertSee('Hammer-A');
         $response->assertSee('Wrench-B');
 
         // View only specific site
-        $responseFiltered = $this->actingAs($this->user)->get(route('mobile-equipment.index', ['site' => 'OTHER-SITE']));
+        $responseFiltered = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-equipment.index', ['site' => 'OTHER-SITE']));
         $responseFiltered->assertStatus(200);
         $responseFiltered->assertViewHas('totalCount', 1);
         $responseFiltered->assertDontSee('Hammer-A');
@@ -176,7 +176,7 @@ class MobileEquipmentTest extends TestCase
 
     public function test_mobile_equipment_wizard_renders_correctly(): void
     {
-        $response = $this->actingAs($this->user)->get(route('mobile-equipment.wizard'));
+        $response = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-equipment.wizard'));
 
         $response->assertStatus(200);
         $response->assertViewHas('sites');
@@ -202,7 +202,7 @@ class MobileEquipmentTest extends TestCase
 
         $file = UploadedFile::fake()->create('generator.jpg', 800, 'image/jpeg');
 
-        $response = $this->actingAs($this->user)->postJson(route('mobile-equipment.scan-photo'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->postJson(route('mobile-equipment.scan-photo'), [
             'photo' => $file,
         ]);
 
@@ -244,7 +244,7 @@ class MobileEquipmentTest extends TestCase
             'quantity' => 1,
         ];
 
-        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.store'), $postData);
 
         $response->assertRedirect(route('mobile-equipment.index'));
         $response->assertSessionHas('success');
@@ -279,7 +279,7 @@ class MobileEquipmentTest extends TestCase
             'quantity' => 1,
         ];
 
-        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.store'), $postData);
 
         $response->assertRedirect(route('mobile-equipment.index'));
 
@@ -304,7 +304,7 @@ class MobileEquipmentTest extends TestCase
             'is_bulk' => '0',
         ];
 
-        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.store'), $postData);
 
         $response->assertRedirect(route('mobile-equipment.index'));
 
@@ -331,7 +331,7 @@ class MobileEquipmentTest extends TestCase
             'is_bulk' => 'on',
         ];
 
-        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.store'), $postData);
 
         $response->assertRedirect(route('mobile-equipment.index'));
 
@@ -373,7 +373,7 @@ class MobileEquipmentTest extends TestCase
             ],
         ];
 
-        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), $postData);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.store-batch'), $postData);
 
         $response->assertRedirect(route('mobile-equipment.index'));
         $response->assertSessionHas('success');
@@ -431,7 +431,7 @@ class MobileEquipmentTest extends TestCase
             ],
         ];
 
-        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), $postData);
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.store-batch'), $postData);
 
         $response->assertRedirect(route('mobile-equipment.index'));
 
@@ -488,7 +488,7 @@ class MobileEquipmentTest extends TestCase
         $file1 = UploadedFile::fake()->create('drill.jpg', 800, 'image/jpeg');
         $file2 = UploadedFile::fake()->create('nails.jpg', 800, 'image/jpeg');
 
-        $response = $this->actingAs($this->user)->post(route('mobile-equipment.scan-photos-batch'), [
+        $response = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.scan-photos-batch'), [
             'photos' => [$file1, $file2],
         ]);
 
@@ -531,7 +531,7 @@ class MobileEquipmentTest extends TestCase
             'photo' => UploadedFile::fake()->create('new_photo.jpg', 800, 'image/jpeg'),
         ];
 
-        $response = $this->actingAs($this->user)->put(route('mobile-equipment.update', $equipment), $updateData);
+        $response = $this->actingAsPersonalAppUser($this->user)->put(route('mobile-equipment.update', $equipment), $updateData);
 
         $response->assertRedirect(route('mobile-equipment.index'));
         $response->assertSessionHas('success');
@@ -559,7 +559,7 @@ class MobileEquipmentTest extends TestCase
             'status' => '대기중',
         ]);
 
-        $response = $this->actingAs($this->user)->delete(route('mobile-equipment.destroy', $equipment));
+        $response = $this->actingAsPersonalAppUser($this->user)->delete(route('mobile-equipment.destroy', $equipment));
 
         $response->assertRedirect(route('mobile-equipment.index'));
         $response->assertSessionHas('success');
@@ -575,7 +575,7 @@ class MobileEquipmentTest extends TestCase
             'equipment_type' => 'Other (기타)', 'status' => '대기중',
             'site_id' => $this->site->id, 'quantity' => 2, 'is_bulk' => 'on',
         ];
-        $this->actingAs($this->user)
+        $this->actingAsPersonalAppUser($this->user)
             ->post(route('mobile-equipment.store'), $base + ['model' => 'Purchased material'])
             ->assertRedirect(route('mobile-equipment.index'));
         $this->post(route('mobile-equipment.store'), array_merge($base, [
@@ -589,7 +589,7 @@ class MobileEquipmentTest extends TestCase
     public function test_mobile_batch_preserves_ownership_for_bulk_and_serialized_items(): void
     {
         $item = ['equipment_type' => 'Other (기타)', 'status' => '대기중', 'quantity' => 2];
-        $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), [
+        $this->actingAsPersonalAppUser($this->user)->post(route('mobile-equipment.store-batch'), [
             'site_id' => $this->site->id,
             'items' => [
                 $item + ['model' => 'Owned material', 'is_bulk' => 'on'],
@@ -611,7 +611,7 @@ class MobileEquipmentTest extends TestCase
             'equipment_type' => 'Other (기타)', 'model' => 'Invalid ownership',
             'status' => '대기중', 'quantity' => 1, 'acquisition_type' => 'unknown',
         ];
-        $this->actingAs($this->user)->postJson(route('mobile-equipment.store'), $item)
+        $this->actingAsPersonalAppUser($this->user)->postJson(route('mobile-equipment.store'), $item)
             ->assertUnprocessable()->assertJsonValidationErrors('acquisition_type');
         $this->postJson(route('mobile-equipment.store-batch'), ['items' => [$item]])
             ->assertUnprocessable()->assertJsonValidationErrors('items.0.acquisition_type');

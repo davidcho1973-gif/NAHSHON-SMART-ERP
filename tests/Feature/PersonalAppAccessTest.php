@@ -30,9 +30,11 @@ class PersonalAppAccessTest extends TestCase
     {
         $user = $this->manager();
         $this->actingAsPurchaseUser($user);
-        foreach (['/app/connect/'.str_repeat('a', 64), '/attendance-app/manager-access', '/personal-app-access/users'] as $url) {
-            $this->get($url)->assertStatus(410);
+        foreach (['/app/connect/'.str_repeat('a', 64), '/attendance-app/manager-access'] as $url) {
+            $this->get($url)->assertRedirect(route('login', ['app' => 1]));
+            $this->getJson($url)->assertStatus(410);
         }
+        $this->get('/personal-app-access/users')->assertStatus(410);
         $this->post('/app/connect/'.str_repeat('a', 64))->assertStatus(410);
         $this->postJson('/personal-app-access/users/'.$user->id.'/qr')->assertStatus(410);
         $this->assertDatabaseCount('personal_app_devices', 0);
@@ -44,10 +46,22 @@ class PersonalAppAccessTest extends TestCase
         $user = $this->manager();
         $device = $this->device($user);
         $this->withCookie(PersonalAppAccessService::COOKIE, 'retired-test-token')
-            ->get('/attendance-app')->assertRedirect(route('login', ['erp' => 1]))
+            ->get('/attendance-app')->assertRedirect(route('login', ['app' => 1]))
             ->assertCookieExpired(PersonalAppAccessService::COOKIE);
         $this->assertGuest();
         $this->assertNotNull($device->fresh()->revoked_at);
+    }
+
+    public function test_a_retired_qr_bookmark_only_opens_login_without_restoring_identity(): void
+    {
+        $this->get('/app/connect/'.str_repeat('a', 64).'?return_to=https://untrusted.example')
+            ->assertRedirect(route('login', ['app' => 1]))
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertGuest();
+        $this->assertDatabaseCount('personal_app_devices', 0);
+        $this->assertDatabaseCount('users', 0);
+        $this->assertNull(session(EmailPasswordAuthService::STRONG_AUTH_SESSION));
     }
 
     public function test_old_active_qr_session_is_removed_and_api_rejects_it(): void

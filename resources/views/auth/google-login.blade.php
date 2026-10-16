@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  @if ($appLogin ?? false)
+    @include('partials.personal-app-meta')
+  @else
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,7 +14,8 @@
   <link rel="manifest" href="{{ route('erp.manifest') }}">
   <link rel="icon" href="{{ asset('images/app-icon.svg') }}" type="image/svg+xml">
   <link rel="apple-touch-icon" href="{{ asset('images/app-icon.svg') }}">
-  <title>{{ ($erpLogin ?? false) ? 'ERP 로그인' : 'Sign In' }} - {{ \App\Support\Org::name() }} SMART ERP</title>
+  @endif
+  <title>{{ ($erpLogin ?? false) ? 'ERP 로그인' : (($appLogin ?? false) ? '개인앱 로그인' : 'Sign In') }} - {{ \App\Support\Org::name() }} SMART ERP</title>
   <style>
     :root {
       color-scheme: light;
@@ -489,9 +493,11 @@
       </div>
 
       <div class="auth-actions">
-      <h1>{{ ($erpLogin ?? false) ? 'ERP 로그인' : 'Sign In' }}</h1>
+      <h1>{{ ($erpLogin ?? false) ? 'ERP 로그인' : (($appLogin ?? false) ? '개인앱 로그인' : 'Sign In') }}</h1>
       @if ($erpLogin ?? false)
         <p class="subtitle">본인 비밀번호 또는 Google로 로그인하세요.<br>개인앱 연결은 유지됩니다.</p>
+      @elseif ($appLogin ?? false)
+          <p class="subtitle">관리직원·반장은 기존 계정으로 로그인하세요.<br>다시 직원등록하지 않아도 됩니다. / Managers and foremen: sign in to reopen your app.</p>
       @else
         <p class="subtitle">등록된 이메일 또는 Google로 로그인하세요.<br>Sign in with your registered email or Google.</p>
       @endif
@@ -512,6 +518,8 @@
         @csrf
         @if ($erpLogin ?? false)
           <input type="hidden" name="erp" value="1">
+        @elseif ($appLogin ?? false)
+          <input type="hidden" name="app" value="1">
         @endif
         @if ($errors->has('email_login') || $errors->has('email') || $errors->has('password'))
           <div class="notice error" role="alert">{{ $errors->first('email_login') ?: ($errors->first('email') ?: $errors->first('password')) }}</div>
@@ -524,33 +532,19 @@
           style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
         <button type="submit" style="width:100%;min-height:50px;margin-top:16px;border:0;border-radius:10px;background:#183b62;color:#fff;font:inherit;font-weight:700;cursor:pointer">이메일로 로그인 / Sign in</button>
         <div id="email-login-help" style="font-size:12px;line-height:1.65;color:#526174;margin-top:13px">
-          @if ($erpLogin ?? false)
-            비밀번호가 없으면 등록된 Google 계정으로 로그인하세요.
-            <br>Use your password or your registered Google account.
-          @else
-          {{-- 구글이 안 되는 관리자가 여기서 멈추지 않게, 무엇을 넣으면 되는지 첫 줄에 적는다.
-               예전에는 «처음 이용하는 계정» 이라고만 적혀 있어서, 이미 구글로 쓰던 사람은
-               자기 얘기가 아닌 줄 알고 그냥 돌아섰다. --}}
-          {{-- 4자리는 상시 열쇠다(2026-09-22 오너 지시). 「한 번만」 이라고 적어 두면
-               다음 날 다시 쓰려던 사람이 안 될 줄 알고 시도조차 하지 않는다. --}}
-          <b>비밀번호가 없으신가요?</b> 비밀번호 칸에 <b>등록된 전화번호 끝 4자리</b>를 넣으면 바로 들어갑니다.
-          Gmail이 없어도, 구글로 쓰시던 계정이어도 됩니다.
-          <br><b>No password?</b> Type the <b>last 4 digits of your registered phone</b> in the password box and you are in. No Gmail needed; this works for Google accounts too.
+          비밀번호가 없으면 등록된 Google 계정으로 로그인하세요.
+          <br>Use your password or your registered Google account.
           <details style="margin-top:8px"><summary style="cursor:pointer">로그인 도움말 / Need help?</summary>
-            끝 4자리는 <b>계속 쓰실 수 있습니다.</b> 원하시면 로그인한 뒤 본인 비밀번호를 따로 정할 수 있고,
-            그 뒤에도 4자리는 그대로 됩니다.
-            <br>5번 틀리면 15분 동안 잠깁니다. 이 방법으로 처음 들어온 계정은 관리자 알림에 한 번 올라갑니다.
-            <br>안 되면 관리자에게 <b>등록 이메일과 전화번호가 맞는지</b> 확인을 요청하세요. 직원 등록과 로그인 계정 활성화는 별도입니다.
-            <br>The last 4 digits keep working. You may also set your own password after signing in; the digits still work afterwards.
-            Five wrong tries lock the account for 15 minutes. If it does not work, ask your administrator to confirm your registered email and phone number.
+            계정이 없거나 비밀번호가 기억나지 않으면 인사담당자에게 계정 연결·복구를 요청하세요. 이미 등록한 직원은 다시 등록하지 않습니다.
+            <br>일반 작업자는 로그인이나 앱 설치 없이 현장 QR로 출퇴근합니다.
+            <br>Ask HR to connect or recover your account. Do not register again. Workers use the site QR without installing an app.
           </details>
-          @endif
         </div>
       </form>
 
       <div class="divider">or</div>
 
-      <a class="google-button" href="{{ route('auth.google.redirect', ($erpLogin ?? false) ? ['erp' => 1] : []) }}" aria-disabled="{{ $googleConfigured ? 'false' : 'true' }}">
+      <a class="google-button" href="{{ route('auth.google.redirect', ($erpLogin ?? false) ? ['erp' => 1] : (($appLogin ?? false) ? ['app' => 1] : [])) }}" aria-disabled="{{ $googleConfigured ? 'false' : 'true' }}">
         <span class="google-mark">G</span>
         <span>Continue with Google</span>
       </a>
@@ -561,6 +555,8 @@
       @endunless
       @if (($erpLogin ?? false) && auth()->check())
         <p class="setup-note"><a href="{{ route('attendance-app.index') }}">개인앱으로 돌아가기 / Back to personal app</a></p>
+      @elseif ($appLogin ?? false)
+          <p class="setup-note"><a href="{{ route('worker-app.entry') }}">현장 QR 이용 안내 / Site QR attendance</a></p>
       @endif
       </div>
     </section>

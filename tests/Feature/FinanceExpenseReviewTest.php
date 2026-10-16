@@ -23,7 +23,9 @@ class FinanceExpenseReviewTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private Employee $employee;
 
     protected function setUp(): void
@@ -65,7 +67,7 @@ class FinanceExpenseReviewTest extends TestCase
 
     private function review(User $user, int $expenseId, string $decision)
     {
-        return $this->actingAs($user)->postJson('/smart-company-api/api_reviewExpense', [
+        return $this->actingAsPersonalAppUser($user)->postJson('/smart-company-api/api_reviewExpense', [
             'args' => [$expenseId, $decision],
             'siteId' => 'ALL',
         ]);
@@ -119,13 +121,13 @@ class FinanceExpenseReviewTest extends TestCase
         $admin = $this->admin();
         $expense = $this->pendingExpense(['amount' => 500]);
 
-        $before = $this->actingAs($admin)->postJson('/smart-company-api/api_getFinanceStats', [
+        $before = $this->actingAsPersonalAppUser($admin)->postJson('/smart-company-api/api_getFinanceStats', [
             'args' => [], 'siteId' => 'ALL',
         ])->json('approvedExpenseAmount');
 
         $this->review($admin, $expense->id, 'approved')->assertOk();
 
-        $after = $this->actingAs($admin)->postJson('/smart-company-api/api_getFinanceStats', [
+        $after = $this->actingAsPersonalAppUser($admin)->postJson('/smart-company-api/api_getFinanceStats', [
             'args' => [], 'siteId' => 'ALL',
         ])->json('approvedExpenseAmount');
 
@@ -136,20 +138,20 @@ class FinanceExpenseReviewTest extends TestCase
     {
         $this->pendingExpense();
 
-        $adminRow = $this->actingAs($this->admin())->postJson('/smart-company-api/api_getExpenses', [
+        $adminRow = $this->actingAsPersonalAppUser($this->admin())->postJson('/smart-company-api/api_getExpenses', [
             'args' => [], 'siteId' => 'ALL',
         ])->json('0');
         $this->assertTrue($adminRow['canReview']);
         $this->assertSame('pending', $adminRow['status']);
 
-        $worker = User::factory()->create([
-            'employee_id' => $this->employee->id, 'access_role' => 'worker',
+        $foreman = User::factory()->create([
+            'employee_id' => $this->employee->id, 'access_role' => 'foreman',
             'access_scope' => 'self', 'account_status' => 'active',
         ]);
-        $workerRow = $this->actingAs($worker)->postJson('/smart-company-api/api_getExpenses', [
+        $foremanRow = $this->actingAsPersonalAppUser($foreman)->postJson('/smart-company-api/api_getExpenses', [
             'args' => [], 'siteId' => 'ALL',
         ])->json('0');
-        $this->assertFalse($workerRow['canReview'], '승인 권한 없는 사람에게 승인 버튼이 갑니다.');
+        $this->assertFalse($foremanRow['canReview'], '승인 권한 없는 사람에게 승인 버튼이 갑니다.');
     }
 
     // ── 권한과 경계 ────────────────────────────────────────────────────
@@ -164,7 +166,7 @@ class FinanceExpenseReviewTest extends TestCase
 
         $response = $this->review($worker, $expense->id, 'approved');
 
-        $response->assertOk();
+        $response->assertForbidden()->assertJsonPath('code', 'personal_app_role_required');
         $this->assertFalse($response->json('success'));
         $this->assertSame('pending', $expense->fresh()->status, '권한 없는 승인이 통과했습니다.');
     }

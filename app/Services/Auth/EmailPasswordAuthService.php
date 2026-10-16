@@ -5,6 +5,7 @@ namespace App\Services\Auth;
 use App\Models\AuthEvent;
 use App\Models\User;
 use App\Services\Alerts\UnifiedAlertService;
+use App\Support\PersonalAppAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,32 +23,49 @@ class EmailPasswordAuthService
     /** Explicit ERP entry must authenticate rather than follow an old app landing. */
     public const ERP_LOGIN_SESSION = 'erp_login_requested';
 
+    /** An installed personal app returns to its fixed home after reauthentication. */
+    public const APP_LOGIN_SESSION = 'personal_app_login_requested';
+
     public static function rememberErpLogin(Request $request): bool
     {
         if ($request->boolean('erp')) {
             $request->session()->put(self::ERP_LOGIN_SESSION, true);
+        } elseif ($request->boolean('app')) {
+            $request->session()->forget(self::ERP_LOGIN_SESSION);
+        }
+
+        if ($request->session()->get(self::ERP_LOGIN_SESSION) === true) {
+            $request->session()->forget(self::APP_LOGIN_SESSION);
         }
 
         return $request->session()->get(self::ERP_LOGIN_SESSION) === true;
     }
 
-    /**
-     * 이메일 + (전화번호 뒷 4자리 또는 본인이 정한 비밀번호) 로 들어온다.
-     *
-     * ── 4자리가 계속 통하는 이유 (2026-09-22, 오너 지시) ────────────────
-     * 처음에는 4자리를 «비밀번호를 정하는 5분» 을 여는 열쇠로만 썼다. 한 번 쓰고 닫히는
-     * 문이었다. 오너가 <b>계속 쓸 수 있게</b> 하라고 정했다 — 현장 관리자에게 비밀번호를
-     * 하나 더 외우게 하는 것이 실제로는 «못 들어온다» 로 끝나기 때문이다.
-     *
-     * 그래서 4자리는 상시 열쇠가 된다. 비밀번호를 정한 사람은 둘 다 쓸 수 있다.
-     *
-     * 4자리는 10,000 가지뿐이라 그 자체로는 약하다. 대신 아래 두 가지가 지킨다:
-     *   · 5번 틀리면 15분 잠긴다 — 전부 시도하려면 500시간이 걸려 원격 추측은 사실상 막힌다.
-     *   · 이 길로 들어온 계정은 알림으로 한 번 올라간다.
-     *
-     * 남는 위험은 <b>번호를 아는 사람</b>이다(명부·단톡방에 적혀 있다). 그건 잠금으로
-     * 막을 수 없고, 알림으로 «보이게» 하는 것이 이 설계가 할 수 있는 전부다.
-     */
+    public static function rememberAppLogin(Request $request): bool
+    {
+        if (self::rememberErpLogin($request)) {
+            return false;
+        }
+        if ($request->boolean('app')) {
+            $request->session()->put(self::APP_LOGIN_SESSION, true);
+        }
+
+        return $request->session()->get(self::APP_LOGIN_SESSION) === true;
+    }
+
+    public static function takeAppDestination(Request $request): ?string
+    {
+        if ($request->session()->pull(self::APP_LOGIN_SESSION) !== true
+            || $request->session()->get(self::ERP_LOGIN_SESSION) === true) {
+            return null;
+        }
+        // Installation intent is navigation only: never accept a supplied URL or identity.
+        $request->session()->forget('url.intended');
+
+        return '/attendance-app';
+    }
+
+    /** Staff app login requires a chosen password; legacy phone digits never grant staff access. */
     public function attempt(string $email, string $password, Request $request): string
     {
         $request->session()->forget([self::SETUP_SESSION, self::STRONG_AUTH_SESSION]);
@@ -60,7 +78,7 @@ class EmailPasswordAuthService
                 return ['result' => 'denied'];
             }
 
-            // 둘 중 어느 쪽이든 된다. 비밀번호를 정했다고 4자리가 닫히지 않는다.
+            // 전화 뒷자리 호환은 아래 역할·세션 검사로 제한한다.
             $initial = $this->initialDigits($user);
             $byDigits = $initial !== null && hash_equals($initial, $password);
             $byPassword = $user->password_set_at && Hash::check($password, $user->password);
@@ -121,7 +139,7 @@ class EmailPasswordAuthService
             if (! $user || ! $this->active($user)) {
                 return null;
             }
-            // An authenticated Google/PIN user can add a password once. Anonymous setup
+            // A strongly authenticated user can add a password once. Anonymous setup
             // is rechecked under the row lock, so two sessions cannot consume it twice.
             if (! $request->user() && ! $this->setupUser($request)) {
                 return null;
@@ -254,7 +272,7 @@ class EmailPasswordAuthService
 
     private function requiresStrongAuthentication(User $user): bool
     {
-        return $user->access_role === 'super_admin' || (bool) $user->purchase_buy_enabled;
+        return PersonalAppAccess::eligible($user) || (bool) $user->purchase_buy_enabled;
     }
 
     private function signIn(User $user, Request $request, bool $strong): void
@@ -266,7 +284,7 @@ class EmailPasswordAuthService
             $request->session()->put(self::STRONG_AUTH_SESSION, (int) $user->id);
             WorkerDeviceSession::clear($request);
         } else {
-            $request->session()->forget(self::STRONG_AUTH_SESSION);
+            WorkerDeviceSession::markDeviceOnly($request);
         }
         $user->forceFill(['last_login_at' => now()])->save();
         AuthEvent::record('login_success', user: $user, method: $strong ? 'password' : 'phone4', request: $request);

@@ -10,14 +10,18 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Admin\CommunicationAdminService;
+use App\Services\Communication\ChatAttachmentService;
 use App\Services\Communication\CommunicationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
  * 방이 늘어도 길을 잃지 않는다 — 주제방 · 그룹방 · 스레드.
  *
- *   · 주제방(공개): 같은 회사 사람이면 누구나 "방 찾기" 에서 보고 들어오고 나간다.
+ *   · 주제방(공개): 같은 회사의 개인앱 사용자라면 "방 찾기" 에서 보고 들어오고 나간다.
  *     들어가기 전에는 내 방 목록을 어지럽히지 않는다.
  *   · 그룹방(비공개): 초대받은 사람만. 관리자라도 명단에 없으면 못 본다 — 1:1 과 같다.
  *   · 스레드: 답글은 원글 아래로 접힌다. "방에도 보내기" 를 고르면 방에도 보인다.
@@ -27,7 +31,9 @@ class ChatTopicsAndThreadsTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private CommunicationService $chat;
 
     protected function setUp(): void
@@ -39,7 +45,7 @@ class ChatTopicsAndThreadsTest extends TestCase
         $this->site = Site::create(['company_id' => $this->company->id, 'code' => 'TOP', 'name' => '현장', 'status' => 'active']);
     }
 
-    private function person(string $name, string $role = 'worker', ?Company $company = null): User
+    private function person(string $name, string $role = 'foreman', ?Company $company = null): User
     {
         static $n = 0;
         $n++;
@@ -57,7 +63,7 @@ class ChatTopicsAndThreadsTest extends TestCase
 
     private function makeRoom(User $creator, string $type, string $name = '3층 배관 이야기'): CommunicationRoom
     {
-        $this->actingAs($creator)->post(route('communication.room.store'), [
+        $this->actingAsPersonalAppUser($creator)->post(route('communication.room.store'), [
             'name' => $name, 'type' => $type, 'description' => '3층 배관 공정·자재',
         ])->assertRedirect();
 
@@ -66,7 +72,7 @@ class ChatTopicsAndThreadsTest extends TestCase
 
     // ── 주제방(공개) ──────────────────────────────────────────────────
 
-    public function test_a_topic_room_is_found_by_anyone_in_the_company_and_joined_by_choice(): void
+    public function test_a_topic_room_is_found_by_an_eligible_company_member_and_joined_by_choice(): void
     {
         $boss = $this->person('박반장', 'site_manager');
         $lee = $this->person('이영희');
@@ -76,13 +82,13 @@ class ChatTopicsAndThreadsTest extends TestCase
 
         // 들어가기 전 — 내 방 목록은 어지럽히지 않고, "방 찾기" 에는 보인다.
         $this->assertFalse($this->chat->roomsForUser($lee)->contains('id', $topic->id));
-        $this->actingAs($lee)->get(route('communication.browse'))->assertOk()->assertSee('3층 배관 이야기');
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.browse'))->assertOk()->assertSee('3층 배관 이야기');
 
-        $this->actingAs($lee)->post(route('communication.join', ['room' => $topic]))
+        $this->actingAsPersonalAppUser($lee)->post(route('communication.join', ['room' => $topic]))
             ->assertRedirect(route('communication.show', ['room' => $topic]));
         $this->assertTrue($this->chat->roomsForUser($lee)->contains('id', $topic->id));
 
-        $this->actingAs($lee)->post(route('communication.leave', ['room' => $topic]))
+        $this->actingAsPersonalAppUser($lee)->post(route('communication.leave', ['room' => $topic]))
             ->assertRedirect(route('communication.index'));
         $this->assertFalse($this->chat->roomsForUser($lee)->contains('id', $topic->id), '나간 방이 목록에 남았습니다.');
     }
@@ -93,11 +99,11 @@ class ChatTopicsAndThreadsTest extends TestCase
         $topic = $this->makeRoom($boss, CommunicationRoom::TYPE_TOPIC);
 
         $otherCo = Company::create(['code' => 'OTHER-CO', 'name' => 'Other', 'status' => 'active']);
-        $stranger = $this->person('남', 'worker', $otherCo);
+        $stranger = $this->person('남', 'foreman', $otherCo);
 
-        $this->actingAs($stranger)->get(route('communication.browse'))->assertOk()->assertDontSee('3층 배관 이야기');
-        $this->actingAs($stranger)->post(route('communication.join', ['room' => $topic]))->assertForbidden();
-        $this->actingAs($stranger)->get(route('communication.show', ['room' => $topic]))->assertForbidden();
+        $this->actingAsPersonalAppUser($stranger)->get(route('communication.browse'))->assertOk()->assertDontSee('3층 배관 이야기');
+        $this->actingAsPersonalAppUser($stranger)->post(route('communication.join', ['room' => $topic]))->assertForbidden();
+        $this->actingAsPersonalAppUser($stranger)->get(route('communication.show', ['room' => $topic]))->assertForbidden();
     }
 
     // ── 그룹방(비공개) ────────────────────────────────────────────────
@@ -112,11 +118,11 @@ class ChatTopicsAndThreadsTest extends TestCase
 
         $this->assertFalse($this->chat->canAccessRoom($admin, $group), '관리자가 초대 없이 비공개 방에 들어갔습니다.');
         $this->assertFalse($this->chat->roomsForUser($admin)->contains('id', $group->id));
-        $this->actingAs($lee)->get(route('communication.browse'))->assertDontSee('견적 검토');
-        $this->actingAs($lee)->post(route('communication.join', ['room' => $group]))->assertForbidden();
+        $this->actingAsPersonalAppUser($lee)->get(route('communication.browse'))->assertDontSee('견적 검토');
+        $this->actingAsPersonalAppUser($lee)->post(route('communication.join', ['room' => $group]))->assertForbidden();
 
         // 방 사람이 초대하면 들어온다 — 초대받은 사람의 활동함에도 남는다.
-        $this->actingAs($boss)->postJson(route('communication.invite', ['room' => $group]), ['employee_id' => $lee->employee_id])
+        $this->actingAsPersonalAppUser($boss)->postJson(route('communication.invite', ['room' => $group]), ['employee_id' => $lee->employee_id])
             ->assertOk();
         $this->assertTrue($this->chat->canAccessRoom($lee, $group));
         $this->assertSame(1, CommunicationNotification::query()
@@ -130,7 +136,7 @@ class ChatTopicsAndThreadsTest extends TestCase
         $kim = $this->person('김철수');
         $group = $this->makeRoom($boss, CommunicationRoom::TYPE_GROUP, '견적 검토');
 
-        $this->actingAs($lee)->postJson(route('communication.invite', ['room' => $group]), ['employee_id' => $kim->employee_id])
+        $this->actingAsPersonalAppUser($lee)->postJson(route('communication.invite', ['room' => $group]), ['employee_id' => $kim->employee_id])
             ->assertForbidden();
         $this->assertFalse($this->chat->canAccessRoom($kim, $group));
     }
@@ -143,7 +149,7 @@ class ChatTopicsAndThreadsTest extends TestCase
         $group = $this->makeRoom($boss, CommunicationRoom::TYPE_GROUP, '견적 검토');
         $group->update(['site_id' => $this->site->id]);
 
-        $this->actingAs($boss);
+        $this->actingAsPersonalAppUser($boss);
         $result = app(CommunicationAdminService::class)->syncRoomMembers($group->id);
 
         $this->assertFalse($result['success']);
@@ -156,12 +162,12 @@ class ChatTopicsAndThreadsTest extends TestCase
         // 그런 방은 아무도 "방 찾기" 에서 못 찾으므로 만들지 않고 현장을 골라 달라고 한다.
         $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
 
-        $this->actingAs($admin)->post(route('communication.room.store'), [
+        $this->actingAsPersonalAppUser($admin)->post(route('communication.room.store'), [
             'name' => '어디에도 없는 방', 'type' => CommunicationRoom::TYPE_TOPIC,
         ])->assertRedirect();
         $this->assertNull(CommunicationRoom::query()->where('name', '어디에도 없는 방')->first());
 
-        $this->actingAs($admin)->post(route('communication.room.store'), [
+        $this->actingAsPersonalAppUser($admin)->post(route('communication.room.store'), [
             'name' => '현장 고른 방', 'type' => CommunicationRoom::TYPE_TOPIC, 'site_id' => $this->site->id,
         ])->assertRedirect();
         $this->assertSame($this->company->id, (int) CommunicationRoom::query()->where('name', '현장 고른 방')->value('company_id'));
@@ -174,7 +180,7 @@ class ChatTopicsAndThreadsTest extends TestCase
         $lee = $this->person('이영희');
 
         $this->assertTrue($this->chat->canAccessRoom($admin, $group), '만든 사람이 자기 비공개 방에 못 들어갑니다.');
-        $this->actingAs($admin)->postJson(route('communication.invite', ['room' => $group]), ['employee_id' => $lee->employee_id])
+        $this->actingAsPersonalAppUser($admin)->postJson(route('communication.invite', ['room' => $group]), ['employee_id' => $lee->employee_id])
             ->assertOk();
     }
 
@@ -192,7 +198,7 @@ class ChatTopicsAndThreadsTest extends TestCase
         $this->chat->postMessage($lee, $siteRoom, '3층 배관 완료');
 
         $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
-        $this->actingAs($admin);
+        $this->actingAsPersonalAppUser($admin);
         $bodies = array_column(app(CommunicationAdminService::class)->list()['messages'], 'body');
 
         $this->assertContains('3층 배관 완료', $bodies);
@@ -202,14 +208,14 @@ class ChatTopicsAndThreadsTest extends TestCase
 
     public function test_a_private_groups_files_stay_out_of_the_company_hub(): void
     {
-        \Illuminate\Support\Facades\Queue::fake();
-        \Illuminate\Support\Facades\Storage::fake((string) config('document-intelligence.disk', 'local'));
+        Queue::fake();
+        Storage::fake((string) config('document-intelligence.disk', 'local'));
         $boss = $this->person('박반장', 'site_manager');
         $group = $this->makeRoom($boss, CommunicationRoom::TYPE_GROUP, '견적 검토');
         $message = $this->chat->postMessage($boss, $group, '');
 
-        $file = app(\App\Services\Communication\ChatAttachmentService::class)
-            ->attach($message, \Illuminate\Http\UploadedFile::fake()->image('quote.jpg'), $boss);
+        $file = app(ChatAttachmentService::class)
+            ->attach($message, UploadedFile::fake()->image('quote.jpg'), $boss);
 
         $this->assertNull($file->intelligent_document_id, '비공개 방의 파일이 회사 문서함으로 넘어갔습니다.');
     }
@@ -220,7 +226,7 @@ class ChatTopicsAndThreadsTest extends TestCase
         $lee = $this->person('이영희');
         $siteRoom = $this->chat->ensureSiteRooms($this->site)['chat'];
 
-        $this->actingAs($lee)->post(route('communication.leave', ['room' => $siteRoom]))->assertForbidden();
+        $this->actingAsPersonalAppUser($lee)->post(route('communication.leave', ['room' => $siteRoom]))->assertForbidden();
     }
 
     public function test_the_room_topic_is_edited_by_its_owner_not_by_everyone(): void
@@ -230,9 +236,9 @@ class ChatTopicsAndThreadsTest extends TestCase
         $topic = $this->makeRoom($boss, CommunicationRoom::TYPE_TOPIC);
         $this->chat->joinRoom($lee, $topic);
 
-        $this->actingAs($lee)->patchJson(route('communication.about', ['room' => $topic]), ['description' => '잡담방'])
+        $this->actingAsPersonalAppUser($lee)->patchJson(route('communication.about', ['room' => $topic]), ['description' => '잡담방'])
             ->assertForbidden();
-        $this->actingAs($boss)->patchJson(route('communication.about', ['room' => $topic]), ['description' => '3층 배관 — 도면 Rev 는 고정 글 참고'])
+        $this->actingAsPersonalAppUser($boss)->patchJson(route('communication.about', ['room' => $topic]), ['description' => '3층 배관 — 도면 Rev 는 고정 글 참고'])
             ->assertOk();
 
         $this->assertSame('3층 배관 — 도면 Rev 는 고정 글 참고', $topic->fresh()->description);
@@ -247,12 +253,12 @@ class ChatTopicsAndThreadsTest extends TestCase
         $room = $this->chat->ensureSiteRooms($this->site)['chat'];
 
         $question = $this->chat->postMessage($lee, $room, '3층 슬리브 위치 확인 부탁');
-        $first = $this->actingAs($lee)->getJson(route('communication.stream', ['room' => $room, 'after' => 0]))->json();
+        $first = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', ['room' => $room, 'after' => 0]))->json();
 
         $this->travel(10)->seconds();
         $this->chat->postMessage($boss, $room, '도면대로 갑니다', ['parent_id' => $question->id]);
 
-        $next = $this->actingAs($lee)->getJson(route('communication.stream', [
+        $next = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', [
             'room' => $room, 'after' => $first['lastId'], 'changed' => $first['cursor'],
         ]))->json();
 
@@ -273,7 +279,7 @@ class ChatTopicsAndThreadsTest extends TestCase
         $this->chat->postMessage($boss, $room, '내일 오전', ['parent_id' => $question->id]);
         $this->chat->postMessage($lee, $room, '감사합니다', ['parent_id' => $question->id]);
 
-        $data = $this->actingAs($lee)->getJson(route('communication.thread', ['room' => $room, 'message' => $question]))
+        $data = $this->actingAsPersonalAppUser($lee)->getJson(route('communication.thread', ['room' => $room, 'message' => $question]))
             ->assertOk()->json();
 
         $this->assertSame($question->id, $data['parent']['id']);
@@ -286,14 +292,14 @@ class ChatTopicsAndThreadsTest extends TestCase
         $room = $this->chat->ensureSiteRooms($this->site)['chat'];
         $question = $this->chat->postMessage($lee, $room, '3층 출입 통제 언제까지?');
 
-        $this->actingAs($lee)->postJson(route('communication.store', ['room' => $room]), [
+        $this->actingAsPersonalAppUser($lee)->postJson(route('communication.store', ['room' => $room]), [
             'body' => '17시까지로 확정', 'parent_id' => $question->id, 'broadcast' => '1',
         ])->assertOk()->assertJsonPath('success', true);
 
         $reply = CommunicationMessage::query()->where('body', '17시까지로 확정')->firstOrFail();
         $this->assertTrue((bool) ($reply->payload['broadcast'] ?? false));
 
-        $row = collect($this->actingAs($lee)->getJson(route('communication.stream', ['room' => $room, 'after' => 0]))->json('messages'))
+        $row = collect($this->actingAsPersonalAppUser($lee)->getJson(route('communication.stream', ['room' => $room, 'after' => 0]))->json('messages'))
             ->firstWhere('id', $reply->id);
         $this->assertTrue($row['broadcast']);
     }
@@ -305,6 +311,6 @@ class ChatTopicsAndThreadsTest extends TestCase
         $question = $this->chat->postMessage($boss, $group, '단가 확인');
         $lee = $this->person('이영희');
 
-        $this->actingAs($lee)->getJson(route('communication.thread', ['room' => $group, 'message' => $question]))->assertForbidden();
+        $this->actingAsPersonalAppUser($lee)->getJson(route('communication.thread', ['room' => $group, 'message' => $question]))->assertForbidden();
     }
 }

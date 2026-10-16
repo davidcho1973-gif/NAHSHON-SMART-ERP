@@ -41,7 +41,7 @@ class ReceiptUploadTest extends TestCase
             'company_id' => $company->id, 'site_id' => $site->id,
             'first_name' => '수', 'last_name' => '김', 'name' => '김수', 'employment_status' => 'active',
         ]);
-        $this->user = User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker', 'account_status' => 'active']);
+        $this->user = User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'foreman', 'account_status' => 'active']);
     }
 
     /** @return array<string, mixed> */
@@ -64,7 +64,7 @@ class ReceiptUploadTest extends TestCase
                 ->andReturn($this->analyzed());
         });
 
-        $res = $this->actingAs($this->user)->postJson(route('mobile-expense.upload-receipt'), [
+        $res = $this->actingAsPersonalAppUser($this->user)->postJson(route('mobile-expense.upload-receipt'), [
             'receipt' => UploadedFile::fake()->create('invoice.pdf', 300, 'application/pdf'),
         ]);
 
@@ -77,7 +77,7 @@ class ReceiptUploadTest extends TestCase
             $mock->shouldReceive('analyze')->once()->andReturn($this->analyzed());
         });
 
-        $res = $this->actingAs($this->user)->postJson(route('mobile-expense.upload-receipt'), [
+        $res = $this->actingAsPersonalAppUser($this->user)->postJson(route('mobile-expense.upload-receipt'), [
             'receipt' => UploadedFile::fake()->create('IMG_0042.heic', 2048, 'image/heic'),
         ]);
 
@@ -92,7 +92,7 @@ class ReceiptUploadTest extends TestCase
             $mock->shouldNotReceive('analyze');
         });
 
-        $res = $this->actingAs($this->user)->post(route('mobile-expense.upload-receipt'), [
+        $res = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.upload-receipt'), [
             'receipt' => UploadedFile::fake()->create('notes.txt', 10, 'text/plain'),
         ]);
 
@@ -108,7 +108,7 @@ class ReceiptUploadTest extends TestCase
             $mock->shouldNotReceive('analyze');
         });
 
-        $res = $this->actingAs($this->user)->post(route('mobile-expense.upload-receipt'), [
+        $res = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.upload-receipt'), [
             'receipt' => UploadedFile::fake()->create('huge.jpg', ReceiptUpload::MAX_KB + 1, 'image/jpeg'),
         ]);
 
@@ -117,7 +117,7 @@ class ReceiptUploadTest extends TestCase
 
     public function test_a_missing_file_is_named_as_missing(): void
     {
-        $res = $this->actingAs($this->user)->post(route('mobile-expense.upload-receipt'), []);
+        $res = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.upload-receipt'), []);
 
         $res->assertStatus(422)->assertJson(['success' => false, 'code' => ReceiptUpload::CODE_MISSING]);
     }
@@ -128,7 +128,7 @@ class ReceiptUploadTest extends TestCase
             $mock->shouldReceive('analyze')->once()->andThrow(new \RuntimeException('All Gemini models failed. Last error: HTTP 503'));
         });
 
-        $res = $this->actingAs($this->user)->post(route('mobile-expense.upload-receipt'), [
+        $res = $this->actingAsPersonalAppUser($this->user)->post(route('mobile-expense.upload-receipt'), [
             'receipt' => UploadedFile::fake()->image('receipt.jpg', 400, 600),
         ]);
 
@@ -191,13 +191,13 @@ class ReceiptUploadTest extends TestCase
             'candidates' => [['content' => ['parts' => [['text' => json_encode($this->analyzed())]]]]],
         ])]);
 
-        $ok = $this->actingAs($this->user)->post(route('expense-app.submit'), [
+        $ok = $this->actingAsPersonalAppUser($this->user)->post(route('expense-app.submit'), [
             'receipt' => UploadedFile::fake()->create('IMG_0042.heic', 2048, 'image/heic'),
             'payment_type' => 'personal', 'lang' => 'es',
         ]);
         $ok->assertOk()->assertJson(['success' => true]);
 
-        $big = $this->actingAs($this->user)->post(route('expense-app.submit'), [
+        $big = $this->actingAsPersonalAppUser($this->user)->post(route('expense-app.submit'), [
             'receipt' => UploadedFile::fake()->create('huge.jpg', ReceiptUpload::MAX_KB + 1, 'image/jpeg'),
             'payment_type' => 'personal', 'lang' => 'en',
         ]);
@@ -207,7 +207,7 @@ class ReceiptUploadTest extends TestCase
 
     public function test_the_screen_tells_people_what_they_can_upload(): void
     {
-        $res = $this->actingAs($this->user)->get(route('mobile-expense.wizard'));
+        $res = $this->actingAsPersonalAppUser($this->user)->get(route('mobile-expense.wizard'));
 
         $res->assertOk()
             ->assertSee(ReceiptUpload::hint())

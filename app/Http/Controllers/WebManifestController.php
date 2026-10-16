@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
-use Illuminate\Http\JsonResponse;
 use App\Support\Org;
+use Illuminate\Http\JsonResponse;
 
 /**
  * 휴대폰이 "이건 앱이다" 라고 판단하는 근거 파일.
@@ -37,15 +37,17 @@ class WebManifestController extends Controller
         );
     }
 
-    /** 로그인해서 쓰는 작업자 앱(반장·계정이 있는 작업자). */
+    /** 관리직원·반장 업무앱. 기존 아이콘의 identity/start URL은 보존한다. */
     public function worker(): JsonResponse
     {
         return $this->manifest(
             id: 'worker-app',
-            name: '내 출퇴근 · '.Org::name(),
-            shortName: '내 출퇴근',
+            name: '업무 개인앱 · '.Org::name(),
+            shortName: '업무 개인앱',
             start: route('attendance-app.index'),
-            scope: route('attendance-app.index'),
+            // Login, device recovery and receipts belong to the same installed app.
+            // Scope only controls browser chrome; authorization is still server-side.
+            scope: url('/'),
             // 앱을 여는 첫 0.5초(스플래시)도 화면과 같은 색이어야 한다 — 어두운 판이
             // 번쩍였다가 노란 화면이 뜨면 잘못 눌린 것처럼 보인다.
             theme: '#FEE500',

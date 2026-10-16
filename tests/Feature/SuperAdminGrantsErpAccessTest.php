@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Admin\UserAccessService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -45,7 +46,7 @@ class SuperAdminGrantsErpAccessTest extends TestCase
         $worker = $this->person('김작업', 'worker');
 
         // 주기 전에는 닫혀 있다.
-        $this->actingAs($worker)->get('/')->assertRedirect(route('attendance-app.index'));
+        $this->actingAs($worker)->get('/')->assertRedirect(route('worker-app.entry'));
 
         $this->actingAs($boss);
         $result = app(UserAccessService::class)->save([
@@ -56,14 +57,14 @@ class SuperAdminGrantsErpAccessTest extends TestCase
         $this->assertTrue($result['success'], json_encode($result, JSON_UNESCAPED_UNICODE));
 
         // 준 순간 열린다.
-        $this->actingAs($worker->fresh())->get('/')->assertOk();
+        $this->actingAsPersonalAppUser($worker->fresh())->get('/')->assertOk();
     }
 
     public function test_taking_the_role_back_closes_the_erp_again(): void
     {
         $boss = $this->person('사장', 'super_admin');
         $manager = $this->person('오관리', 'site_manager');
-        $this->actingAs($manager)->get('/')->assertOk();
+        $this->actingAsPersonalAppUser($manager)->get('/')->assertOk();
 
         $this->actingAs($boss);
         app(UserAccessService::class)->save([
@@ -72,7 +73,7 @@ class SuperAdminGrantsErpAccessTest extends TestCase
             'employeeId' => $manager->employee_id,
         ]);
 
-        $this->actingAs($manager->fresh())->get('/')->assertRedirect(route('attendance-app.index'));
+        $this->actingAs($manager->fresh())->get('/')->assertRedirect(route('worker-app.entry'));
     }
 
     /** 목록이 «누가 들어올 수 있는가» 를 말해 준다 — 안 보이면 아무도 관리할 수 없다. */
@@ -87,7 +88,7 @@ class SuperAdminGrantsErpAccessTest extends TestCase
 
         $this->assertTrue($rows['사장']['erpAccess']);
         $this->assertTrue($rows['오관리']['erpAccess']);
-        $this->assertFalse($rows['김작업']['erpAccess'], '작업자는 작업자 앱까지다');
+        $this->assertFalse($rows['김작업']['erpAccess'], '일반 작업자는 현장 QR만 사용한다');
     }
 
     /** 인사담당자는 자기보다 높은 권한을 줄 수 없다 — 그 길이 열리면 승인이 뜻을 잃는다. */
@@ -113,10 +114,15 @@ class SuperAdminGrantsErpAccessTest extends TestCase
         $manager = $this->person('오관리', 'site_manager');
 
         $this->postJson(route('worker-app.find'), ['last4' => substr(preg_replace('/\D/', '', $manager->employee->phone), -4)])
-            ->assertOk();
-        $this->postJson(route('worker-app.enter'), ['employee_id' => $manager->employee_id])->assertOk();
+            ->assertForbidden()->assertJsonMissingPath('workers');
+        $this->postJson(route('worker-app.enter'), ['employee_id' => $manager->employee_id])
+            ->assertForbidden()->assertJsonMissingPath('device_token');
+        $this->assertGuest();
 
+        // A pre-existing phone-only session also needs a real login after the policy change.
+        $this->actingAs($manager)->withSession([WorkerDeviceSession::FLAG => true]);
         $this->assertAuthenticatedAs($manager->fresh());
         $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
+        $this->get('/attendance-app')->assertRedirect(route('login', ['app' => 1]));
     }
 }

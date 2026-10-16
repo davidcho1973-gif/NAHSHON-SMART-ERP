@@ -27,9 +27,13 @@ class RoomStreamTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private Employee $employee;
+
     private User $user;
+
     private CommunicationRoom $room;
 
     protected function setUp(): void
@@ -46,7 +50,7 @@ class RoomStreamTest extends TestCase
             'email' => 'stream@example.com', 'employment_status' => 'active',
         ]);
         $this->user = User::factory()->create([
-            'employee_id' => $this->employee->id, 'access_role' => 'worker', 'account_status' => 'active',
+            'employee_id' => $this->employee->id, 'access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
         $this->room = CommunicationRoom::query()->create([
             'company_id' => $this->company->id, 'site_id' => $this->site->id,
@@ -68,7 +72,7 @@ class RoomStreamTest extends TestCase
 
     private function stream(int $after)
     {
-        return $this->actingAs($this->user)
+        return $this->actingAsPersonalAppUser($this->user)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => $after]));
     }
 
@@ -140,9 +144,9 @@ class RoomStreamTest extends TestCase
     public function test_someone_outside_the_room_cannot_listen_in(): void
     {
         $this->say('현장 내부 이야기');
-        $outsider = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']);
+        $outsider = User::factory()->create(['access_role' => 'foreman', 'access_scope' => 'self', 'account_status' => 'active']);
 
-        $this->actingAs($outsider)
+        $this->actingAsPersonalAppUser($outsider)
             ->getJson(route('communication.stream', ['room' => $this->room, 'after' => 0]))
             ->assertForbidden();
     }

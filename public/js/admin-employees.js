@@ -18,6 +18,12 @@
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
+  function hasPersonalApp(r) {
+    // The account role is authoritative; a job title or purchase flag does not grant app access.
+    return !!r.hasAccount && r.accountStatus === 'active' && r.status === 'active' &&
+      ['super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager', 'payroll', 'foreman'].indexOf(r.accountRole) >= 0;
+  }
+
   function call(method, args) {
     return global.gsRun(method, args || [], null).then(function (res) {
       if (!res) throw new Error('서버 응답이 없습니다.');
@@ -141,22 +147,24 @@
             if (r.hrReviewPending) {
               html += u.rowButton('확인', 'window.AdminEmployees.confirmRegistration(' + r.id + ')') + ' ';
             }
-            // 계정이 없으면 이 사람은 앱에 못 들어온다. 직원 정보를 그대로 써서
-            // 여기서 바로 만들어 준다 — 계정 화면에서 이름·이메일을 또 치지 않는다.
+            // 일반 작업자는 현장 QR을 쓴다. 계정 생성만으로 개인앱 로그인이 완료되지는 않는다.
             if (!r.hasAccount && !r.canQuickConnect && state.options && state.options.canGrantAccount) {
               html += u.rowButton('계정 만들기', 'window.AdminEmployees.grantAccount(' + r.id + ')') + ' ';
             }
-            // 계정이 생긴 다음에야 앱에 들어올 수 있다. 그때부터 설치 카드를 뽑을 수 있게 한다 —
-            // 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
-            // 현장 사람에게 보낼 링크는 없다 — 벽의 QR 을 찍고 전화번호 뒷 4자리를 넣으면
-            // 들어온다. 그래서 여기 남는 것은 그 QR 을 여는 단추 하나뿐이다.
             if (r.siteQrUrl) html += u.rowButton('현장 공용 QR', "window.open('" + u.esc(r.siteQrUrl) + "','_blank')") + ' ';
+            if (hasPersonalApp(r)) {
+              html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
+              html += u.rowButton('앱 링크 공유', "window.open('/attendance-app/employee/" + r.id + "/share','_blank')") + ' ';
+              html += u.rowButton('개인앱 보기', "window.open('/attendance-app?as=" + r.id + "','_blank')") + ' ';
+            } else if (r.hasAccount && !r.accountRole) {
+              // Older responses may omit accountRole; let the server choose the correct guidance.
+              html += u.rowButton('접속 안내', "window.open('/attendance-app/employee/" + r.id + "/share','_blank')") + ' ';
+            } else if (!r.hasAccount || r.accountRole === 'worker') {
+              html += u.badge('현장 QR 출퇴근', 'muted') + ' ';
+            }
             if (r.onboardingRequestUrl) {
               html += u.rowButton('추가정보·W-9 링크', 'window.AdminEmployees.copyOnboardingLink(' + r.id + ')') + ' ';
             }
-            // 버튼을 권한으로 감추지 않는다. 감추면 "왜 안 보이지" 를 아무도 답할 수 없다 —
-            // 권한이 없으면 열린 화면이 이유를 말해 준다(조용히 사라지는 것보다 낫다).
-            html += u.rowButton('작업자 화면 보기', "window.open('/attendance-app?as=" + r.id + "','_blank')") + ' ';
             // W-9 는 1099 지급의 전제조건이라 급여 담당이 수시로 찾는다. 제출 전이면
             // 아는 칸이 채워진 종이가, 제출 후면 보관용 사본이 나온다.
             html += u.rowButton('W-9 출력', "window.open('/w9/" + r.id + "/print','_blank')") + ' ';
@@ -418,16 +426,17 @@
     loadOptions().then(function (o) {
       u.formModal({
         title: '로그인 계정 만들기',
-        subtitle: r.name + ' 님이 앱에 들어올 수 있게 합니다. 이름과 소속은 직원 정보를 그대로 씁니다.',
+        subtitle: r.name + ' 님의 직원 정보에 계정을 연결합니다. 관리직원·반장은 계정 · 권한 관리 → 관리자로 초대를 먼저 이용하세요.',
         saveLabel: '만들기',
         fields: [
-          { name: 'email', label: '이메일 (작업자·반장은 선택)', colSpan: 2, value: r.email || '',
-            hint: '현장 인력(작업자·반장)은 이메일이 없어도 됩니다 — 전화번호 뒷 4자리로 앱에 들어옵니다. ERP 화면을 여는 계정에는 이메일이 필요합니다.' },
+          { name: 'email', label: '이메일 (일반 작업자는 선택)', colSpan: 2, value: r.email || '',
+            hint: '직접 만든 관리직원·반장 계정은 이 이메일과 같은 Google 계정으로 처음 로그인합니다. 사용할 비밀번호는 이 화면에서 설정되지 않습니다.' },
           { name: 'role', label: '역할', type: 'select', required: true,
-            options: o.accountRoles, value: 'worker' },
+            options: o.accountRoles, value: 'worker',
+            hint: '기존 작업자는 역할·이메일을 바꾸기 전에 초대하세요. 일반 작업자는 앱 설치 없이 현장 QR로 출퇴근합니다.' },
           { name: 'scope', label: '볼 수 있는 범위', type: 'select', required: true,
             options: o.accountScopes, value: 'self',
-            hint: '"본인" 이면 자기 출퇴근만 봅니다. 현장·팀은 직원 정보의 소속을 따라갑니다.' },
+            hint: '"본인"은 본인 기록만 볼 수 있는 범위입니다. 현장·팀은 직원 정보의 소속을 따라갑니다.' },
         ],
         onSave: function (v) {
           return call('api_grantEmployeeAccount', [id, v]).then(function (res) {
