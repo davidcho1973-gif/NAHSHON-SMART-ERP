@@ -1,3 +1,5 @@
+## CODEX — 2026-10-17 Finance query and formatted report
+The old keyword-only list and unfiltered master export used different inputs. List and workbook now share validated date/status/payment/search filters, scoped metadata queries and SQL status totals. UI includes Query/Reset and locks export while conditions are unapplied; page changes preserve filters and stale requests cannot overwrite newer queries. Workbook exports all matched rows (explicit 10,000-row ceiling, never silent truncation), summary/status formulas, typed dates/currency, safe text, authenticated receipt links, frozen headers, and ready print areas (A4 summary/A3 detailed). No migrations/business-data writes. Targeted 23 PHP/104 assertions and browser query/pagination/reset checks pass; static/Blade builds pass. Evidence and synthetic workbook: outputs/Finance_Report_20261017 outside repo. Full release gates required before production.
 # WORK LOG
 
 ## CODEX — 2026-10-17 Collapse the drawing file library

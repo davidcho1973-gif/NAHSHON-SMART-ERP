@@ -14,6 +14,6 @@ test('finance renders metadata, pages and searches through the scoped API withou
   assert.equal(calls[0].page,1);
   await nodes['fin-next'].onclick();await new Promise(resolve=>setImmediate(resolve));
   assert.equal(calls[1].page,2);
-  nodes['fin-search'].value='bolt';nodes['fin-search'].keydown({key:'Enter'});await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(calls[2].page,1);assert.equal(calls[2].search,'bolt');assert.deepEqual(errors,[]);
+  context.document.getElementById('fin-search').value='bolt';context.document.getElementById('fin-from').value='2026-10-01';context.document.getElementById('fin-to').value='2026-10-31';context.document.getElementById('fin-status').value='approved';context.document.getElementById('fin-payment').value='personal';nodes['fin-query'].onsubmit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls[2].page,1);assert.equal(calls[2].search,'bolt');assert.equal(calls[2].dateFrom,'2026-10-01');assert.equal(calls[2].status,'approved');assert.equal(context.window.financeExportOptions().search,'bolt');assert.equal(context.window.financeExportOptions().payment,'personal');nodes['fin-query'].input();assert.equal(nodes['btn-fin-export'].disabled,true);assert.deepEqual(errors,[]);
 });
