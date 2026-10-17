@@ -3,14 +3,13 @@
 namespace App\Services\Admin;
 
 use App\Mail\SubmittalMail;
+use App\Services\Finance\ExpenseReportWorkbook;
 use App\Services\Mail\OutboundMailer;
 use App\Support\AccessPolicy;
 use App\Support\AnthropicChat;
 use App\Support\MailReady;
 use App\Support\OperationalAccess;
 use App\Support\SmartCompanyData;
-use PhpOffice\PhpSpreadsheet\Cell\DataType;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 /** Real operations behind the remaining Apps Script UI controls. */
@@ -61,26 +60,10 @@ class LegacyActions
         return ['success' => true, 'english' => $output, 'text' => $output, 'draft' => $output];
     }
 
-    public function financeExcel(string $site): string
+    public function financeExcel(string $site, array $options = []): string
     {
         abort_unless(AccessPolicy::canManageMoney(auth()->user()), 403);
-        $book = new Spreadsheet;
-        $sheet = $book->getActiveSheet();
-        $sheet->setTitle('Expenses');
-        $keys = ['id', 'date', 'site', 'account', 'detail', 'amount', 'status', 'employeeName'];
-        $sheet->fromArray(['ID', 'Date', 'Site', 'Account', 'Description', 'Amount (USD)', 'Status', 'Employee']);
-        $row = 2;
-        foreach (SmartCompanyData::expenses($site) as $expense) {
-            foreach ($keys as $col => $key) {
-                $sheet->setCellValueExplicit([$col + 1, $row], $expense[$key] ?? '', $key === 'amount' ? DataType::TYPE_NUMERIC : DataType::TYPE_STRING);
-            }
-            $row++;
-        }
-        $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:H'.max(1, $row - 1));
-        $sheet->getStyle('A1:H1')->getFont()->setBold(true);
-        $sheet->getColumnDimension('E')->setWidth(65);
-        $sheet->getStyle('F2:F'.max(2, $row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+        $book = app(ExpenseReportWorkbook::class)->build($site, $options);
         $tmp = tempnam(sys_get_temp_dir(), 'erp-export');
         try {
             (new Xlsx($book))->save($tmp);
