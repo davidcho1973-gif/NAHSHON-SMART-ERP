@@ -60,10 +60,12 @@ use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
 use App\Services\Drawings\DrawingMarkService;
 use App\Services\Drawings\SectionDrawingService;
+use App\Services\Finance\ClaimEvidenceAutomation;
+use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ClaimSubmissionService;
 use App\Services\Finance\ClaimWorklistService;
-use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ContractChangeService;
 use App\Services\Finance\ContractSheetImportService;
 use App\Services\Finance\ExpenseReviewService;
@@ -356,9 +358,9 @@ class SmartCompanyData
             'api_transitionClaimSubmission' => app(ClaimSubmissionService::class)->transition((array) ($args[0] ?? [])),
             'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
             'api_getClaimEvidence' => app(ClaimEvidenceService::class)->getLedger((int) ($args[0] ?? 0)),
-            'api_getClaimEvidenceInbox' => app(\App\Services\Finance\ClaimEvidenceAutomation::class)->workspace((int) ($args[0] ?? 0), (array) ($args[1] ?? [])),
-            'api_matchClaimEvidence' => app(\App\Services\Finance\ClaimEvidenceAutomation::class)->enqueue((int) ($args[0] ?? 0)),
-            'api_reviewClaimEvidence' => app(\App\Services\Finance\ClaimEvidenceInboxService::class)->review((array) ($args[0] ?? [])),
+            'api_getClaimEvidenceInbox' => app(ClaimEvidenceAutomation::class)->workspace((int) ($args[0] ?? 0), (array) ($args[1] ?? [])),
+            'api_matchClaimEvidence' => app(ClaimEvidenceAutomation::class)->enqueue((int) ($args[0] ?? 0)),
+            'api_reviewClaimEvidence' => app(ClaimEvidenceInboxService::class)->review((array) ($args[0] ?? [])),
             'api_saveClaimLine' => app(ClaimEvidenceService::class)->saveLine(is_array($args[0] ?? null) ? $args[0] : []),
             'api_recordInstallation' => app(ClaimEvidenceService::class)->recordInstallation(is_array($args[0] ?? null) ? $args[0] : []),
             'api_saveClaimRecord' => app(ClaimEvidenceService::class)->saveRecord(is_array($args[0] ?? null) ? $args[0] : []),
@@ -650,7 +652,7 @@ class SmartCompanyData
 
             'api_getAllFolderFiles' => ['success' => false, 'error' => '이 레거시 연결은 지원되지 않습니다. 해당 관리 화면에서 처리하세요.'],
             'api_bulkProcessDriveFolder' => ['success' => false, 'error' => '이 레거시 연결은 지원되지 않습니다. 해당 관리 화면에서 처리하세요.'],
-            'api_getFinanceExcelBase64' => app(LegacyActions::class)->financeExcel($siteId),
+            'api_getFinanceExcelBase64' => app(LegacyActions::class)->financeExcel($siteId, is_array($args[0] ?? null) ? $args[0] : []),
             'api_getPersonnelCard' => self::realPersonnelCard((string) ($args[0] ?? '')),
             'api_syncWorkerStatus' => app(EmployeeAdminService::class)->setStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
             'api_universalAIScan' => self::universalAIScan($args),
@@ -1162,7 +1164,7 @@ class SmartCompanyData
         return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'totalSpend' => 0, 'contractTotal' => 0, 'contractBalance' => 0, 'billedTotal' => 0, 'submittedPending' => 0, 'receivedTotal' => 0, 'arOutstanding' => 0, 'disputedDeductions' => 0, 'retainageHeld' => 0, 'collectionRate' => 0, 'byCategory' => [], 'includesHqCommon' => false];
     }
 
-    public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true, ?array $options = null): array
+    public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true, ?array $options = null, bool $paginate = true): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
@@ -1173,16 +1175,35 @@ class SmartCompanyData
                     ->with(['site:id,code', 'employee:id,first_name,last_name,email', 'preApproval:id,title,estimated_amount'])
                     ->orderByDesc('expense_date')
                     ->orderByDesc('id');
-                $search = mb_substr(trim((string) ($options['search'] ?? '')), 0, 200);
+                $filters = self::financeFilters($options ?? []);
+                foreach (['dateFrom' => '>=', 'dateTo' => '<='] as $key => $operator) {
+                    if ($filters[$key] !== '') {
+                        $query->whereDate('expense_date', $operator, $filters[$key]);
+                    }
+                }
+                if ($filters['status'] !== '') {
+                    $query->where('status', $filters['status']);
+                }
+                if ($filters['payment'] !== '') {
+                    $query->where('payment_type', $filters['payment']);
+                }
+                $search = $filters['search'];
                 if ($search !== '') {
+                    $search = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
                     $query->where(function ($q) use ($search): void {
                         $q->where('description', 'ilike', '%'.$search.'%')->orWhere('accounting_account', 'ilike', '%'.$search.'%')
-                            ->orWhere('category', 'ilike', '%'.$search.'%');
+                            ->orWhere('category', 'ilike', '%'.$search.'%')
+                            ->orWhereHas('employee', fn ($employee) => $employee->select('employees.id')->where('first_name', 'ilike', '%'.$search.'%')->orWhere('last_name', 'ilike', '%'.$search.'%')->orWhereRaw("concat_ws(' ', first_name, last_name) ilike ?", ['%'.$search.'%']))
+                            ->orWhereHas('site', fn ($site) => $site->select('sites.id')->where('code', 'ilike', '%'.$search.'%')->orWhere('name', 'ilike', '%'.$search.'%'));
                     });
                 }
                 $page = max(1, (int) ($options['page'] ?? 1));
                 $total = $options !== null ? (clone $query)->count() : 0;
-                if ($options !== null) {
+                $summary = $options !== null ? (clone $query)->reorder()->select('status')->selectRaw('count(*) as count, COALESCE(SUM(amount), 0) as amount')->groupBy('status')->toBase()->get()->map(fn ($row) => ['status' => $row->status, 'count' => (int) $row->count, 'amount' => (float) $row->amount])->all() : [];
+                if ($options !== null && ! $paginate) {
+                    abort_if($total > 10000, 422, '조회 결과가 10,000건을 초과합니다. 기간이나 현장을 좁혀서 내보내 주세요.');
+                }
+                if ($options !== null && $paginate) {
                     $page = min($page, max(1, (int) ceil($total / 25)));
                     $query->forPage($page, 25);
                 }
@@ -1219,13 +1240,31 @@ class SmartCompanyData
                 })
                     ->all();
 
-                return $options === null ? $items : ['items' => $items, 'page' => $page, 'perPage' => 25, 'total' => $total, 'lastPage' => max(1, (int) ceil($total / 25))];
+                return $options === null ? $items : ['items' => $items, 'page' => $page, 'perPage' => 25, 'total' => $total, 'summary' => $summary, 'filters' => $filters, 'lastPage' => max(1, (int) ceil($total / 25))];
             }
         } catch (\Throwable $e) {
             throw $e;
         }
 
         return [];
+    }
+
+    public static function financeFilters(array $options): array
+    {
+        $filters = array_intersect_key($options, array_flip(['search', 'dateFrom', 'dateTo', 'status', 'payment']));
+        validator($filters, [
+            'search' => 'nullable|string|max:200',
+            'dateFrom' => 'nullable|date_format:Y-m-d',
+            'dateTo' => 'nullable|date_format:Y-m-d',
+            'status' => 'nullable|in:draft,pending,approved,paid,rejected',
+            'payment' => 'nullable|in:personal,corporate',
+        ])->validate();
+        $filters = array_map(fn ($value) => trim((string) $value), $filters) + array_fill_keys(['search', 'dateFrom', 'dateTo', 'status', 'payment'], '');
+        if ($filters['dateFrom'] !== '' && $filters['dateTo'] !== '') {
+            validator($filters, ['dateTo' => 'after_or_equal:dateFrom'])->validate();
+        }
+
+        return $filters;
     }
 
     private static function mobileExpenseReceiptUrl(MobileExpense $expense): string

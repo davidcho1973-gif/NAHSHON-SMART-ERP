@@ -5389,19 +5389,27 @@
       };
 
       var financePage = 1, financeSearch = '', financeSite = null;
+      var financeFilters = {dateFrom: '', dateTo: '', status: '', payment: ''};
+      var financeRequest = 0;
+      window.financeExportOptions = function () { return Object.assign({}, financeFilters, {search: financeSearch}); };
       async function renderFinance() {
+        var requestId = ++financeRequest;
         if (financeSite !== _siteId()) { financePage = 1; financeSearch = ''; financeSite = _siteId(); }
         pageContainer.innerHTML = skeleton();
         try {
           var [stats, expenses] = await Promise.all([
             window.API.getFinanceStats(),
-            window.API.getExpenses({page: financePage, search: financeSearch})
+            window.API.getExpenses(Object.assign({page: financePage}, window.financeExportOptions()))
           ]);
+          if (requestId !== financeRequest || financeSite !== _siteId()) return;
 
           stats = stats || {};
           var expensePage = expenses || {};
           expenses = Array.isArray(expensePage.items) ? expensePage.items : [];
           financePage = Number(expensePage.page || 1);
+          var queryTotal = (expensePage.summary || []).reduce(function (sum, item) { return sum + Number(item.amount || 0); }, 0);
+          var queryApproved = (expensePage.summary || []).reduce(function (sum, item) { return sum + (['approved', 'paid'].indexOf(item.status) >= 0 ? Number(item.amount || 0) : 0); }, 0);
+          function financeOptions(values, selected) { return Object.keys(values).map(function (key) { return '<option value="' + key + '"' + (key === selected ? ' selected' : '') + '>' + values[key] + '</option>'; }).join(''); }
 
           var mtdBudget = Number(stats.mtdBudget || 0);
           var mtdTotal = Number(stats.mtdTotal || 0);
@@ -5459,7 +5467,7 @@
               ? '<div style="font-size:11px;color:var(--status-success);margin-top:4px">연결 예산: ' + safeHtml(ex.preApprovalTitle) + (ex.preApprovalAmount ? ' · ' + fmtUSD(ex.preApprovalAmount) : '') + '</div>'
               : '';
             var employee = ex.employeeName ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">제출자: ' + safeHtml(ex.employeeName) + '</div>' : '';
-            return '<tr><td class="cell-mono">' + safeHtml(ex.date || '-') + '</td><td>' + siteName + '</td><td>' + accountName + '</td><td class="cell-primary">' + safeHtml(ex.detail || '-') + '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">상태: ' + financeStatusLabel(ex.status) + '</div>' + linkedBudget + employee + '</td><td class="cell-mono" style="text-align:right;' + amtStyle + '">' + fmtUSD(ex.amount) + '</td><td>' + actions + '</td></tr>';
+            return '<tr><td class="cell-mono">' + safeHtml(ex.date || '-') + '</td><td>' + siteName + '</td><td>' + accountName + '</td><td class="cell-primary">' + safeHtml(ex.detail || '-') + '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">상태: ' + financeStatusLabel(ex.status) + '</div>' + linkedBudget + employee + '</td><td class="cell-mono" style="text-align:right;' + amtStyle + '">' + ('$' + Number(ex.amount || 0).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})) + '</td><td>' + actions + '</td></tr>';
           }).join('');
 
           if (!expensesHtml) {
@@ -5507,8 +5515,15 @@
 
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-bullets"></i> 비용 제출 내역</div>' +
-            '<div style="display:flex; gap:8px; align-items:center;"><button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; height: 36px;" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드</button>' +
-            '<input type="text" class="search-inline" id="fin-search" placeholder="전체 내역 검색 후 Enter" value="' + safeHtml(financeSearch) + '"></div></div>' +
+            '<button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; min-height:36px" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> 조회 결과 엑셀</button></div>' +
+            '<form id="fin-query" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:14px">' +
+            '<label>시작일<input aria-label="시작일" class="search-inline" type="date" id="fin-from" value="' + safeHtml(financeFilters.dateFrom) + '"></label>' +
+            '<label>종료일<input aria-label="종료일" class="search-inline" type="date" id="fin-to" value="' + safeHtml(financeFilters.dateTo) + '"></label>' +
+            '<label>상태<select aria-label="상태" class="search-inline" id="fin-status">' + financeOptions({'':'전체',draft:'임시저장',pending:'승인대기',approved:'승인완료',paid:'지급완료',rejected:'반려'}, financeFilters.status) + '</select></label>' +
+            '<label>결제<select aria-label="결제" class="search-inline" id="fin-payment">' + financeOptions({'':'전체',personal:'개인 결제',corporate:'회사 결제'}, financeFilters.payment) + '</select></label>' +
+            '<input aria-label="비용 검색" type="search" maxlength="200" class="search-inline" id="fin-search" placeholder="내역 · 계정 · 제출자 · 현장" value="' + safeHtml(financeSearch) + '">' +
+            '<button type="submit" class="btn-primary">조회</button><button type="button" id="fin-reset" class="btn-secondary">초기화</button></form>' +
+            '<div style="padding:0 14px 14px;font-size:13px">조회 ' + Number(expensePage.total || 0) + '건 · 합계 $' + queryTotal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' · 승인·지급 $' + queryApproved.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) + '<span style="color:var(--text-tertiary)"> · 현장은 상단 선택 적용 / 상단 지표는 전체 현황</span></div>' +
             '<div class="panel-body"><table class="data-table" id="fin-table"><thead><tr>' +
             '<th>날짜</th><th>현장</th><th>계정</th><th>세부내역</th><th style="text-align:right">금액</th><th style="text-align:right">관리</th>' +
             '</tr></thead><tbody>' + expensesHtml + '</tbody></table></div>' +
@@ -5519,9 +5534,16 @@
 
           document.getElementById('fin-prev').onclick = function () { financePage--; renderFinance(); };
           document.getElementById('fin-next').onclick = function () { financePage++; renderFinance(); };
-          document.getElementById('fin-search').addEventListener('keydown', function (event) {
-            if (event.key === 'Enter') { financeSearch = this.value.trim(); financePage = 1; renderFinance(); }
-          });
+          document.getElementById('fin-query').onsubmit = function (event) {
+            event.preventDefault();
+            var from = document.getElementById('fin-from').value, to = document.getElementById('fin-to').value;
+            if (from && to && from > to) { alert('종료일은 시작일 이후로 선택해 주세요.'); return; }
+            financeSearch = document.getElementById('fin-search').value.trim();
+            financeFilters = {dateFrom:from, dateTo:to, status:document.getElementById('fin-status').value, payment:document.getElementById('fin-payment').value};
+            financePage = 1; renderFinance();
+          };
+          document.getElementById('fin-reset').onclick = function () { financeSearch = ''; financeFilters = {dateFrom:'',dateTo:'',status:'',payment:''}; financePage = 1; renderFinance(); };
+          document.getElementById('fin-query').addEventListener('input', function () { document.getElementById('btn-fin-export').disabled = true; document.getElementById('btn-fin-export').title = '조회 버튼을 눌러 조건을 적용해 주세요.'; });
           document.querySelectorAll('.finance-delete-expense').forEach(function (button) {
             button.addEventListener('click', function () {
               window.deleteFinanceExpense(this.dataset.deleteUrl);
@@ -5532,7 +5554,7 @@
               window.reviewFinanceExpense(this.dataset.expenseId, this.dataset.decision);
             });
           });
-        } catch (err) { renderError('재무 데이터 로딩 실패'); console.error(err); }
+        } catch (err) { if (requestId === financeRequest) renderError('재무 데이터 로딩 실패'); console.error(err); }
       }
 
       // ── INVENTORY ──────────────────────────────────────────
@@ -14384,7 +14406,7 @@ window.submitVendorCreate = function() {
         setTimeout(function () {
           alert('로컬 테스트 모드: 다운로드 링크를 시뮬레이션 합니다.');
           if (btn) {
-            btn.innerHTML = '<i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드';
+            btn.innerHTML = '<i class="ph ph-download-simple"></i> 조회 결과 엑셀';
             btn.disabled = false;
           }
         }, 1000);
@@ -14393,13 +14415,13 @@ window.submitVendorCreate = function() {
       google.script.run
         .withSuccessHandler(function (base64) {
           if (btn) {
-            btn.innerHTML = '<i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드';
+            btn.innerHTML = '<i class="ph ph-download-simple"></i> 조회 결과 엑셀';
             btn.disabled = false;
           }
           if (base64) {
             var link = document.createElement('a');
             link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64;
-            link.download = '비용_마스터_내역.xlsx';
+            link.download = '비용_조회보고서_' + new Date().toISOString().slice(0,10) + '.xlsx';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -14409,12 +14431,12 @@ window.submitVendorCreate = function() {
         })
         .withFailureHandler(function (err) {
           if (btn) {
-            btn.innerHTML = '<i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드';
+            btn.innerHTML = '<i class="ph ph-download-simple"></i> 조회 결과 엑셀';
             btn.disabled = false;
           }
           alert('엑셀 생성 실패: ' + err.message);
         })
-        .api_getFinanceExcelBase64();
+        .api_getFinanceExcelBase64(window.financeExportOptions ? window.financeExportOptions() : {});
     };
   </script>
 
