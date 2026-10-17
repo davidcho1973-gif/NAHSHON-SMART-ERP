@@ -1,5 +1,9 @@
 # WORK LOG
 
+## CODEX — 2026-10-17 Collapse the drawing file library
+
+The always-expanded PDF library pushed the project's work sections below long file lists. The drawing-file header now toggles that library, collapsed by default, with file count and read/failure status still visible. Expansion is held per site for the current page session and survives polling/reloads; the existing work-section toggle remains independent. A native button exposes expanded state and retains keyboard focus. Upload, reread, document selection and stored data are unchanged. Relevant JavaScript tests and local browser checks precede the required full CI/staging/production gates; release evidence is saved under outputs/Drawing_Files_Collapse_20261017 outside the repository.
+
 ## CODEX — 2026-10-15 Stable employee registration and personal-app installation
 
 The enrollment completion and install guide previously invited saving the current page without a permanent app entry. A saved invitation could later expire with HTTP 410; the reported phone URL is unavailable, so that specific incident remains unconfirmed. The final user direction separates ordinary workers from managers and foremen. Workers review name/phone, complete registration, and open site attendance without installing an app. Unverified employment/company and worker/self grants are preserved; registration itself never records attendance.

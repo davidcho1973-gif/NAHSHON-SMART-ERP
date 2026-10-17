@@ -28,7 +28,7 @@
   var THUMB_WIDTH = 900;
 
   var A = null;
-  var state = { data: null, pdfjs: null, reading: false, progress: {}, poll: null, auto: true, open: {} };
+  var state = { data: null, pdfjs: null, reading: false, progress: {}, poll: null, auto: true, open: {}, docsOpen: {} };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -228,6 +228,21 @@
   // ── 그리기 ─────────────────────────────────────────────────────────
 
   function docsPanel(u, d) {
+    // Keep the file library compact; polling must preserve the user's choice for each site.
+    var expanded = !!state.docsOpen[String(d.siteId)];
+    var documents = d.documents || [];
+    var totals = documents.reduce(function (sum, doc) {
+      sum.pages += Number(doc.pages) || 0;
+      sum.done += Number(doc.done) || 0;
+      sum.failed += Number(doc.failed) || 0;
+      sum.reading += (doc.sheets || []).filter(function (s) { return s.status === 'reading'; }).length;
+      if (!doc.pages) sum.unread++;
+      return sum;
+    }, { pages: 0, done: 0, failed: 0, reading: 0, unread: 0 });
+    var overview = totals.done + ' / ' + totals.pages + '쪽 읽음' +
+      (totals.unread ? ' · 미읽음 ' + totals.unread + '개' : '') +
+      (totals.reading ? ' · 읽는 중 ' + totals.reading + '쪽' : state.reading ? ' · 처리 중' : '') +
+      (totals.failed ? ' · 실패 ' + totals.failed + '쪽' : '');
     var rows = (d.documents || []).map(function (doc) {
       var reading = (doc.sheets || []).filter(function (s) { return s.status === 'reading'; }).length;
       var status = doc.pages === 0 ? '아직 안 읽음'
@@ -252,10 +267,21 @@
       : '';
 
     return '<div style="border:1px solid var(--border-default);border-radius:12px;overflow:hidden;margin-bottom:14px;background:var(--bg-surface)">' +
-      '<div style="padding:10px 14px;background:var(--bg-base);display:flex;justify-content:space-between;align-items:center">' +
-        '<div style="font-size:14px;font-weight:700">도면 파일</div>' +
-        '<div style="font-size:12px;color:var(--text-secondary)">사진으로 된 쪽은 AI 가 글자를 읽어 붙입니다</div></div>' +
-      (rows || empty) + other + '</div>';
+      '<button type="button" aria-expanded="' + expanded + '" aria-controls="sd-document-list" onclick="window.AdminSectionDrawings.toggleDocs(this)" style="width:100%;border:0;padding:12px 14px;background:var(--bg-base);color:var(--text-primary);display:flex;gap:10px;flex-wrap:wrap;align-items:center;text-align:left;cursor:pointer;font:inherit">' +
+        '<span style="font-size:14px;font-weight:700">도면 파일 · ' + documents.length + '개</span>' +
+        '<span style="flex:1;font-size:12px;color:var(--text-secondary)">' + u.esc(overview) + '</span>' +
+        '<span data-docs-toggle-label style="font-size:12px;white-space:nowrap">' + (expanded ? '접기 ▲' : '펼치기 ▼') + '</span></button>' +
+      '<div id="sd-document-list"' + (expanded ? '' : ' hidden') + '>' + (rows || empty) + other + '</div></div>';
+  }
+
+  function toggleDocs(button) {
+    if (!state.data) return;
+    var key = String(state.data.siteId);
+    var expanded = state.docsOpen[key] = !state.docsOpen[key];
+    var list = document.getElementById('sd-document-list');
+    if (list) list.hidden = !expanded;
+    button.setAttribute('aria-expanded', String(expanded));
+    button.querySelector('[data-docs-toggle-label]').textContent = expanded ? '접기 ▲' : '펼치기 ▼';
   }
 
   /** 공정 카드의 도면 한 장 — 누르면 표시가 얹힌 도면이 크게 열린다. */
@@ -1156,6 +1182,7 @@
     gcPreview: gcPreview,
     gcDownload: gcDownload,
     toggleAll: toggleAll,
+    toggleDocs: toggleDocs,
     record: record,
     rfi: rfi,
     rfiDecide: rfiDecide,
