@@ -37,4 +37,5 @@ test('intake opens for the selected site and contract and blocks closing during 
   w.AdminDrawingEvidence.upload(4,9);
   assert.ok(config.body.includes('site_id=4&amp;') || config.body.includes('site_id=4&contract_id=9'));
   assert.equal(config.beforeClose({querySelector:()=>({contentWindow:{documentEvidenceWorkflow:{busy:true}}})}),false);
+  assert.equal(config.beforeClose({querySelector:()=>{throw new Error('cross-origin sign-in frame');}}),true);
 });

@@ -14,7 +14,9 @@
       subtitle: '공정이 분명한 자료는 자동 연결 · 애매한 자료는 확인 대기 · 수량과 기성은 별도 확인',
       body: '<iframe title="기성 증빙 일괄 접수" src="' + ui.esc(url) + '" style="width:100%;height:72vh;border:0"></iframe>',
       beforeClose: function (el) {
-        var workflow = el.querySelector('iframe').contentWindow.documentEvidenceWorkflow;
+        var workflow;
+        try { workflow = el.querySelector('iframe').contentWindow.documentEvidenceWorkflow; }
+        catch (_) { return true; } // An expired session may navigate the frame to a sign-in provider.
         if (workflow && workflow.busy) { ui.toast('파일 전송이 끝날 때까지 기다려 주세요.','error'); return false; }
         return !workflow || !workflow.files.some(function(r){return r.state !== 'stored';}) || global.confirm('아직 저장하지 않은 파일이 있습니다. 닫을까요?');
       },
