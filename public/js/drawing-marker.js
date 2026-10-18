@@ -334,7 +334,9 @@
     $('[data-export]').onclick = function () { exportPng(); };
 
     // ── 불러오기 ──
-    call('api_getSheetMarks', [opts.siteId, opts.sheetNo]).then(function (r) {
+    var sheetArgs = [opts.siteId, opts.sheetNo];
+    if (global.apiCache) delete global.apiCache['api_getSheetMarks' + JSON.stringify(sheetArgs)];
+    call('api_getSheetMarks', sheetArgs).then(function (r) {
       if (r.success === false) throw new Error(r.error || '도면을 불러오지 못했습니다.');
       st.data = r;
       st.marks = r.marks || [];

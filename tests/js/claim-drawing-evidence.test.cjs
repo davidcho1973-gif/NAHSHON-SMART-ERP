@@ -11,6 +11,7 @@ function load() {
 test('only same-origin HTTP evidence links are rendered and source titles are escaped',()=>{
   const w=load();
   assert.equal(w.AdminDrawingEvidence._safeUrl('javascript:alert(1)'),'');
+  assert.equal(w.AdminDrawingEvidence._safeUrl(undefined),'');
   assert.equal(w.AdminDrawingEvidence._safeUrl('https://other.example/a'),'');
   const html=w.AdminDrawingEvidence.sheetHtml([{contractId:2,pagination:{total:1},rows:[{title:'<script>x</script>',url:'/document/1',lineLabels:['Piping'],status:'review'}]}]);
   assert.ok(!html.includes('<script>'));
@@ -19,7 +20,8 @@ test('only same-origin HTTP evidence links are rendered and source titles are es
 });
 test('drawing evidence listing keeps scope and paginates through the existing inbox',async()=>{
   const w=load();let call;
-  w.gsRun=async(method,args)=>{call={method,args};return {success:true,rows:[],pagination:{page:1,lastPage:2}};};
+  w.apiCache={['api_getClaimEvidenceInbox'+JSON.stringify([5,{status:'linked',page:1,perPage:25,sheetNo:'P-101'}])]:{data:'outdated'}};
+  w.gsRun=async(method,args)=>{call={method,args};assert.equal(w.apiCache[method+JSON.stringify(args)],undefined);return {success:true,rows:[],pagination:{page:1,lastPage:2}};};
   w.AdminUI.table=()=>'<table></table>';
   w.AdminUI.modal=opts=>{assert.ok(opts.actions.some(a=>a.value==='next'));return {result:Promise.resolve(null)};};
   await w.AdminDrawingEvidence.list(5,null,'P-101',1);

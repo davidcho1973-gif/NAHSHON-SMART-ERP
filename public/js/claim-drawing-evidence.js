@@ -3,6 +3,7 @@
   'use strict';
   var currentUpload = null;
   function safeUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return '';
     try { var u = new URL(value, global.location.href); return u.origin === global.location.origin && /^https?:$/.test(u.protocol) ? u.href : ''; }
     catch (_) { return ''; }
   }
@@ -30,7 +31,10 @@
     var filters = {status:'linked', page:page || 1, perPage:25};
     if (sectionId) filters.sectionId = Number(sectionId);
     if (sheetNo) filters.sheetNo = sheetNo;
-    return global.gsRun('api_getClaimEvidenceInbox', [Number(contractId), filters], null).then(function (data) {
+    var args = [Number(contractId), filters];
+    // Queue completion and source access can change without a mutation in this tab.
+    if (global.apiCache) delete global.apiCache['api_getClaimEvidenceInbox' + JSON.stringify(args)];
+    return global.gsRun('api_getClaimEvidenceInbox', args, null).then(function (data) {
       if (!data || data.success === false) throw new Error(data && data.error || '증빙을 불러오지 못했습니다.');
       var modal = ui.modal({ title:'공정 · 도면 연결 증빙', width:900,
         subtitle:'도면 위치는 지정하지 않은 자료입니다. 증빙 연결은 시공 완료나 기성 금액 확정이 아닙니다.',
