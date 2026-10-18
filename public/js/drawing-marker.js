@@ -986,6 +986,12 @@
             '<div style="font-size:12px;color:#94a3b8">' + esc(s.label + (m.record ? ' · ' + (STAGE[m.record.stage] || '') + ' ' + num(m.record.reportedQty) + ' ' + (m.line.unit || '') + ' · ' + (m.record.workDate || '') : m.label ? ' · ' + m.label : '')) + '</div></div></div>';
         }).join('') : '<div style="padding:20px 6px;color:#64748b;font-size:13px">아직 표시가 없습니다. 줄에서 «기록» 할 때 도면에 찍거나, 아래 도구로 더하세요.</div>');
       // 이 도면에 아직 표시가 없는 이 공정의 줄 — 남은 일. 누르면 바로 그 줄을 찍는다.
+      if (global.AdminDrawingEvidence && st.data) {
+        side.insertAdjacentHTML('beforeend', global.AdminDrawingEvidence.sheetHtml(st.data.evidenceGroups));
+        Array.prototype.forEach.call(side.querySelectorAll('[data-evidence-contract]'), function (button) {
+          button.onclick = function () { close(); global.AdminDrawingEvidence.list(Number(button.getAttribute('data-evidence-contract')), null, st.data.sheetNo); };
+        });
+      }
       var marked = {};
       st.marks.forEach(function (m) { if (m.line) marked[m.line.id] = true; });
       var left = (opts.lines || []).filter(function (l) { return !marked[l.id]; });
