@@ -32,6 +32,9 @@
     <script src="{{ asset('js/admin-week-board.js') }}?v={{ filemtime(public_path('js/admin-week-board.js')) }}" defer></script>
     <script src="{{ asset('js/admin-section-drawings.js') }}?v={{ filemtime(public_path('js/admin-section-drawings.js')) }}" defer></script>
     <script src="{{ asset('js/admin-claim-editor.js') }}?v={{ filemtime(public_path('js/admin-claim-editor.js')) }}" defer></script>
+    <link rel="stylesheet" href="{{ asset('css/drawing-studio.css') }}?v={{ filemtime(public_path('css/drawing-studio.css')) }}">
+    <script src="{{ asset('js/drawing-studio-core.js') }}?v={{ filemtime(public_path('js/drawing-studio-core.js')) }}" defer></script>
+    <script src="{{ asset('js/drawing-studio.js') }}?v={{ filemtime(public_path('js/drawing-studio.js')) }}" defer></script>
     <script src="{{ asset('js/drawing-marker.js') }}?v={{ filemtime(public_path('js/drawing-marker.js')) }}" defer></script>
     <script src="{{ asset('js/claim-drawing-evidence.js') }}?v={{ filemtime(public_path('js/claim-drawing-evidence.js')) }}" defer></script>
     <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
