@@ -89,6 +89,7 @@
           try {
             if(!item.id){
               var form=new w.FormData(); form.append('files[]',item.file); form.append('site_id',String(scope.siteId));
+              form.append('purpose','claim_evidence');
               if(scope.projectId)form.append('project_id',String(scope.projectId));
               if(scope.companyId)form.append('company_id',String(scope.companyId));
               var csrf=document.querySelector('meta[name="csrf-token"]');

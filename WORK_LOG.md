@@ -1,3 +1,7 @@
+## CODEX — 2026-10-18 Direct BOQ original preservation
+
+Final path audit found that the ordinary document upload prepares/compresses photos and permits local storage fallback. BOQ uploads now explicitly select the existing evidence intake policies: original bytes/hash, canonical duplicate handling and private durable storage, while still automatically queuing analysis. The mixed-file batch continues to wait for its explicit Start action. HTTP upload regression checks the original image hash and queued job; frontend regression checks the evidence purpose flag.
+
 ## CODEX — 2026-10-18 BOQ confirmation workspace
 
 Root cause: BOQ confirmation rendered only measured work, so separately indexed originals and section drawings disappeared when no work record existed. The existing confirmation view now reads the canonical section drawings and paginated evidence alongside its editable work records. It provides original preview, same-screen document review, association editing and scoped multi-file upload with per-file retry. Unready originals remain review candidates (including after analysis finishes); explicit ambiguous uploads go to the existing queue. Existing associations are retained when another BOQ attaches the same original. Missing drawing, evidence and actual-work/record-evidence links are shown as factual gaps, not invented contract requirements or financial approval. Existing contract-specific issues also remain visible. Source permissions are reapplied on every read and mutation; no new ledger, migration, financial amount or geometry is created.
