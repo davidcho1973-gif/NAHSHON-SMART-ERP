@@ -14,7 +14,9 @@ use App\Models\Project;
 use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\User;
+use App\Models\WorkSection;
 use App\Services\Admin\BillingAdminService;
+use App\Services\Drawings\SectionDrawingService;
 use App\Services\Finance\ClaimEditingService;
 use App\Services\Finance\ClaimEvidenceService;
 use App\Services\Finance\ClaimRecordReport;
@@ -61,6 +63,26 @@ class ClaimEvidenceTest extends TestCase
     private function svc(): ClaimEvidenceService
     {
         return app(ClaimEvidenceService::class);
+    }
+
+    public function test_child_process_drawing_selection_is_independent_and_scoped(): void
+    {
+        $section = WorkSection::create(['site_id' => $this->contract->site_id, 'project_contract_id' => $this->contract->id, 'division' => 'Electrical', 'code' => 'E01', 'name' => 'Power']);
+        $line = $this->line();
+        $line->update(['work_section_id' => $section->id]);
+        $other = $this->line(['lineNo' => '16']);
+        $service = app(SectionDrawingService::class);
+        $this->assertTrue($service->setSheets($section->id, ['E-1'])['success']);
+        $this->assertTrue($service->setSheets($section->id, ['e-2', 'E-2'], $line->id)['success']);
+        $this->assertSame(['E-1'], $section->sheets()->pluck('sheet_no')->all());
+        $this->assertSame(['E-2'], $service->sectionLines($section->id)['lines'][0]['sheetNos']);
+        $this->assertFalse($service->setSheets($section->id, ['E-3'], $other->id)['success']);
+        $this->assertTrue($service->setSheets($section->id, [], $line->id)['success']);
+        $this->assertSame([], $service->sectionLines($section->id)['lines'][0]['sheetNos']);
+        $outside = Site::create(['company_id' => $this->contract->company_id, 'code' => 'OUTSIDE', 'name' => 'Other site', 'status' => 'active']);
+        $this->actor->update(['access_role' => 'site_manager', 'access_scope' => 'site', 'allowed_site_id' => $outside->id]);
+        $this->assertFalse($service->setSheets($section->id, ['E-3'], $line->id)['success']);
+        $this->assertSame([], $this->contract->fresh()->payload['lineDrawingSheets'][$line->id]);
     }
 
     public function test_record_report_exports_saved_version_without_prices_or_executable_cells(): void
