@@ -105,6 +105,14 @@ Usage: docs/CLAIM_WORKFLOW_KO.md.
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-18 Reusable manager registration links
+
+Root cause: an invitation owned the first recipient identity and was consumed after seven days/one acceptance, so removing its expiration alone could not safely register multiple employees. Added an explicit reusable mode with a fixed validated job/company/site/team/trade grant, nullable expiry, encrypted recoverable sharing token, use count and per-recipient audit events. Registration grants the configured manager permissions immediately, as explicitly selected by David. Existing one-time invitations retain their behavior. Strongly authenticated superadmins can re-open, disable or replace reusable links; stopping a link prevents future registration without revoking completed accounts.
+
+New employees register separately; an existing credentialless worker must already be authenticated to that same employee in the browser, match the full phone and company/site scope, and retain the same account fingerprint through completion. Account/employee/history identity is preserved, while duplicate phone/email/Google identities and stale/changed grants fail closed. A named per-step limiter retains single-use limits and allows bounded shared-site onboarding without GET requests consuming registration attempts. Shared SPA/route/translation changes are required for the owner-requested reusable onboarding flow. No production staff accounts or public invitation links are created by this release.
+
+Validation: related invitation/job/access regressions 100 tests / 851 assertions and JavaScript 178 tests pass locally; static build and Pint pass. Full CI, staging and production verification follow before completion.
+
 ## CODEX — 2026-10-06 Receipt continuation pages
 
 Root cause: the receipt app loop submitted every queued image independently, so a purchase spanning multiple pages created multiple expenses. The receipt app now offers an explicit same-purchase grouping checkbox and converts the selected pages into one reduced PDF before its single intake request. Independent-purchase mode is retained. A group needing a manual total or a retry stays together, and additional pages rebuild the group from the originals in order. ERP expense registration now accumulates photos/camera captures and analyzes them only after the user clicks the combined analysis button; changed pages invalidate the old receipt attachment.
@@ -258,6 +266,7 @@ Owner requested removal of pay viewing from the worker app. Removed the pay tab,
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-18 | CODEX | Reusable manager registration links | No-expiry/multi-person fixed grants, immediate enrollment, re-sharing, disable/reissue, existing-worker identity preservation and bounded onboarding. | codex/reusable-manager-invitations → staging → main | Local related PHP 100/851, JS 178, static build and Pint pass; CI/deploy verification follows. |
 | 2026-10-18 | CODEX | Drawing CAD studio and side sharing | Calibrated measurements, vector drawing/annotations, layers/history, and reviewed PNG/PDF sharing through mail or authorized chat. | codex/drawing-cad-studio-20261018 | PostgreSQL feature tests, geometry tests and synthetic Chrome edit/save/share checks; full release gates before deployment. |
 | 2026-10-15 | CODEX | Scoped mobile app entry | Use the existing read-only scoped query for unread counts so opening the app does not provision hidden chat parents. | codex/fix-mobile-home-scope-20261015; PR146 | Regression baseline and fixed-code CI required; no production account or scope changes. |
 | 2026-10-06 | CODEX | Foreman receipts, purchase requests and trade managers | Keep crew foremen and add trade-wide managers; explicit scoped grants, same-employee position updates, workspace entry points and receipt filing repair. | codex/foreman-trade-manager → staging → main | Local access/receipt/purchase regressions pass; final CI and deploy evidence recorded with the release. |

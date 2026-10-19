@@ -149,18 +149,20 @@
   function renderNewInvitations() {
     if (!state.options || !state.options.canIssueInvitations || !state.newInvitations.length) return '';
     var u = ui();
-    return '<h3 style="margin-top:24px">등록 대기 중인 신규 관리자 초대</h3>' + u.table({
+    return '<h3 style="margin-top:24px">신규 관리자 초대 · 반복사용 링크</h3>' + u.table({
       id: 'ua-invites', rows: state.newInvitations,
       columns: [
         { key: 'label', label: '초대 메모' },
         { key: 'roleLabel', label: '역할' },
         { key: 'scopeLabel', label: '관리 범위' },
         { key: 'expiresAt', label: '유효기간', render: function (r) {
-          return u.esc(r.expiresAt) + (r.expired ? ' · 만료' : '');
+          return r.reusable ? '만료 없음 · 반복사용' : u.esc(r.expiresAt) + (r.expired ? ' · 만료' : '');
         } },
+        { key: 'useCount', label: '등록 인원', render: function (r) { return r.reusable ? u.esc(r.useCount) + '명' : '1회용'; } },
         { key: '_actions', label: '관리', render: function (r) {
-          return u.rowButton('초대 재발급', 'window.AdminAccess.inviteNew(' + r.id + ')') + ' ' +
-            u.rowButton('초대 취소', 'window.AdminAccess.revokeNewInvite(' + r.id + ')');
+          return (r.reusable ? u.rowButton('링크 · QR 보기', 'window.AdminAccess.showReusable(' + r.id + ')') + ' ' : '') +
+            u.rowButton('초대 재발급', 'window.AdminAccess.inviteNew(' + r.id + ')') + ' ' +
+            u.rowButton(r.reusable ? '링크 중지' : '초대 취소', 'window.AdminAccess.revokeNewInvite(' + r.id + ')');
         } }
       ]
     });
@@ -337,7 +339,7 @@
       var jobEditor;
       u.formModal({
         title: isNew ? '신규 관리자 초대' : '관리자로 초대 — ' + row.name,
-        subtitle: isNew ? '직원 사전 등록 없이 링크 하나를 전달합니다. 직원이 이름·전화번호·로그인 정보를 입력하면 등록이 완료됩니다. 7일·1회용입니다.'
+        subtitle: isNew ? '직원 사전 등록 없이 링크 하나를 전달합니다. 7일·1회용 또는 만료 없는 반복사용을 선택하세요. 등록 즉시 지정 권한이 적용됩니다.'
           : '직원이 직접 로그인 정보를 등록합니다. 7일간 유효하며 재발급 시 이전 초대는 취소됩니다.',
         saveLabel: '초대 링크 · QR 만들기',
         fields: [
@@ -348,7 +350,9 @@
             options: o.scopes.filter(function (r) { return ['site', 'company', 'all_sites'].indexOf(r.value) >= 0; }) },
           { name: 'siteId', label: '담당 현장', type: 'select', options: o.sites, value: row.siteId || '' },
           { name: 'companyId', label: isNew ? '소속 회사 · 회사 범위일 때 담당 회사' : '담당 회사', type: 'select', options: o.companies, value: row.companyId || '' }
-        ].concat(o.jobCatalog ? [{name:'jobRole',label:'직책',type:'select',required:true,value:previous && previous.grant.job_role || 'site_manager',
+        ].concat(isNew ? [{name:'useMode',label:'초대 사용 방식',type:'select',required:true,value:previous && previous.reusable ? 'reusable' : 'single',
+          options:[{value:'single',label:'7일 · 1명만 등록'},{value:'reusable',label:'만료 없음 · 여러 직원 반복 등록'}],
+          hint:'반복사용 링크를 받은 사람은 지정 권한을 즉시 얻습니다. 승인된 직원에게 전달하고, 필요 없으면 링크를 중지하세요. 재발급하면 이전 링크는 중지되며 이미 등록한 직원은 유지됩니다.'}] : []).concat(o.jobCatalog ? [{name:'jobRole',label:'직책',type:'select',required:true,value:previous && previous.grant.job_role || 'site_manager',
           options:Object.entries(o.jobCatalog.jobs).map(function(e){return {value:e[0],label:e[1].label};})},
           {name:'teamId',label:'담당 팀 (팀 범위)',type:'select',options:o.teams,value:previous && previous.grant.allowed_team_id || ''}] : []).concat(isNew ? [{ name: 'recipientLabel', label: '초대 메모 (선택)', value: previous ? previous.label : '',
           hint: '예: 703K 새 소장. 직원 이름·이메일은 직원이 직접 입력합니다.' }] : []),
@@ -392,11 +396,11 @@
     var message = isNew ? '관리자 입사 등록 초대입니다. 아래 링크에서 이름·전화번호를 입력하고 Google 또는 이메일·새 ERP 비밀번호로 등록해 주세요. 직원 등록과 관리자 설정이 함께 완료됩니다.\n' + res.url
       : res.name + ' 님, 관리자 등록을 완료해 주세요. 기존 등록 전화번호를 확인한 뒤 Google 또는 이메일·비밀번호를 설정하면 됩니다.\n' + res.url;
     u.modal({
-      title: '카톡 · QR로 초대', width: 460,
-      subtitle: isNew ? '한 명에게만 전달하세요. 등록 완료 전에는 직원·계정이 생성되지 않습니다.'
+      title: res.reusable ? '반복사용 관리자 초대 링크' : '카톡 · QR로 초대', width: 460,
+      subtitle: res.reusable ? '같은 링크를 여러 직원에게 보낼 수 있습니다. 등록 즉시 지정 권한이 적용됩니다. 기존 직원은 본인 개인앱에 연결된 브라우저에서 진행합니다.' : isNew ? '한 명에게만 전달하세요. 등록 완료 전에는 직원·계정이 생성되지 않습니다.'
         : '초대받은 직원 본인에게만 전달하세요. 등록 완료 전까지 현재 작업자 권한이 유지됩니다.',
       body: '<div style="text-align:center"><img alt="관리자 등록 초대 QR" src="' + u.esc(res.qr) + '" style="width:240px;max-width:100%"></div>' +
-        '<p>유효기간: ' + u.esc(res.expiresAt) + '</p>' +
+        '<p>유효기간: ' + (res.reusable ? '없음 · 여러 직원 반복 등록' : u.esc(res.expiresAt)) + '</p>' +
         '<textarea aria-label="카톡으로 보낼 초대 내용" readonly style="box-sizing:border-box;width:100%;min-height:135px">' + u.esc(message) + '</textarea>',
       actions: [{ label: '카톡에 보낼 내용 복사', value: 'keep', action: 'copy', kind: 'primary' },
         { label: '공유하기', value: 'keep', action: 'share' }, { label: '닫기', value: null }],
@@ -413,6 +417,13 @@
     });
   }
 
+  function showReusable(id) {
+    return call('api_shareManagerInvitation', [id]).then(function (res) {
+      if (res.success === false) { ui().toast(res.error, 'error'); return; }
+      showInvitation(res);
+    }).catch(function (e) { ui().toast(e.message || '링크를 불러오지 못했습니다.', 'error'); });
+  }
+
   function revokeInvite(id) {
     var u = ui();
     u.confirmDanger({ title: '초대를 취소할까요?', body: '전달한 링크와 QR로 더 이상 등록할 수 없습니다. 기존 직원 기록은 유지됩니다.', confirmLabel: '초대 취소' }).then(function (ok) {
@@ -426,7 +437,7 @@
 
   function revokeNewInvite(id) {
     var u = ui();
-    u.confirmDanger({ title: '초대를 취소할까요?', body: '전달한 링크와 QR로 더 이상 등록할 수 없습니다.', confirmLabel: '초대 취소' }).then(function (ok) {
+    u.confirmDanger({ title: '초대 링크를 중지할까요?', body: '전달한 링크와 QR로 더 이상 등록할 수 없습니다. 이미 등록한 직원의 계정과 권한은 유지됩니다.', confirmLabel: '링크 중지' }).then(function (ok) {
       if (!ok) return;
       return call('api_revokeNewManagerInvitation', [id]).then(function (res) {
         if (res.success === false) { u.toast(res.error, 'error'); return; }
@@ -453,6 +464,7 @@
     remove: remove,
     invite: invite,
     inviteNew: inviteNew,
+    showReusable: showReusable,
     revokeNewInvite: revokeNewInvite,
     revokeInvite: revokeInvite,
     _state: state,

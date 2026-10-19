@@ -82,3 +82,37 @@ test('new manager invite has no employee prerequisite, fixes admin scope and can
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls.find(c => c.method === 'api_revokeNewManagerInvitation').args[0], 12);
 });
+
+test('reusable invitation mode can be re-shared without rotating the link or creating another invitation', async () => {
+  let form, modal, copied;
+  const calls = [];
+  const pending = { id: 14, label: 'Trade managers', reusable: true, useCount: 3,
+    grant: { access_role: 'site_manager', access_scope: 'site' }, enrollment: { site_id: 4, company_id: 2 } };
+  const ui = { esc: s => String(s ?? ''), formModal: o => { form = o; }, modal: o => { modal = o; },
+    pageHeader: () => '', primaryButton: () => '', table: () => '', bindSearch() {}, toast() {} };
+  const options = { roles: [{ value: 'site_manager' }], scopes: [{ value: 'site' }], sites: [], companies: [], canIssueInvitations: true };
+  const context = { window: { AdminUI: ui, gsRun: async (method, args) => {
+    calls.push({ method, args });
+    if (method === 'api_getUserAccessOptions') return options;
+    if (method === 'api_getUserAccessList') return { rows: [], newInvitations: [pending] };
+    return { success: true, kind: 'new_employee', reusable: true, url: 'https://erp.example/manager-invitation/shared', qr: 'data:image/svg+xml;base64,test', expiresAt: null };
+  } }, document: { getElementById: () => ({ innerHTML: '' }) },
+  navigator: { clipboard: { writeText: async text => { copied = text; } } }, setTimeout: fn => fn() };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync('public/js/admin-access.js', 'utf8'), context);
+  context.window.AdminAccess._state.newInvitations = [pending];
+  context.window.AdminAccess.inviteNew(14);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(form.fields.find(f => f.name === 'useMode').value, 'reusable');
+  await form.onSave({ role: 'site_manager', scope: 'site', siteId: '4', useMode: 'reusable' });
+  assert.equal(calls.find(c => c.method === 'api_createManagerInvitation').args[0].useMode, 'reusable');
+  assert.match(modal.subtitle, /같은 링크를 여러 직원/);
+  assert.match(modal.body, /유효기간: 없음/);
+  const previousCreates = calls.filter(c => c.method === 'api_createManagerInvitation').length;
+  await context.window.AdminAccess.showReusable(14);
+  assert.equal(calls.at(-1).method, 'api_shareManagerInvitation');
+  assert.equal(calls.filter(c => c.method === 'api_createManagerInvitation').length, previousCreates);
+  modal.onAction({ action: 'copy' }, {});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(copied, /manager-invitation\/shared/);
+});
