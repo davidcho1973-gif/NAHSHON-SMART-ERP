@@ -106,7 +106,7 @@
       if(transformed.some(e=>e.points.some(p=>p.some(n=>!Number.isFinite(n)||n<0||n>1)))){status('변경하면 도형이 도면 밖으로 나갑니다.',true);return;}mutate(()=>transformed.forEach(e=>Object.assign(objects().find(x=>x.id===e.id),e)));}
     function remove(){mutate(()=>{doc.entities=objects().filter(e=>!selected.includes(e.id)||!editable(e));selected=[];});}
     function duplicate(){mutate(()=>{const copies=C.translate(chosen().filter(editable),.012,.012).map(e=>({...e,id:id()}));doc.entities.push(...copies);selected=copies.map(e=>e.id);});}
-    async function save(){if(!dirty||saving||conflict||!canManage)return;saving=true;const snapshot=C.clone(doc),token=JSON.stringify(snapshot);renderPanel();
+    async function save(){if(!dirty||saving||conflict||!canManage)return;saving=true;const snapshot=C.clone(doc),token=JSON.stringify(snapshot);if(mode==='edit')renderPanel();
       try{const r=await api(base,'PUT',{revision,document:snapshot});revision=r.revision;dirty=JSON.stringify(doc)!==token;saving=false;if(mode==='edit')renderPanel();if(mode==='edit')status(dirty?'새 변경이 남아 있습니다.':'저장됨 · 버전 '+revision);}
       catch(e){saving=false;conflict=e.status===409;if(mode==='edit'){renderPanel();status(e.message,true);}} }
     function point(ev){const p=host.toWorld(ev.clientX,ev.clientY),view=v();p[0]=Math.max(0,Math.min(1,p[0]));p[1]=Math.max(0,Math.min(1,p[1]));snapLabel='';
