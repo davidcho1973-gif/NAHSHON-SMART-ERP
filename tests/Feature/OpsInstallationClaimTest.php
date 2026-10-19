@@ -74,7 +74,7 @@ class OpsInstallationClaimTest extends TestCase
         return OpsIntakeBatch::create(['site_id' => $this->site->id, 'created_by_id' => $author->id, 'source' => 'paste', 'raw_text' => $text, 'image_count' => 0]);
     }
 
-    public function test_a_billing_managers_post_records_installation_and_the_missing_delivery(): void
+    public function test_a_billing_managers_post_records_installation_without_inventing_delivery(): void
     {
         $this->reply = [['contract_line_id' => $this->wall->id, 'quantity' => 40, 'location' => 'Pantry north wall', 'quote' => 'Pantry 북쪽 벽 드라이월 40 SF 마감', 'confidence' => 0.9]];
         $batch = $this->report('Pantry 북쪽 벽 드라이월 40 SF 마감했습니다', $this->manager);
@@ -93,10 +93,9 @@ class OpsInstallationClaimTest extends TestCase
         $this->assertSame('pending', $install->status, '확인 대기 — 담당자가 확인해야 기성');
         $this->assertEquals(40, $install->reported_qty);
         $this->assertSame('2026-09-18', $install->work_date->toDateString());
-        $this->assertSame('2026-09-18', ClaimWorkRecord::where('stage', 'stored')->sole()->work_date->toDateString());
+        $this->assertSame(0, ClaimWorkRecord::where('stage', 'stored')->count(), '반입은 별도 입고 근거가 필요하다');
         $this->assertSame('intake', $install->evidence[0]['type']);
         $this->assertSame($item->id, $install->evidence[0]['id']);
-        $this->assertEquals(40, ClaimWorkRecord::where('stage', 'stored')->sole()->reported_qty, '설치한 자재는 들어온 것 — 빠진 반입도 함께');
 
         $this->assertSame(['proposed' => 0, 'applied' => 0], app(OpsClaimReflector::class)->reflect($batch), '같은 글은 두 번 읽지 않는다');
 

@@ -395,6 +395,7 @@
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:14px;font-weight:800;flex:1">기성 = 공정 · ' + u.esc(b.contractTitle || '') + '</span>' +
       u.rowButton(Object.keys(state.open).length ? '모든 줄 접기' : '모든 줄 펼치기', 'window.AdminSectionDrawings.toggleAll()') +
       (b.contractId ? u.rowButton('원청 청구서 엑셀', 'window.AdminSectionDrawings.gcClaims(' + b.contractId + ')') : '') +
+      (b.contractId && b.canManage ? u.rowButton('기성 편집', 'window.AdminSectionDrawings.editor(' + b.contractId + ')') : '') +
       (b.contractId ? u.rowButton('기성 근거 대장 열기', 'window.AdminSectionDrawings.ledger(' + b.contractId + ')') : '') + '</div>' +
       bar(b.percent) +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px">' + cells.map(function (c) {
@@ -815,7 +816,7 @@
       field('무엇을 했나요?', '<select data-stage style="' + INPUT + '">' + stages.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select>') +
       field('이번 수량 (' + u.esc(l.unit) + ')', '<input data-qty type="number" min="0" step="any" style="' + INPUT + '">') +
       '<div data-over style="display:none;font-size:12px;color:var(--status-danger);margin-top:4px"></div>' +
-      (l.splitsMaterial ? '<label data-with-stored style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px"><input type="checkbox" data-stored checked> <span data-stored-text>반입도 같은 수량으로 기록 (설치한 자재는 들어온 것)</span></label>' : '') +
+      (l.splitsMaterial ? '<div style="font-size:12px;margin-top:8px">반입은 입고 수량과 근거를 확인하여 별도로 기록하세요.</div>' : '') +
       field('작업일', '<input data-date type="date" value="' + today() + '" style="' + INPUT + '">') +
       field('위치', '<input data-location placeholder="예) 주방 서쪽 벽 · 그리드 C-4" style="' + INPUT + '">') +
       markField(u, s) +
@@ -1187,6 +1188,13 @@
     rfi: rfi,
     rfiDecide: rfiDecide,
     ledger: ledger,
+    editor: function (contractId) {
+      var sheets = [], seen = {};
+      (state.data.sections || []).forEach(function (s) {
+        (s.sheets || []).forEach(function (p) { if (p.sheet && !seen[p.sheet.id]) { seen[p.sheet.id] = true; sheets.push(p.sheet); } });
+      });
+      global.AdminClaimEditor.open(contractId, state.data.siteId, sheets);
+    },
     _state: state,
     _meaningful: meaningful,
   };
