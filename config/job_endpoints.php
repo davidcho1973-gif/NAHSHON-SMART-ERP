@@ -347,6 +347,7 @@ return [
         'ProjectContractDocumentController' => ['_module' => 'contracts'],
         'PayrollController' => ['_module' => 'payroll'],
         'GcClaimExportController' => ['_module' => 'contracts'],
+        'ClaimRecordReportController' => ['_module' => 'contracts', 'send' => ['contracts', 'export']],
         'HrAttendanceExportController' => ['_module' => 'attendance'],
         'W9FormController' => ['_module' => 'private_hr'],
         'PurchaseRequestController' => ['_module' => 'purchasing', 'mobile' => ['purchasing', 'view'], 'store' => ['purchasing', 'view'], 'upload' => ['purchasing', 'view'], 'action' => ['purchasing', 'edit']],

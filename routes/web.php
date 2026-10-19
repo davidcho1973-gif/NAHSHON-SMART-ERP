@@ -73,6 +73,8 @@ Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::
 Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
 use App\Http\Controllers\AssistantWorkspaceController;
 use App\Http\Controllers\ClaimEvidenceFileController;
+use App\Http\Controllers\ClaimRecordReportController;
+use App\Http\Controllers\DrawingStudioController;
 use App\Http\Controllers\JobApprovalController;
 use App\Http\Controllers\JobWorkspaceController;
 use App\Http\Controllers\PersonalPayslipController;
@@ -323,7 +325,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
-    Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(\App\Http\Controllers\DrawingStudioController::class)->group(function (): void {
+    Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(DrawingStudioController::class)->group(function (): void {
         Route::get('/', 'show');
         Route::put('/', 'save');
         Route::get('/history', 'history');
@@ -416,6 +418,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/billing-export/contracts/{contract}/daily-evidence/{type}/{id}', [ClaimEvidenceFileController::class, 'show'])
         ->whereNumber(['contract', 'id'])->whereIn('type', ['document', 'expense', 'receipt', 'photo'])->name('billing-export.daily-evidence');
     Route::get('/billing-export/applications/{application}/gc-claim.xlsx', [GcClaimExportController::class, 'download'])->whereNumber('application')->name('billing-export.gc-claim');
+    Route::get('/claim-editor/lines/{line}/export/{format}', [ClaimRecordReportController::class, 'export'])->whereNumber('line')->whereIn('format', ['html', 'docx', 'xlsx'])->name('claim-record.export');
+    Route::post('/claim-editor/lines/{line}/send', [ClaimRecordReportController::class, 'send'])->whereNumber('line')->middleware('throttle:10,1')->name('claim-record.send');
     Route::post('/drawing-api/documents/{document}/start', [DrawingSheetController::class, 'start'])->whereNumber('document')->name('drawing-sheets.start');
     Route::post('/drawing-api/documents/{document}/pages/{page}', [DrawingSheetController::class, 'page'])
         ->whereNumber(['document', 'page'])->middleware('throttle:240,1')->name('drawing-sheets.page');

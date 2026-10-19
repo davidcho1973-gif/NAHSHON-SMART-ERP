@@ -31,6 +31,7 @@
     <script src="{{ asset('js/admin-material-receipts.js') }}?v={{ filemtime(public_path('js/admin-material-receipts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-week-board.js') }}?v={{ filemtime(public_path('js/admin-week-board.js')) }}" defer></script>
     <script src="{{ asset('js/admin-section-drawings.js') }}?v={{ filemtime(public_path('js/admin-section-drawings.js')) }}" defer></script>
+    <link rel="stylesheet" href="{{ asset('css/claim-record-studio.css') }}?v={{ filemtime(public_path('css/claim-record-studio.css')) }}">
     <script src="{{ asset('js/admin-claim-editor.js') }}?v={{ filemtime(public_path('js/admin-claim-editor.js')) }}" defer></script>
     <link rel="stylesheet" href="{{ asset('css/drawing-studio.css') }}?v={{ filemtime(public_path('css/drawing-studio.css')) }}">
     <script src="{{ asset('js/drawing-studio-core.js') }}?v={{ filemtime(public_path('js/drawing-studio-core.js')) }}" defer></script>

@@ -6,10 +6,12 @@
       return r;
     });
   }
-  function open(contractId, siteId, sheets) {
+  function open(contractId, siteId, sheets, options) {
+    options = options || {};
     if (!document.getElementById('ce-style')) { var style = document.createElement('style'); style.id = 'ce-style'; style.textContent = '.ce-editor{font:14px/1.5 system-ui,sans-serif}.ce-editor input,.ce-editor select,.ce-editor textarea{box-sizing:border-box;border:1px solid var(--border-default,#cbd5e1);border-radius:7px;padding:8px;background:var(--bg-surface,#fff);color:var(--text-primary,#123);max-width:100%;font:inherit}.ce-editor button{border:1px solid var(--border-default,#cbd5e1);border-radius:7px;padding:8px 12px;background:var(--bg-surface,#fff);color:var(--text-primary,#123);font:inherit;cursor:pointer}.ce-editor button:hover{border-color:#0ea5e9}.ce-editor button:disabled{opacity:.5}.ce-editor aside{max-height:65vh;overflow:auto;position:sticky;top:0}.ce-editor [data-edit-body]>div{align-items:start}.ce-editor section{padding:12px;border:1px solid var(--border-default,#cbd5e1);border-radius:10px}.ce-editor label{display:block;margin:8px 0}.ce-editor label input,.ce-editor label select,.ce-editor label textarea{display:block;width:100%}.ce-editor [data-commit],.ce-editor [data-period-prepare]{background:#086b9b;color:white}.ce-editor [data-total]{padding:12px;background:#eaf5ff;color:#145075;border-radius:8px;font-weight:700}.ce-editor [data-save-state]{color:#167755;margin-bottom:8px}.ce-editor h3,.ce-editor h4{margin:12px 0}.ce-editor [data-drawing-preview]{margin-top:12px;background:#f1f5f9;border-radius:8px}.ce-editor [data-calcs] input{min-width:0}@media(max-width:850px){.ce-editor [data-edit-body]>div{grid-template-columns:1fr!important}.ce-editor aside{max-height:160px;overflow:auto}}'; document.head.appendChild(style); }
     var u = global.AdminUI, esc = u.esc, box, data, line, content, revision = 0, timer, saving = Promise.resolve(), closed = false;
     var undo = [], redo = [], dirty = false, newWork = false, searchTimer, searchVersion = 0, activeSheetId = null;
+    var embedded = null, embeddedSheet = null, uploading = false, committing = false, modal, sending = false;
     function error(e) { if (dirty) state('저장되지 않음 · 다시 시도하세요'); u.toast(e.message || '처리하지 못했습니다.', 'error'); }
     function money(v) { return Number(v || 0).toLocaleString('en-US', { style: 'currency', currency: data.contract.currency || 'USD' }); }
     function snapshot() { undo.push(JSON.stringify(content)); redo = []; }
@@ -17,7 +19,9 @@
       return content.calculations.length ? Math.round(content.calculations.reduce(function (s, r) { return s + Number(r.length) * Number(r.height) * Number(r.count) - Number(r.deduction); }, 0) * 10000) / 10000 : Number(content.quantity || 0);
     }
     function state(text) { if (box) box.querySelector('[data-save-state]').textContent = text; }
+    function locked() { return !newWork && !!data?.drafts.find(function(d){return d.lineId===line?.id;})?.recordId; }
     function queueSave() {
+      if (locked()) return;
       dirty = true; clearTimeout(timer); state('저장 대기');
       timer = setTimeout(function () { save().catch(error); }, 1200);
     }
@@ -41,12 +45,15 @@
       return saving;
     }
     function choose(id) {
+      if (uploading || committing) return Promise.resolve();
+      if (embedded && !embedded.beforeClose()) return Promise.resolve();
+      if (embedded) { embedded.close(true); embedded = null; embeddedSheet = null; }
       return save().then(function () { if (dirty) return save(); }).then(function () {
         searchVersion++; clearTimeout(searchTimer);
         line = data.lines.find(function (l) { return l.id === Number(id); });
         var draft = data.drafts.find(function (d) { return d.lineId === line.id; });
         revision = draft ? draft.revision : 0;
-        content = draft ? JSON.parse(JSON.stringify(draft.content)) : { workDate: data.contract.today, location: '', stage: line.recognitionBasis === 'milestone' ? Object.keys(line.stageWeights || {})[0] : 'installed', quantity: 0, calculations: [], evidence: [], marks: [], notes: '' };
+        content = draft ? JSON.parse(JSON.stringify(draft.content)) : { workDate: data.contract.today, location: '', stage: line.recognitionBasis === 'milestone' ? (Object.keys(line.stageWeights || {}).includes('installation') ? 'installation' : Object.keys(line.stageWeights || {})[0]) : 'installed', quantity: 0, calculations: [], evidence: [], marks: [], notes: '' };
         var preferred = (sheets || []).find(function (s) { return (s.sectionIds || []).includes(line.workSectionId); }) || (sheets || [])[0]; activeSheetId = preferred ? preferred.id : null;
         undo = []; redo = []; dirty = false; newWork = false; render();
         if (draft && draft.recordId) state('기록 완료 #' + draft.recordId);
@@ -55,16 +62,21 @@
     function render() {
       var stages = line.recognitionBasis === 'milestone' ? Object.keys(line.stageWeights || {}) : ['installed'];
       var records = data.records.filter(function (r) { return r.lineId === line.id; });
+      if (options.fullscreen) box.querySelector('[data-record-title]').textContent = '#' + line.lineNo + ' ' + line.description;
       box.querySelector('[data-edit-body]').innerHTML = '<div style="display:grid;grid-template-columns:minmax(150px,1fr) minmax(250px,3fr) minmax(240px,2fr);gap:12px;overflow:auto">' +
-        '<aside><input data-line-search placeholder="공정명·번호 검색" style="width:100%;position:sticky;top:0;margin-bottom:8px">' + data.lines.map(function (l) { return '<button type="button" data-line="' + l.id + '" style="display:block;width:100%;padding:12px;text-align:left;margin-bottom:6px">#' + esc(l.lineNo) + ' ' + esc(l.description) + '<br><small>미배정 ' + money(l.availableAmount) + '<br>' + esc(l.nextAction || '') + '</small></button>'; }).join('') + '</aside>' +
-        '<section><select data-sheet style="width:100%">' + (sheets || []).map(function (s) { return '<option value="' + s.id + '">' + esc(s.sheetNo + ' · ' + s.title) + '</option>'; }).join('') + '</select><button type="button" data-drawing>도면 크게 열기 · 표시</button><div data-drawing-preview style="height:300px;overflow:auto"></div>' +
+        '<aside><input data-line-search placeholder="공정명·번호 검색" style="width:100%;position:sticky;top:0;margin-bottom:8px">' + (options.fullscreen ? data.lines.filter(function (l) { return l.id === line.id; }) : data.lines).map(function (l) { return '<button type="button" data-line="' + l.id + '" style="display:block;width:100%;padding:12px;text-align:left;margin-bottom:6px">#' + esc(l.lineNo) + ' ' + esc(l.description) + '<br><small>미배정 ' + money(l.availableAmount) + '<br>' + esc(l.nextAction || '') + '</small></button>'; }).join('') + '</aside>' +
+        '<section data-panel="calculation"><select data-sheet style="width:100%">' + (sheets || []).map(function (s) { return '<option value="' + s.id + '">' + esc(s.sheetNo + ' · ' + s.title) + '</option>'; }).join('') + '</select><button type="button" data-drawing>도면 크게 열기 · 표시</button><div data-drawing-preview style="height:300px;overflow:auto"></div>' +
         '<h4>산출표 · ' + esc(line.unit) + '</h4><div style="display:flex;gap:4px;color:#64748b;font-size:12px"><span style="width:18%">위치</span><span style="width:18%">길이</span><span style="width:18%">높이</span><span style="width:18%">개수</span><span style="width:18%">공제</span></div><div data-calcs></div><button type="button" data-add>+ 산출 행</button><p data-total></p>' +
         '<details><summary>AI에게 질문</summary><textarea data-question rows="3" placeholder="선택한 공정의 도면 근거와 부족한 자료를 설명해줘" style="width:100%"></textarea><button type="button" data-ask>질문하기</button><div data-answer></div></details></section>' +
-        '<section><h3>#' + esc(line.lineNo) + ' ' + esc(line.description) + '</h3><p>계약 ' + esc(line.contractQty) + ' ' + esc(line.unit) + '</p><p>확인 금액 ' + money(line.verifiedAmount) + '<br>기존 회차 배정 ' + money(line.allocatedAmount) + '<br>미배정 확인액 ' + money(line.availableAmount) + '<br>잔여 계약액 ' + money(line.remainingContractAmount) + '</p>' +
+        '<section data-panel="record"><h3>#' + esc(line.lineNo) + ' ' + esc(line.description) + '</h3><p>계약 ' + esc(line.contractQty) + ' ' + esc(line.unit) + '</p><p data-money>확인 금액 ' + money(line.verifiedAmount) + '<br>기존 회차 배정 ' + money(line.allocatedAmount) + '<br>미배정 확인액 ' + money(line.availableAmount) + '<br>잔여 계약액 ' + money(line.remainingContractAmount) + '</p>' +
         '<label>작업일<input data-field="workDate" type="date" value="' + esc(content.workDate) + '"></label><br><label>위치<input data-field="location" value="' + esc(content.location) + '"></label><br><label>단계<select data-field="stage">' + stages.map(function (s) { return '<option' + (s === content.stage ? ' selected' : '') + ' value="' + esc(s) + '">' + esc({ installed: '설치', installation: '설치', stored: '자재 반입' }[s] || s) + '</option>'; }).join('') + '</select></label><br><label>산출표가 없을 때 직접 수량<input data-field="quantity" type="number" min="0" step="any" value="' + esc(content.quantity) + '"></label>' +
-        '<p>' + esc((line.blockers || []).join(' · ')) + '</p><details><summary>공정 필수자료 설정</summary><div data-requirements></div><button type="button" data-rule-add>+ 필수자료</button><button type="button" data-rule-save>조건 저장</button></details><h4>기존 자료 연결</h4><input data-search placeholder="자료 검색"><div data-sources style="max-height:200px;overflow:auto"></div><div data-linked></div>' +
-        '<label>메모<textarea data-field="notes" rows="3">' + esc(content.notes) + '</textarea></label><p><button type="button" data-undo>되돌리기</button> <button type="button" data-redo>다시 실행</button></p><button type="button" data-commit>확인 대기로 기록</button><button type="button" data-review>기존 기록 · 확인</button><button type="button" data-new>새 작업</button>' +
-        '<details><summary>초안 수정 이력</summary><div data-history></div></details><details><summary>작업 이력 ' + records.length + '건</summary>' + records.map(function (r) { return '<p>' + (r.status === 'pending' && r.recordKind === 'actual' ? '<input type="checkbox" data-record-select value="' + r.id + '"> ' : '') + esc(r.workDate + ' · ' + r.location + ' · ' + r.reportedQty + ' ' + line.unit + ' · ' + r.status) + '</p>'; }).join('') + '<button type="button" data-bulk>선택 기록에 위 작업일·위치 적용</button></details></section></div>';
+        '<div data-panel="evidence"><label>증빙 바로 올리기<input data-upload type="file" multiple accept="image/*,.pdf,.docx,.xlsx,.csv"></label><div data-upload-state></div></div><p>' + esc((line.blockers || []).join(' · ')) + '</p><details><summary>공정 필수자료 설정</summary><div data-requirements></div><button type="button" data-rule-add>+ 필수자료</button><button type="button" data-rule-save>조건 저장</button></details><h4>기존 자료 연결</h4><input data-search placeholder="자료 검색"><div data-sources style="max-height:200px;overflow:auto"></div><div data-linked></div>' +
+        '<div><button type="button" data-template>작업 보고서 양식 넣기</button><button type="button" data-paste-table>Excel 표 붙여넣기</button></div><label>작업 설명 · 보고서<textarea data-field="notes" rows="8">' + esc(content.notes) + '</textarea></label><p><button type="button" data-undo>되돌리기</button> <button type="button" data-redo>다시 실행</button></p><button type="button" data-commit>확인 대기로 기록</button><button type="button" data-review>기존 기록 · 확인</button><button type="button" data-new>새 작업</button>' +
+        '<details><summary>초안 수정 이력</summary><div data-history></div></details><details data-record-history><summary>작업 이력 ' + records.length + '건</summary>' + records.map(function (r) { return '<p>' + (r.status === 'pending' && r.recordKind === 'actual' ? '<input type="checkbox" data-record-select value="' + r.id + '"> ' : '') + esc(r.workDate + ' · ' + r.location + ' · ' + r.reportedQty + ' ' + line.unit + ' · ' + r.status) + (r.status === 'pending' && r.recordKind === 'actual' ? ' <button data-edit-record="'+r.id+'">수정</button>' : '') + '</p>'; }).join('') + '<button type="button" data-bulk>선택 기록에 위 작업일·위치 적용</button></details></section></div>';
+      box.querySelectorAll('[data-edit-record]').forEach(function(b){b.onclick=function(){var record=data.records.find(function(r){return r.id===Number(b.dataset.editRecord);});u.formModal({title:'작업 기록 #'+record.id+' 수정',subtitle:'검토 대기 기록의 수정 이력이 남습니다.',fields:[{name:'workDate',label:'작업일',type:'date',value:record.workDate,required:true},{name:'location',label:'작업 위치',value:record.location,required:true},{name:'reportedQty',label:'보고 수량 ('+line.unit+')',type:'number',value:record.reportedQty,required:true},{name:'notes',label:'작업 설명',type:'textarea',value:record.notes||'',colSpan:2}],onSave:function(v){return call('api_saveClaimRecord',[Object.assign({id:record.id},v)]).then(function(){return call('api_getClaimEditor',[contractId]);}).then(function(r){data=r;render();return {success:true};}).catch(function(e){return {success:false,error:e.message};});}});};});
+      box.querySelector('[data-upload]').onchange = uploadFiles;
+      box.querySelector('[data-template]').onclick=function(){snapshot();content.notes+=(content.notes?'\n\n':'')+'작업 내용\n• \n\n시공 위치 및 범위\n• \n\n자재 · 장비\n• \n\n검측 및 보완사항\n• \n\n다음 작업 계획\n• ';box.querySelector('[data-field="notes"]').value=content.notes;queueSave();};
+      box.querySelector('[data-paste-table]').onclick=function(){u.formModal({title:'Excel 산출표 붙여넣기',subtitle:'머리글 없이 위치 / 길이 / 높이 / 개수 / 공제 순서의 5열을 복사하세요. 붙여넣은 행은 기존 표 뒤에 추가됩니다.',fields:[{name:'table',label:'복사한 셀',type:'textarea',required:true,colSpan:2}],onSave:function(v){var rows=String(v.table||'').trim().split(/\r?\n/).map(function(row){return row.split('\t');});if(rows.length+content.calculations.length>100||rows.some(function(r){return r.length!==5||r.slice(1).some(function(n){return n.trim()===''||!Number.isFinite(Number(n))||Number(n)<0;});}))return Promise.resolve({success:false,error:'5열의 숫자와 최대 100행을 확인하세요.'});snapshot();rows.forEach(function(r){content.calculations.push({label:r[0],length:Number(r[1]),height:Number(r[2]),count:Number(r[3]),deduction:Number(r[4])});});calculations();queueSave();return save().then(function(){return {success:true};});}});};
       box.querySelector('[data-line-search]').oninput = function () { var query = this.value.toLowerCase(); box.querySelectorAll('[data-line]').forEach(function (b) { b.hidden = !b.textContent.toLowerCase().includes(query); b.style.display = b.hidden ? 'none' : 'block'; }); };
       box.querySelectorAll('[data-line]').forEach(function (b) { b.onclick = function () { choose(b.dataset.line); }; });
       box.querySelectorAll('[data-field]').forEach(function (e) { e.oninput = function () { snapshot(); content[e.dataset.field] = e.value; calculations(); queueSave(); }; });
@@ -72,11 +84,11 @@
       box.querySelector('[data-search]').oninput = function () { sources(); clearTimeout(searchTimer); var query = this.value, version = ++searchVersion; searchTimer = setTimeout(function () { call('api_getClaimEvidenceSources', [contractId, query]).then(function (r) { if (closed || version !== searchVersion) return; r.sourceOptions.forEach(function (source) { if (!data.sourceOptions.some(function (s) { return s.value === source.value; })) data.sourceOptions.push(source); }); sources(); }).catch(error); }, 350); };
       box.querySelector('[data-undo]').onclick = function () { if (!undo.length) return; redo.push(JSON.stringify(content)); content = JSON.parse(undo.pop()); render(); queueSave(); };
       box.querySelector('[data-redo]').onclick = function () { if (!redo.length) return; undo.push(JSON.stringify(content)); content = JSON.parse(redo.pop()); render(); queueSave(); };
-      box.querySelector('[data-new]').onclick = function () { if (!global.confirm('새 작업 초안을 시작할까요? 기존 시공 기록은 보존됩니다.')) return; newWork = true; snapshot(); content = { workDate: data.contract.today, location: '', stage: line.recognitionBasis === 'milestone' ? (Object.keys(line.stageWeights || {}).includes('installation') ? 'installation' : Object.keys(line.stageWeights || {})[0]) : 'installed', quantity: 0, calculations: [], evidence: [], marks: [], notes: '' }; render(); queueSave(); };
-      box.querySelector('[data-review]').onclick = function () { save().then(function () { global.AdminClaimEvidence.open(contractId, line.id); }).catch(error); };
-      box.querySelector('[data-commit]').onclick = function () { var b = this; b.disabled = true; save().then(function () { return call('api_commitClaimEditDraft', [{ lineId: line.id, revision: revision }]); }).then(function (r) { state('확인 대기 기록 #' + r.id); u.toast('기록했습니다. 담당자 확인 후 기성에 포함됩니다.'); return call('api_getClaimEditor', [contractId]).then(function (fresh) { data = fresh; render(); state('확인 대기 기록 #' + r.id); }); }).catch(error).finally(function () { b.disabled = false; }); };
+      box.querySelector('[data-new]').onclick = function () { if(uploading || committing)return; if (!global.confirm('새 작업 초안을 시작할까요? 기존 시공 기록은 보존됩니다.')) return; newWork = true; snapshot(); content = { workDate: data.contract.today, location: '', stage: line.recognitionBasis === 'milestone' ? (Object.keys(line.stageWeights || {}).includes('installation') ? 'installation' : Object.keys(line.stageWeights || {})[0]) : 'installed', quantity: 0, calculations: [], evidence: [], marks: [], notes: '' }; render(); queueSave(); };
+      box.querySelector('[data-review]').onclick = function () { if(options.fullscreen){var history=box.querySelector('[data-record-history]');history.open=true;history.scrollIntoView({block:'start'});return;} save().then(function () { if (embedded && !embedded.beforeClose()) return; modal.close(null); global.AdminClaimEvidence.open(contractId, line.id); }).catch(error); };
+      box.querySelector('[data-commit]').onclick = function () { var b = this; if (committing || uploading) return; committing = true; b.disabled = true; save().then(function () { if (!revision) { dirty = true; return save(); } }).then(function () { return call('api_commitClaimEditDraft', [{ lineId: line.id, revision: revision }]); }).then(function (r) { state('확인 대기 기록 #' + r.id); u.toast('기록했습니다. 담당자 확인 후 기성에 포함됩니다.'); return call('api_getClaimEditor', [contractId]).then(function (fresh) { data = fresh; render(); state('확인 대기 기록 #' + r.id); }); }).catch(error).finally(function () { committing = false; b.disabled = false; }); };
       if (activeSheetId !== null) box.querySelector('[data-sheet]').value = String(activeSheetId);
-      box.querySelector('[data-sheet]').onchange = function () { activeSheetId = Number(this.value); preview(); };
+      box.querySelector('[data-sheet]').onchange = function () { if (embedded && !embedded.beforeClose()) { this.value = String(activeSheetId); return; } if (embedded) { embedded.close(true); embedded = null; embeddedSheet = null; } activeSheetId = Number(this.value); preview(); };
       box.querySelector('[data-drawing]').onclick = function () {
         var s = selectedSheet(); if (!s) return;
         global.DrawingMarker.open({ siteId: siteId, sheetNo: s.sheetNo, mode: 'pick', captureSnapshot: true, initialShapes: content.marks.filter(function (m) { return m.sheetNo === s.sheetNo; }), line: line, note: content.notes, onProposal: function (p) { snapshot(); if (p.calculations.length) content.calculations = p.calculations; p.sources.forEach(addSource); content.marks = content.marks.concat(p.annotations || []); render(); queueSave(); }, onPick: function (g) { snapshot(); content.marks = content.marks.filter(function (m) { return m.sheetNo !== g.sheetNo; }).concat(g.shapes.map(function (m) { return Object.assign({}, m, { sheetNo: g.sheetNo, label: m.label || g.label || '' }); })); if (g.measuredTotal && !content.calculations.length && !Number(content.quantity)) content.quantity = g.measuredTotal; render(); queueSave(); return uploadMarked(g); } });
@@ -100,7 +112,15 @@
       var savedDraft = data.drafts.find(function (d) { return d.lineId === line.id; });
       box.querySelector('[data-history]').innerHTML = ((savedDraft && savedDraft.history) || []).slice().reverse().map(function (h) { return '<p>' + esc(h.at + ' · 버전 ' + h.revision) + (savedDraft.recordId ? '' : ' <button type="button" data-restore="' + h.revision + '">복원</button>') + '</p>'; }).join('') || '저장된 수정 이력이 없습니다.';
       box.querySelectorAll('[data-restore]').forEach(function (b) { b.onclick = function () { var h = savedDraft.history.find(function (x) { return x.revision === Number(b.dataset.restore); }); if (!h) return; snapshot(); content = JSON.parse(JSON.stringify(h.content)); render(); queueSave(); }; });
+      if(options.fullscreen){
+        var tabs=document.createElement('nav');tabs.className='ce-studio-tabs';tabs.innerHTML='<button data-jump="record">작업 기록</button><button data-jump="calculation">산출표</button><button data-jump="evidence">증빙</button>';
+        box.querySelector('[data-edit-body]').prepend(tabs);tabs.querySelectorAll('[data-jump]').forEach(function(b){b.onclick=function(){box.querySelector('[data-panel="'+b.dataset.jump+'"]').scrollIntoView({block:'start'});};});
+      }
       calculations(); sources(); preview();
+      if(locked()){
+        box.querySelectorAll('[data-field],[data-upload],[data-add],[data-row],[data-delete-row],[data-source],[data-caption],[data-rotate],[data-up],[data-unlink],[data-template],[data-paste-table],[data-undo],[data-redo],[data-commit],[data-drawing],[data-ask],[data-restore]').forEach(function(e){e.disabled=true;});
+        state('검토 요청 완료 · 기존 기록 수정 또는 새 작업을 선택하세요');
+      }
     }
     function uploadMarked(g) {
       if (!g.blob) return Promise.resolve();
@@ -112,7 +132,16 @@
       });
     }
     function selectedSheet() { return (sheets || []).find(function (s) { return String(s.id) === box.querySelector('[data-sheet]').value; }); }
-    function preview() { var s = selectedSheet(), p = box.querySelector('[data-drawing-preview]'); p.innerHTML = s && s.thumbUrl ? '<img alt="도면 미리보기" src="' + esc(s.thumbUrl) + '" style="max-width:100%">' : '도면을 선택하세요.'; }
+    function preview() {
+      var s = selectedSheet(), p = box.querySelector('[data-drawing-preview]');
+      p.innerHTML = s && s.thumbUrl ? '<img alt="도면 미리보기" src="' + esc(s.thumbUrl) + '" style="max-width:100%">' : '연결된 도면이 없습니다. 공정별 도면에서 도면을 지정하세요.';
+      if (!options.fullscreen) return;
+      var host = box.querySelector('[data-studio-drawing]');
+      if (embedded && embeddedSheet === (s && s.id)) return;
+      if (!s || !global.DrawingMarker) { host.textContent = '연결된 도면이 없습니다. 오른쪽에서 작업 기록과 증빙을 작성할 수 있습니다.'; return; }
+      host.textContent = ''; embeddedSheet = s.id;
+      embedded = global.DrawingMarker.open({host:host, siteId:siteId, sheetNo:s.sheetNo, sectionId:line.workSectionId, line:line});
+    }
     function calculations() {
       box.querySelector('[data-calcs]').innerHTML = content.calculations.map(function (r, i) { return '<div style="display:flex;gap:4px;margin:6px 0">' + ['label', 'length', 'height', 'count', 'deduction'].map(function (k) { return '<input aria-label="' + esc({label:'위치',length:'길이',height:'높이',count:'개수',deduction:'공제'}[k]) + '" title="' + esc({label:'위치',length:'길이',height:'높이',count:'개수',deduction:'공제'}[k]) + '" data-row="' + i + '" data-key="' + k + '" style="width:18%" type="' + (k === 'label' ? 'text' : 'number') + '" value="' + esc(r[k]) + '">'; }).join('') + '<button type="button" data-delete-row="' + i + '">×</button></div>'; }).join('');
       box.querySelectorAll('[data-row]').forEach(function (e) { e.oninput = function () { snapshot(); content.calculations[Number(e.dataset.row)][e.dataset.key] = e.dataset.key === 'label' ? e.value : Number(e.value); updateTotal(); queueSave(); }; });
@@ -121,14 +150,15 @@
     }
     function updateTotal() {
       var weight = line.recognitionBasis === 'milestone' ? Number((line.stageWeights || {})[content.stage] || 0) / 100 : 1;
-      box.querySelector('[data-total]').textContent = '길이 × 높이 × 개수 − 공제 = ' + total() + ' ' + line.unit + ' · 확인 시 예상 ' + money(total() * line.unitPrice * weight);
+      box.querySelector('[data-total]').textContent = '길이 × 높이 × 개수 − 공제 = ' + total() + ' ' + line.unit + (options.fullscreen ? '' : ' · 확인 시 예상 ' + money(total() * line.unitPrice * weight));
     }
     function addSource(key) { var p = key.split(':'); if (!content.evidence.some(function (e) { return e.type === p[0] && e.id === Number(p[1]); })) content.evidence.push({ type: p[0], id: Number(p[1]), locator: '전체' }); }
     function sources() {
       var q = box.querySelector('[data-search]').value.toLowerCase();
       box.querySelector('[data-sources]').innerHTML = data.sourceOptions.filter(function (o) { return o.label.toLowerCase().includes(q); }).map(function (o) { return '<button draggable="true" type="button" data-source="' + esc(o.value) + '" style="display:block;text-align:left">+ ' + esc(o.label) + '</button>'; }).join('');
       box.querySelectorAll('[data-source]').forEach(function (e) { e.ondragstart = function (event) { event.dataTransfer.setData('text/plain', e.dataset.source); }; e.onclick = function () { snapshot(); addSource(e.dataset.source); sources(); queueSave(); }; });
-      box.querySelector('[data-linked]').innerHTML = content.evidence.map(function (e, i) { var o = data.sourceOptions.find(function (o) { return o.value === e.type + ':' + e.id; }); return '<p>' + esc(o ? o.label : '자료 확인 필요') + ' <button type="button" data-rotate="' + i + '">↻</button><button type="button" data-up="' + i + '">↑</button><button type="button" data-unlink="' + i + '">×</button><input aria-label="증빙 설명" data-caption="' + i + '" value="' + esc(e.locator) + '"></p>'; }).join('');
+      box.querySelector('[data-linked]').innerHTML = content.evidence.map(function (e, i) { var o = data.sourceOptions.find(function (o) { return o.value === e.type + ':' + e.id; }); return '<p>' + esc(o ? o.label : '자료 확인 필요') + (['document','photo','receipt','expense'].includes(e.type) ? ' <button type="button" data-proof="'+i+'">원본 보기</button>' : '') + ' <button type="button" data-rotate="' + i + '">↻</button><button type="button" data-up="' + i + '">↑</button><button type="button" data-unlink="' + i + '">×</button><input aria-label="증빙 설명" data-caption="' + i + '" value="' + esc(e.locator) + '"></p>'; }).join('');
+      box.querySelectorAll('[data-proof]').forEach(function(b){b.onclick=function(){var e=content.evidence[Number(b.dataset.proof)],url='/billing-export/contracts/'+contractId+'/daily-evidence/'+e.type+'/'+e.id;u.modal({title:'증빙 원본 · '+e.locator,width:1100,body:'<p><a target="_blank" rel="noopener" href="'+esc(url)+'">원본 열기 / 다운로드</a> · Office 파일은 내려받아 열 수 있습니다.</p><iframe sandbox="allow-same-origin allow-downloads" title="증빙 원본" src="'+esc(url)+'" style="width:100%;height:65vh;border:0;background:white"></iframe>'});};});
       var linked = box.querySelector('[data-linked]'); linked.ondragover = function (event) { event.preventDefault(); }; linked.ondrop = function (event) { event.preventDefault(); var key = event.dataTransfer.getData('text/plain'); if (!data.sourceOptions.some(function (o) { return o.value === key; })) return; snapshot(); addSource(key); sources(); queueSave(); };
       box.querySelectorAll('[data-caption]').forEach(function (e) { e.oninput = function () { content.evidence[Number(e.dataset.caption)].locator = e.value; queueSave(); }; });
       box.querySelectorAll('[data-rotate]').forEach(function (e) { e.onclick = function () { snapshot(); var p = content.evidence[Number(e.dataset.rotate)], match = (p.note || '').match(/presentationRotation:(90|180|270)/); var rotation = ((match ? Number(match[1]) : 0) + 90) % 360; p.note = 'presentationRotation:' + rotation; u.toast('제출용 사진 회전 ' + rotation + '° · 원본 유지'); queueSave(); }; });
@@ -149,9 +179,56 @@
         };
       }).catch(error).finally(function () { button.disabled = false; });
     }
+    function uploadFiles() {
+      var files = Array.from(this.files || []), input = this, statusEl = box.querySelector('[data-upload-state]');
+      if (!files.length || uploading) return; if (files.length + content.evidence.length > 20) { u.toast('연결 증빙은 20개까지 가능합니다.', 'error'); return; }
+      uploading = true; input.disabled = true;
+      files.reduce(function (chain, file) { return chain.then(function () {
+        statusEl.textContent = file.name + ' 올리는 중…';
+        var fd = new FormData(); fd.append('files[]', file); fd.append('purpose','claim_evidence'); fd.append('site_id',siteId);
+        if (data.contract.projectId) fd.append('project_id',data.contract.projectId);
+        if (data.contract.companyId) fd.append('company_id',data.contract.companyId);
+        return fetch('/document-hub/api/upload',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''},body:fd}).then(function(r){return r.json();}).then(function(r){
+          var id = r.documents?.[0]?.id || r.duplicates?.[0]?.documentId;
+          if (!id) throw new Error(file.name + ': ' + (r.failed?.[0]?.reason || r.message || '업로드 실패'));
+          if (!data.sourceOptions.some(function(x){return x.value==='document:'+id;})) data.sourceOptions.push({value:'document:'+id,label:file.name});
+          snapshot(); addSource('document:'+id); sources(); queueSave(); return save();
+        });
+      }); },Promise.resolve()).then(function(){statusEl.textContent='업로드 완료 · 원본 보존 · 분석 및 검토 전';input.value='';}).catch(function(e){statusEl.textContent=e.message;error(e);}).finally(function(){uploading=false;input.disabled=false;});
+    }
+    function exportRecord(format) {
+      return save().then(function(){if(!revision){dirty=true;return save();}}).then(function(){
+        var url='/claim-editor/lines/'+line.id+'/export/'+format+'?revision='+revision;
+        if(format==='html'){var frame=box.querySelector('[data-report-preview]');frame.src=url;box.querySelector('[data-report-panel]').hidden=false;return;}
+        return fetch(url,{credentials:'same-origin',headers:{Accept:'application/octet-stream'}}).then(async function(r){if(!r.ok)throw new Error('파일을 만들지 못했습니다. 저장 상태와 권한을 확인하세요.');var blob=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BOQ-'+line.lineNo+'-work-record.'+format;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},2000);});
+      }).catch(error);
+    }
+    function mailRecord() {
+      save().then(function(){if(!revision){dirty=true;return save();}}).then(function(){
+        var sentLine = line.id, sentRevision = revision, requestId = crypto.randomUUID();
+        var m = u.modal({title:'작업 보고서 이메일 보내기',width:980,beforeClose:function(){return !sending;},
+          body:'<iframe title="보낼 보고서 미리보기" style="width:100%;height:40vh;background:white;border:1px solid #aaa" src="/claim-editor/lines/'+sentLine+'/export/html?revision='+sentRevision+'"></iframe><p>현재 저장 버전 v'+sentRevision+' · 보고서와 증빙 목록만 첨부됩니다. 증빙 원본은 포함하지 않습니다.</p><label>수신 이메일<input data-mail-to type="email" required style="width:100%;padding:8px"></label><label>제목<input data-mail-subject maxlength="200" value="'+esc('BOQ '+line.lineNo+' 작업 보고서')+'" style="width:100%;padding:8px"></label><label>첨부 형식<select data-mail-format><option value="docx">Word (.docx)</option><option value="xlsx">Excel (.xlsx)</option></select></label><label>메시지<textarea data-mail-body maxlength="3500" rows="3" style="width:100%"></textarea></label><label><input data-mail-confirm type="checkbox"> 수신처와 미리보기 내용을 확인했습니다.</label><p data-mail-result></p>',
+          actions:[{label:'취소',value:null},{label:'확인한 보고서 보내기',value:'keep',kind:'primary'}],onAction:function(a,el){
+            var to=el.querySelector('[data-mail-to]'),subject=el.querySelector('[data-mail-subject]').value.trim(),result=el.querySelector('[data-mail-result]');
+            if(sending)return;if(!to.value||!to.checkValidity()||!subject||!el.querySelector('[data-mail-confirm]').checked){result.textContent='수신 이메일, 제목과 확인란을 확인하세요.';return;}
+            sending=true;el.querySelectorAll('input,textarea,select,button').forEach(function(x){x.disabled=true;});result.textContent='발송 요청 중…';
+            fetch('/claim-editor/lines/'+sentLine+'/send',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content||''},body:JSON.stringify({requestId:requestId,revision:sentRevision,to:to.value,subject:subject,body:el.querySelector('[data-mail-body]').value,format:el.querySelector('[data-mail-format]').value,confirmed:true})}).then(async function(res){var j=await res.json();if(!res.ok||j.success===false)throw new Error(j.message||j.error||'발송 실패');result.textContent='메일 서버에 발송했습니다. 서신 원장에서 이력을 확인할 수 있습니다.';}).catch(function(e){result.textContent=e.message+' 전송 결과를 확인한 뒤 다시 여세요.';}).finally(function(){sending=false;el.querySelector('[data-m="0"]').disabled=false;el.querySelector('[data-m="0"]').textContent='닫기';});
+          }});
+      }).catch(error);
+    }
+    function setupStudio() {
+      box.classList.add('ce-studio');
+      box.querySelector('[data-send-report]').onclick = mailRecord;
+      box.querySelector('[data-save-now]').onclick=function(){if(!revision){dirty=true;}save().catch(error);};
+      box.querySelectorAll('[data-export-format]').forEach(function(b){b.onclick=function(){exportRecord(b.dataset.exportFormat);};});
+      box.querySelector('[data-close-preview]').onclick=function(){box.querySelector('[data-report-panel]').hidden=true;};
+      box.querySelector('[data-print-preview]').onclick=function(){box.querySelector('[data-report-preview]').contentWindow.print();};
+      box.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&!e.target.closest('.dm-wrap')){e.preventDefault();save().catch(error);}});
+    }
     call('api_getClaimEditor', [contractId]).then(function (r) {
       data = r; if (!data.lines.length) throw new Error('계약 공정을 먼저 등록하세요.');
-      var m = u.modal({ beforeClose: function () { if (document.querySelector('.dm-wrap')) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } closed = true; clearTimeout(timer); return true; }, title: '기성 편집', width: 1400, body: '<div data-save-state></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>', actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); choose(data.lines[0].id); box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { closed = true; clearTimeout(timer); m.close(null); }).catch(error); } });
+      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing || sending) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '공정 기록 작업실' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-save-now>초안 저장 · Ctrl+S</button><button data-export-format="html">보고서 미리보기 · PDF</button><button data-export-format="docx">Word</button><button data-export-format="xlsx">Excel</button><button data-send-report>이메일 보내기</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div><div data-report-panel hidden><div><button data-close-preview>편집으로 돌아가기</button><button data-print-preview>인쇄 / PDF 저장</button></div><iframe title="작업 보고서 미리보기" data-report-preview></iframe></div>' : '<div data-save-state></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
+      modal = m;
     }).catch(error);
   }
   global.AdminClaimEditor = { open: open };

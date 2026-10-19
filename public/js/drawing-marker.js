@@ -276,7 +276,7 @@
    */
   function open(opts) {
     injectCss();
-    var studio = null;
+    var studio = null, disposed = false;
     var st = {
       opts: opts, pick: opts.mode === 'pick', data: null, marks: [], filter: {}, tool: 'hand', draft: [], sel: null,
       W: 0, H: 0, k: 1, x: 0, y: 0, pointers: {}, gesture: null, suggestAt: null, labels: true,
@@ -309,19 +309,25 @@
         '</div>' +
         '<div class="dm-tools" data-tools style="display:none"></div>' +
       '</div><div class="dm-side" data-side></div></div>';
-    document.body.appendChild(wrap);
+    (opts.host || document.body).appendChild(wrap);
+    if (opts.host) { wrap.style.cssText = 'position:absolute;inset:0;z-index:1'; wrap.querySelector('[data-close]').style.display = 'none'; }
     var $ = function (sel) { return wrap.querySelector(sel); };
     var stage = $('[data-stage]'), world = $('[data-world]'), svg = $('[data-svg]'), canvas = $('[data-canvas]');
 
-    function close() {
-      if (studio && !studio.beforeClose()) return;
+    function beforeClose() { return !studio || studio.beforeClose(); }
+    function close(force) {
+      if (!force && !beforeClose()) return false;
+      disposed = true;
       if (studio) studio.destroy();
       document.removeEventListener('keydown', onKey);
       global.removeEventListener('resize', onResize);
       wrap.remove();
       if (st.task) try { st.task.destroy(); } catch (e) { /* 이미 닫힌 문서 */ }
+      return true;
     }
     function onKey(e) {
+      if (opts.host && (!wrap.contains(e.target) || e.target.matches('input,textarea,select,[contenteditable]'))) return;
+      if (opts.host && e.key === 'Escape') return;
       if (e.key === 'Escape') { if (st.draft.length) { st.draft = []; draw(); } else if (st.sel) { select(null); } else close(); }
       if (e.key === 'Enter' && st.draft.length) finishDraft();
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && st.draft.length) { st.draft.pop(); draw(); }
@@ -352,6 +358,7 @@
     var sheetArgs = [opts.siteId, opts.sheetNo];
     if (global.apiCache) delete global.apiCache['api_getSheetMarks' + JSON.stringify(sheetArgs)];
     call('api_getSheetMarks', sheetArgs).then(function (r) {
+      if (disposed) return;
       if (r.success === false) throw new Error(r.error || '도면을 불러오지 못했습니다.');
       st.data = r;
       st.marks = r.marks || [];
@@ -375,9 +382,11 @@
         return;
       }
       return loadPdfJs().then(function (pdfjs) {
+        if (disposed) throw new Error('closed');
         st.task = pdfjs.getDocument({ url: s.pdfUrl, standardFontDataUrl: FONTS, withCredentials: true });
         return st.task.promise;
       }).then(function (pdf) { return pdf.getPage(s.pageNo); }).then(function (page) {
+        if (disposed) throw new Error('closed');
         var base = page.getViewport({ scale: 1 });
         st.wPt = base.width; st.hPt = base.height;
         st.text = page.getTextContent().catch(function () { return { items: [] }; });
@@ -391,10 +400,11 @@
         svg.setAttribute('width', st.W); svg.setAttribute('height', st.H);
         svg.setAttribute('viewBox', '0 0 ' + st.W + ' ' + st.H);
         return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, background: '#ffffff' }).promise.then(function () {
+          if (disposed) return;
           $('[data-empty]').style.display = 'none';
           if (!st.pick && global.DrawingStudio && s.id) {
             studio = global.DrawingStudio.mount({ wrap: wrap, stage: stage, world: world, sheetId: s.id, sheetNo: st.data.sheetNo,
-              side: $('[data-side]'), tools: $('[data-tools]'), canManage: r.canManage,
+              side: $('[data-side]'), tools: $('[data-tools]'), canManage: r.canManage, scopedKeys: !!opts.host,
               view: function () { return { W: st.W, H: st.H, wPt: st.wPt, hPt: st.hPt, k: st.k, fpp: st.fpp }; },
               toWorld: toWorld, refit: fit, hint: showHint, scaleLabel: function () { return st.scaleLabel; },
               setHand: function () { st.tool = 'hand'; st.draft = []; select(null); }, snapshot: studioSnapshot,
@@ -410,6 +420,7 @@
         });
       });
     }).catch(function (e) {
+      if (disposed) return;
       $('[data-empty]').innerHTML = '<i class="ph ph-warning" style="font-size:40px"></i><div>' + esc(e.message || '도면을 열지 못했습니다.') + '</div>';
     });
 
@@ -1168,7 +1179,7 @@
       setTimeout(function () { if (h.parentNode) { h.style.transition = 'opacity .4s'; h.style.opacity = '0'; setTimeout(function () { h.remove(); }, 420); } }, 5200);
     }
 
-    return { close: close, state: st };
+    return { close: close, beforeClose: beforeClose, state: st };
   }
 
   global.DrawingMarker = {

@@ -1,3 +1,11 @@
+## CODEX — 2026-10-18 Full-screen field record studio
+
+Cause: section-line recording had a separate small form, disconnected from the existing claim draft editor and CAD workspace. The Record entry now opens the selected BOQ in the existing editor with a persistent embedded drawing canvas, direct original-preserving evidence upload/preview, pending-record editing, templates, spreadsheet paste, undo/history and explicit review submission. Drawing and record keyboard shortcuts are scoped so they do not steal one another's save actions. No second work or financial ledger is introduced.
+
+Saved own-user draft revisions produce escaped printable reports, genuine DOCX and XLSX with controlled quantity formulas. External email requires recipient/content confirmation, rechecks source permissions/hashes and revision, and uses the existing outbound correspondence ledger. A small dispatch-id table prevents duplicate delivery attempts; uncertain delivery is not automatically retried. Original evidence files are explicitly excluded from report attachments. Existing contract permissions remain enforced; removing amounts from this workspace is presentation only, not a team-role security redesign.
+
+Validation: related PostgreSQL tests, full regression, JavaScript tests, build, Blade/Pint and synthetic Chrome/CI are release gates. Browser checks cover selected-line routing, preserved canvas, paste, evidence, pending submission and same-screen editing. Mail tests use Mail::fake; no real external email is sent. Shared route/access manifest, Blade stylesheet and browser workflow changes register this scoped feature. Deployment results will be tracked in the release PR.
+
 ## CODEX — 2026-10-18 Direct BOQ original preservation
 
 Final path audit found that the ordinary document upload prepares/compresses photos and permits local storage fallback. BOQ uploads now explicitly select the existing evidence intake policies: original bytes/hash, canonical duplicate handling and private durable storage, while still automatically queuing analysis. The mixed-file batch continues to wait for its explicit Start action. HTTP upload regression checks the original image hash and queued job; frontend regression checks the evidence purpose flag.
