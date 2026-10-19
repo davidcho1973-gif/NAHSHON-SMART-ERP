@@ -22,7 +22,7 @@
       const d=Math.hypot(...a)*Math.hypot(...b);angle=d?Math.acos(Math.max(-1,Math.min(1,(a[0]*b[0]+a[1]*b[1])/d)))*180/Math.PI:null;}
     return {length:fpp>0?length*fpp:null,area:fpp>0?area*fpp*fpp:null,angle};
   }
-  function format(value,unit='m',precision=2,area=false) {
+  function format(value,unit='ft',precision=2,area=false) {
     if(value===null||!Number.isFinite(value)) return '축척 필요';
     if(unit==='ft-in'&&!area){let n=Math.round(value*12*16);return `${Math.floor(n/192)}′ ${Number(((n%192)/16).toFixed(4))}″`;}
     let factor=unit==='mm'?304.8:unit==='m'?0.3048:1;
@@ -31,6 +31,32 @@
   function constrain(prev,p,w,h,step) {
     const dx=(p[0]-prev[0])*w,dy=(p[1]-prev[1])*h,r=Math.hypot(dx,dy),a=Math.round(Math.atan2(dy,dx)/step)*step;
     return [prev[0]+r*Math.cos(a)/w,prev[1]+r*Math.sin(a)/h];
+  }
+  function drawingPoint(type,prev,p,w,h,ortho,shift) {
+    if(!prev)return p;
+    // Box tools use opposite corners, not a line direction. Ortho collapsed their height to zero.
+    if(['rect','ellipse','cloud'].includes(type)) {
+      if(!shift)return p;
+      const dx=(p[0]-prev[0])*w,dy=(p[1]-prev[1])*h,size=Math.max(Math.abs(dx),Math.abs(dy));
+      return [prev[0]+(dx<0?-1:1)*size/w,prev[1]+(dy<0?-1:1)*size/h];
+    }
+    return ['line','dimension','polyline','polygon','arrow','angle'].includes(type)&&(ortho||shift)
+      ?constrain(prev,p,w,h,ortho?Math.PI/2:Math.PI/12):p;
+  }
+  function cloudPath(b,s) {
+    const width=b.right-b.x,height=b.bottom-b.y;
+    // Keep old collapsed clouds selectable so their corner handles can repair the stored geometry.
+    if(!(width>0&&height>0))return `M ${b.x} ${b.y} L ${b.right} ${b.bottom}`;
+    const pitch=Math.min(24*s,Math.max(8*s,Math.min(width,height)/3));
+    const corners=[[b.x,b.y],[b.right,b.y],[b.right,b.bottom],[b.x,b.bottom],[b.x,b.y]];
+    let d=`M ${b.x} ${b.y}`;
+    for(let i=1;i<corners.length;i++) {
+      const a=corners[i-1],q=corners[i],dx=q[0]-a[0],dy=q[1]-a[1],length=Math.hypot(dx,dy);
+      const n=Math.max(2,Math.round(length/pitch)),radius=length/n/2;
+      // Clockwise edges with outward semicircles form the same closed revision cloud on every render/export.
+      for(let j=1;j<=n;j++)d+=` A ${radius} ${radius} 0 0 1 ${a[0]+dx*j/n} ${a[1]+dy*j/n}`;
+    }
+    return d+' Z';
   }
   function snap(p,entities,w,h,k,tolerance=10) {
     let best=null,d=tolerance;
@@ -65,11 +91,8 @@
     if(e.type==='text')out=text(p[0][0],p[0][1],e.text);
     else if(e.type==='rect')out=`<rect x="${b.x}" y="${b.y}" width="${b.right-b.x}" height="${b.bottom-b.y}" ${style}/>`;
     else if(e.type==='ellipse')out=`<ellipse cx="${(b.x+b.right)/2}" cy="${(b.y+b.bottom)/2}" rx="${(b.right-b.x)/2}" ry="${(b.bottom-b.y)/2}" ${style}/>`;
-    else if(e.type==='cloud'){
-      const corners=[[b.x,b.y],[b.right,b.y],[b.right,b.bottom],[b.x,b.bottom],[b.x,b.y]];let d=`M ${b.x} ${b.y}`;
-      for(let i=1;i<corners.length;i++){const a=corners[i-1],q=corners[i],dx=q[0]-a[0],dy=q[1]-a[1],n=Math.max(1,Math.ceil(Math.hypot(dx,dy)/(14*s)));
-        for(let j=1;j<=n;j++)d+=` Q ${a[0]+dx*(j-.5)/n+dy/n*.35} ${a[1]+dy*(j-.5)/n-dx/n*.35} ${a[0]+dx*j/n} ${a[1]+dy*j/n}`;}out=`<path d="${d} Z" ${style}/>`;
-    } else out=`<${e.type==='polygon'?'polygon':'polyline'} points="${pts}" ${style}${e.type==='highlight'?` style="mix-blend-mode:multiply"`:''}/>`;
+    else if(e.type==='cloud')out=`<path d="${cloudPath(b,s)}" ${style}/>`;
+    else out=`<${e.type==='polygon'?'polygon':'polyline'} points="${pts}" ${style}${e.type==='highlight'?` style="mix-blend-mode:multiply"`:''}/>`;
     if(e.type==='arrow'&&p.length>=2){const a=p.at(-2),q=p.at(-1),t=Math.atan2(q[1]-a[1],q[0]-a[0]),n=10*s;out+=`<path d="M ${q[0]-n*Math.cos(t-.5)} ${q[1]-n*Math.sin(t-.5)} L ${q.join(' ')} L ${q[0]-n*Math.cos(t+.5)} ${q[1]-n*Math.sin(t+.5)}" ${style}/>`;}
     if(e.type==='dimension'&&p.length===2){const a=p[0],q=p[1],ang=Math.atan2(q[1]-a[1],q[0]-a[0]),nx=-Math.sin(ang),ny=Math.cos(ang),o=18*s;
       const u=[a[0]+nx*o,a[1]+ny*o],z=[q[0]+nx*o,q[1]+ny*o];out=`<path d="M ${a.join(' ')} L ${a[0]+nx*(o+5*s)} ${a[1]+ny*(o+5*s)} M ${q.join(' ')} L ${q[0]+nx*(o+5*s)} ${q[1]+ny*(o+5*s)} M ${u.join(' ')} L ${z.join(' ')}" ${style}/>`;
@@ -80,5 +103,5 @@
     if(e.text&&e.type!=='text')out+=text(p[0][0]+5*s,p[0][1]-7*s,e.text);
     return out;
   }
-  global.DrawingStudioCore={clone,esc,dist,bounds,vertices,measure,format,constrain,snap,translate,simplify,render};
+  global.DrawingStudioCore={clone,esc,dist,bounds,vertices,measure,format,constrain,drawingPoint,cloudPath,snap,translate,simplify,render};
 })(window);

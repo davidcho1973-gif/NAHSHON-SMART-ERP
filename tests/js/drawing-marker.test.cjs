@@ -72,6 +72,19 @@ test('nearly straight segments snap to horizontal or vertical', () => {
   assert.deepEqual(Array.from(m._snapPoint([0.1, 0.1], [0.4, 0.4], 1000, 1000)), [0.4, 0.4]);
 });
 
+test('printed feet and fractional inches use the same exact conversion as typed lengths', () => {
+  const m=load();
+  for(const text of ['12\'-6 1/2"','12′–6½″','12 ft 6 1/2 in','12\'-6-1/2"'])assert.equal(m._parseLength(text),12+6.5/12,text);
+  assert.equal(m._parseLength('12.5'),12.5);
+  assert.equal(m._parseLength('6 1/2"'),6.5/12);
+  assert.equal(m._fmtFeet(12+6.5/12),'12\'-6 1/2"');
+  for(const text of ['12\'-13"','12\'-6 1/0"','-12','KITCHEN','1:100'])assert.equal(m._parseLength(text),null,text);
+  assert.equal(m._dimensionCandidates(['12′-6½″','12\'-6 1/2"']).length,1);
+  assert.equal(m._dimensionCandidates(['SCALE 1/4" = 1\'-0"']).length,0);
+  const values=Array.from(m._dimensionCandidates(['12\'-6" 8\'-0"'])).map(x=>x.feet);
+  assert.deepEqual(values,[12.5,8]);
+});
+
 // 1차·2차 기성은 서로 다른 색, 청구 전 확인분은 «다음 기성 대상».
 test('billing rounds get their own colours', () => {
   const m = load();

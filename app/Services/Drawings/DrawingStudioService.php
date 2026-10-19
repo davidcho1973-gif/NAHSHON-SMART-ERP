@@ -33,7 +33,7 @@ class DrawingStudioService
         $row = DB::table('drawing_studios')->where('drawing_sheet_id', $sheet->id)->first();
 
         return ['revision' => $row?->revision ?? 0, 'document' => $row ? json_decode($row->document, true) : [
-            'version' => 1, 'unit' => 'm', 'precision' => 2,
+            'version' => 1, 'unit' => 'ft', 'precision' => 2,
             'layers' => [['id' => 'default', 'name' => '작도·주석', 'visible' => true, 'locked' => false]], 'entities' => [],
         ]];
     }
