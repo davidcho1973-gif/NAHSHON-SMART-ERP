@@ -63,7 +63,7 @@
     function renderPanel(){if(!active||!doc)return;if(mode==='share'){renderShare();return;}
       const picked=chosen(),e=picked.length===1?picked[0]:null,s=e||style;
       panel.innerHTML=`<div class="ds-row"><h3 style="flex:1">도면 스튜디오</h3><button class="dm-btn" data-exit title="편집 패널 접기">✕</button></div>
-        <div class="ds-row"><button class="dm-btn primary" data-save ${!dirty||saving||!canManage||conflict?'disabled':''}>${saving?'저장 중…':'저장'}</button><button class="dm-btn" data-undo ${!undo.length?'disabled':''}>↶</button><button class="dm-btn" data-redo ${!redo.length?'disabled':''}>↷</button><button class="dm-btn" data-share>공유 ↗</button></div>
+        <div class="ds-row"><button class="dm-btn primary" data-save ${!dirty||saving||!canManage||conflict?'disabled':''}>${saving?'저장 중…':'저장'}</button><button class="dm-btn" data-undo title="실행 취소 (Ctrl+Z)" ${!undo.length?'disabled':''}>↶</button><button class="dm-btn" data-redo title="다시 실행 (Ctrl+Shift+Z)" ${!redo.length?'disabled':''}>↷</button><button class="dm-btn" data-share>공유 ↗</button></div>
         <div class="ds-status ${conflict?'error':''}" data-status>${conflict?'저장 충돌: 작업 JSON을 보관하고 다시 여세요.':dirty?'저장하지 않은 변경 있음':`저장됨 · 버전 ${revision}`}</div>
         <div class="ds-grid"><label>측정 단위<select data-unit>${['mm','m','ft','ft-in'].map(u=>`<option ${doc.unit===u?'selected':''}>${u}</option>`).join('')}</select></label><label>소수 자릿수<select data-precision>${[0,1,2,3,4].map(n=>`<option ${doc.precision===n?'selected':''}>${n}</option>`).join('')}</select></label></div>
         <div class="ds-row"><button class="dm-btn ${snap?'on':''}" data-snap>스냅</button><button class="dm-btn ${ortho?'on':''}" data-ortho>직교</button><button class="dm-btn ${grid?'on':''}" data-grid>격자</button></div>
@@ -145,9 +145,9 @@
       mutate(()=>{doc.entities.push(item);selected=[item.id];draft=[];hover=null;});
     }
     function key(ev){if(!active)return;const input=ev.target.closest('input,textarea,select,[contenteditable=true]');
+      if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='s'){ev.preventDefault();ev.stopImmediatePropagation();if(mode==='edit'&&input?.matches('[data-text],[data-style],[data-name],[data-unit],[data-precision]'))input.dispatchEvent(new Event('change',{bubbles:true}));save();return;}
       if(input){if(ev.key==='Enter'&&ev.target.matches('[data-text]')&&draft.length){ev.preventDefault();ev.stopImmediatePropagation();finish();}else ev.stopPropagation();return;}
       if(ev.key==='Escape'){ev.preventDefault();ev.stopImmediatePropagation();if(draft.length){draft=[];hover=null;render();}else if(selected.length){selected=[];render();renderPanel();}else deactivate();return;}
-      if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='s'){ev.preventDefault();ev.stopImmediatePropagation();save();return;}
       if(mode!=='edit')return;
       if((ev.ctrlKey||ev.metaKey)&&['z','y','d','a'].includes(ev.key.toLowerCase())){ev.preventDefault();ev.stopImmediatePropagation();const k=ev.key.toLowerCase();if(k==='a'){selected=shown().map(e=>e.id);render();renderPanel();}else if(k==='d')duplicate();else history(k==='z'&&!ev.shiftKey);return;}
       if(ev.key==='Enter'){ev.preventDefault();ev.stopImmediatePropagation();finish();}if(ev.key==='Delete'||ev.key==='Backspace'){ev.preventDefault();ev.stopImmediatePropagation();remove();}

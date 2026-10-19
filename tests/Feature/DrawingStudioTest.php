@@ -87,6 +87,9 @@ class DrawingStudioTest extends TestCase
         $d = $this->drawing();
         $d['entities'][0]['points'] = [[.2, .2]];
         $this->putJson($this->url, ['revision' => 0, 'document' => $d])->assertUnprocessable();
+        $d = $this->drawing();
+        $d['layers'] = 'invalid';
+        $this->putJson($this->url, ['revision' => 0, 'document' => $d])->assertUnprocessable();
         $this->assertDatabaseCount('drawing_studios', 0);
     }
 
@@ -139,6 +142,8 @@ class DrawingStudioTest extends TestCase
         $this->post($this->url.'/share', $payload, ['Accept' => 'application/json'])->assertOk()->assertJsonPath('duplicate', true);
         $attached = CommunicationMessageFile::firstOrFail();
         $this->assertSame($bytes, Storage::disk($attached->disk)->get($attached->path));
+        $this->actingAsPersonalAppUser($this->admin)->get(route('communication.file', ['room' => $room, 'file' => $attached]))
+            ->assertOk()->assertStreamedContent($bytes);
         $this->assertDatabaseCount('communication_messages', 1);
         $this->assertDatabaseCount('intelligent_documents', 1);
         $this->getJson($this->url.'/messages?room='.$room->id)->assertOk()->assertJsonCount(1, 'messages');
