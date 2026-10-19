@@ -39,7 +39,7 @@ class DocumentIntelligenceService
         }
         $bytes = (string) $disk->get($document->file_path);
         $originalHash = hash('sha256', $bytes);
-        if ($document->source === 'evidence_batch' && ! hash_equals((string) $document->sha256, $originalHash)) {
+        if ($document->isClaimEvidence() && ! hash_equals((string) $document->sha256, $originalHash)) {
             throw new \RuntimeException('기성 증빙 원본의 내용이 접수 당시와 다릅니다. 원본을 확인해 주세요.');
         }
         $analysis = $this->analyzer->analyze($document, $bytes);
@@ -59,7 +59,7 @@ class DocumentIntelligenceService
         $verification = app(DocumentCrossCheck::class)->check($document, $data, $bytes, $analysis);
         if ($verification !== null) {
             $data['verification'] = $verification;
-            if ($document->source === 'evidence_batch' && ($verification['status'] ?? '') === 'disagreed') {
+            if ($document->isClaimEvidence() && ($verification['status'] ?? '') === 'disagreed') {
                 $data['source_review_reason'] = trim(($data['source_review_reason'] ?? '').' 독립 교차검증의 판독 값이 다릅니다. 원본을 확인해 주세요.');
             }
         }
@@ -74,7 +74,7 @@ class DocumentIntelligenceService
             }
             // A durable source marker defines intake purpose even after later reanalysis.
             // Evidence collection must never create payable expenses, receipts or tasks.
-            $evidenceOnly = $document->source === 'evidence_batch';
+            $evidenceOnly = $document->isClaimEvidence();
             if ($evidenceOnly) {
                 if (! hash_equals((string) $document->sha256, $originalHash)) {
                     throw new \RuntimeException('분석 중 증빙 원본이 변경되었습니다. 다시 확인해 주세요.');
@@ -213,7 +213,7 @@ class DocumentIntelligenceService
             return $document->fresh(['company', 'site', 'project', 'actionItems']);
         });
 
-        if ($superseded || $fresh->source === 'evidence_batch' || ! empty($fresh->ai_payload['duplicate_document_id']) || ! empty($fresh->ai_payload['scope_review_reason']) || ! empty($fresh->ai_payload['source_review_reason'])) {
+        if ($superseded || $fresh->isClaimEvidence() || ! empty($fresh->ai_payload['duplicate_document_id']) || ! empty($fresh->ai_payload['scope_review_reason']) || ! empty($fresh->ai_payload['source_review_reason'])) {
             return $fresh;
         }
 

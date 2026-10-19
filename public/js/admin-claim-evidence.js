@@ -208,15 +208,16 @@
       hint(l.recognitionBasis === 'milestone' ? '단계별 인정 조건: ' + weights : '시공 확인수량 × 계약단가로 산정합니다.') +
       hint('계약 근거: ' + [l.sourceDocumentId ? '문서 #' + l.sourceDocumentId : '', l.sourceLocator].filter(Boolean).join(' · ')) + (l.sourceDocumentId ? button(l.status === 'accepted' ? '계약 원문 열기' : '기준 문서 열기', 'openDocument(' + Number(l.sourceDocumentId) + ')') : '') + sourceReference(l.sourceRef) + hint(l.acceptanceNote || '계약 인정 조건을 확인해 주세요.') +
       hint([l.acceptedBy ? '확정자 ' + l.acceptedBy : '', l.acceptedAt].filter(Boolean).join(' · ')) + '</div>' +
-      sourceNotes + issuePanel(l.id) + hint('표를 좌우로 이동하면 연결된 증빙과 검토 이력을 확인할 수 있습니다.') + '<div style="height:8px"></div>' + recordsTable(lineRecords);
+      '<div id="ce-line-workspace"></div>' + sourceNotes + issuePanel(l.id) + '<h3>작업 기록 · 수정 / 수량 확인</h3>' + hint('표를 좌우로 이동하면 연결된 증빙과 검토 이력을 확인할 수 있습니다.') + '<div style="height:8px"></div>' + recordsTable(lineRecords);
   }
   function draw() {
     if (!state.ledger) return;
     if (state.tab === 'inbox') { paint(inboxView()); return; }
     paint(state.lineId ? detailView() : ledgerView());
     ui().bindSearch(state.lineId ? 'ce-records' : 'ce-lines');
+    if (state.lineId && global.AdminClaimLineWorkspace) global.AdminClaimLineWorkspace.mount({contractId:state.contractId,line:lineById(state.lineId),records:state.ledger.records,canManage:manage(),reload:refresh});
   }
-  function inboxRow(id) { return ((state.inbox && state.inbox.rows) || []).find(function (r) { return Number(r.id) === Number(id); }); }
+  function inboxRow(id) { return (state.tab === 'ledger' && global.AdminClaimLineWorkspace ? global.AdminClaimLineWorkspace.row(id) : null) || ((state.inbox && state.inbox.rows) || []).find(function (r) { return Number(r.id) === Number(id); }); }
   function inboxBadge(status) { return ui().badge(inboxStatuses[status] || status, status === 'linked' ? 'ok' : status === 'review' ? 'warn' : ''); }
   function inboxView() {
     var data = state.inbox || {}, counts = data.summary || {}, p = data.pagination || {};
@@ -294,7 +295,7 @@
     if (!manage()) return;
     var row = inboxRow(id); if (!row) return;
     var contractId = state.contractId, saving = false;
-    var lines = ((state.inbox && state.inbox.lines) || []).filter(function (l) { return Number.isSafeInteger(Number(l.id)) && Number(l.id) > 0; });
+    var lines = (state.tab === 'ledger' ? state.ledger.lines : ((state.inbox && state.inbox.lines) || [])).filter(function (l) { return Number.isSafeInteger(Number(l.id)) && Number(l.id) > 0; });
     var selected = (row.lineIds || []).map(Number);
     var action = ({ linked: 'link', common: 'common', ignored: 'ignore' }[row.status]) || 'link';
     var controlStyle = 'width:100%;padding:10px;border:1px solid var(--border-default);border-radius:8px;background:var(--bg-surface);color:var(--text-primary)';
@@ -329,7 +330,7 @@
         saving = true; error.textContent = '저장 중…';
         return call('api_reviewClaimEvidence', [{ id: Number(id), action: selectedAction, lineIds: selectedAction === 'link' ? lineIds : [] }]).then(requireSuccess).then(function () {
           global.apiCache = {}; modal.close('saved'); ui().toast('증빙 연결을 저장했습니다.');
-          if (state.contractId === contractId) return loadInbox();
+          if (state.contractId === contractId) return state.tab === 'ledger' ? refresh() : loadInbox();
         }).catch(function (e) { error.textContent = e.message || '저장하지 못했습니다.'; }).finally(function () { saving = false; });
       }
     });

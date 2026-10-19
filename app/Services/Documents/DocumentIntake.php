@@ -36,7 +36,8 @@ class DocumentIntake
      */
     public function ingest(UploadedFile $file, array $scope = [], array $meta = []): array
     {
-        $evidence = ($meta['source'] ?? null) === 'evidence_batch';
+        $batchEvidence = ($meta['source'] ?? null) === 'evidence_batch';
+        $evidence = $batchEvidence || ($meta['source'] ?? null) === 'claim_evidence';
         $originalName = $file->getClientOriginalName();
         $extension = strtolower((string) $file->getClientOriginalExtension());
 
@@ -94,7 +95,7 @@ class DocumentIntake
                 'sha256' => $sha256,
                 'title' => pathinfo($originalName, PATHINFO_FILENAME),
                 'received_at' => now(),
-                'ai_status' => $evidence ? 'uploaded' : 'queued',
+                'ai_status' => $batchEvidence ? 'uploaded' : 'queued',
             ]));
         } catch (UniqueConstraintViolationException $e) {
             $duplicate = $scopes->findDuplicate($sha256, $scope);
@@ -110,7 +111,7 @@ class DocumentIntake
                 : $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
         }
 
-        if (! $evidence) {
+        if (! $batchEvidence) {
             AnalyzeIntelligentDocumentJob::dispatch($document->id)->afterCommit();
         }
 
