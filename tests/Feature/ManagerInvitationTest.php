@@ -54,6 +54,50 @@ class ManagerInvitationTest extends TestCase
         $this->flushSession();
     }
 
+    public function test_existing_employee_can_enroll_without_email_and_sign_in_with_employee_number(): void
+    {
+        $invite = $this->issue();
+        $number = $this->worker->employee->employee_number;
+        $this->guest();
+        $this->post($invite['url'].'/verify', ['phone' => '2025550147'])->assertRedirect();
+        $this->get($invite['url'])->assertSee('이메일 없이 등록')->assertSee($number);
+        $this->post($invite['url'].'/complete', ['employee_login' => 1, 'password' => 'NewPassword123',
+            'password_confirmation' => 'NewPassword123'])->assertRedirect(route('manager-invitation.welcome'));
+        $this->assertNull($this->worker->fresh()->email);
+        $this->assertDatabaseCount('employees', 1);
+        $this->assertDatabaseCount('users', 2);
+        $this->guest();
+        $this->post(route('password.login'), ['email' => $number, 'password' => '0147'])->assertSessionHasErrors('email_login');
+        $this->assertGuest();
+        $this->post(route('password.login'), ['email' => $number, 'password' => 'NewPassword123'])->assertRedirect();
+        $this->assertAuthenticatedAs($this->worker);
+        $this->assertTrue(EmailPasswordAuthService::hasStrongAuthentication(request(), $this->worker));
+        $this->guest();
+        $this->worker->forceFill(['account_status' => 'suspended'])->save();
+        $this->post(route('password.login'), ['email' => $number, 'password' => 'NewPassword123'])->assertSessionHasErrors('email_login');
+        $this->assertGuest();
+    }
+
+    public function test_employee_number_login_requires_enrollment_and_obeys_password_lockout(): void
+    {
+        $number = $this->worker->employee->employee_number;
+        $this->guest();
+        $this->post(route('password.login'), ['email' => $number, 'password' => '0147'])->assertSessionHasErrors('email_login');
+        $this->assertGuest();
+        $invite = $this->issue();
+        $this->guest();
+        $this->post($invite['url'].'/verify', ['phone' => '2025550147']);
+        $this->post($invite['url'].'/complete', ['employee_login' => 1, 'password' => 'NewPassword123',
+            'password_confirmation' => 'NewPassword123'])->assertRedirect();
+        $this->guest();
+        for ($i = 0; $i < 5; $i++) {
+            $this->post(route('password.login'), ['email' => $number, 'password' => 'WrongPassword'])->assertSessionHasErrors('email_login');
+        }
+        $this->assertTrue($this->worker->fresh()->password_login_locked_until->isFuture());
+        $this->post(route('password.login'), ['email' => $number, 'password' => 'NewPassword123'])->assertSessionHasErrors('email_login');
+        $this->assertGuest();
+    }
+
     public function test_password_registration_promotes_existing_worker_once_and_retains_employee(): void
     {
         $invite = $this->issue();

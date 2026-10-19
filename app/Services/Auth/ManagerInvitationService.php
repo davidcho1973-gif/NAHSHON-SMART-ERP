@@ -244,13 +244,13 @@ class ManagerInvitationService
         return is_array($session) && ($session['expires'] ?? 0) > now()->timestamp ? ($session['token'] ?? null) : null;
     }
 
-    public function accept(Request $request, string $email, ?string $password = null, ?string $googleId = null): User
+    public function accept(Request $request, ?string $email, ?string $password = null, ?string $googleId = null): User
     {
         $token = $this->sessionToken($request);
         if (! $token) {
             throw ManagerInvitationException::verificationExpired();
         }
-        $email = Str::lower(trim($email));
+        $email = filled($email) ? Str::lower(trim($email)) : null;
         $user = DB::transaction(function () use ($token, $email, $password, $googleId, $request) {
             $invite = $this->find($token);
             // Existing identity mutations lock the account first; new enrollments lock their invitation.
@@ -259,8 +259,13 @@ class ManagerInvitationService
             if (! $this->valid($invite)) {
                 throw ManagerInvitationException::unavailable();
             }
+            if ($email === null && (! $user || blank($user->employee?->employee_number) || blank($password) || $googleId !== null)) {
+                throw ValidationException::withMessages(['email' => '직원번호 등록은 기존 직원의 초대와 새 비밀번호가 필요합니다.']);
+            }
             // Distinct invitations can present the same login identity concurrently.
-            DB::select('select pg_advisory_xact_lock(hashtext(?))', ['manager-email:'.$email]);
+            if ($email !== null) {
+                DB::select('select pg_advisory_xact_lock(hashtext(?))', ['manager-email:'.$email]);
+            }
             if ($googleId) {
                 DB::select('select pg_advisory_xact_lock(hashtext(?))', ['manager-google:'.$googleId]);
             }

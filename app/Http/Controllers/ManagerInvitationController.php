@@ -47,10 +47,11 @@ class ManagerInvitationController extends Controller
             throw ManagerInvitationException::verificationExpired($token);
         }
         $input = $request->validate([
-            'email' => ['required', 'email', 'max:255'],
+            'employee_login' => ['sometimes', 'boolean'],
+            'email' => ['required_unless:employee_login,1', 'nullable', 'email', 'max:255'],
             'password' => ['required', 'confirmed', Password::min(10)->letters()->numbers(), 'max:128'],
         ]);
-        $service->accept($request, $input['email'], $input['password']);
+        $service->accept($request, $request->boolean('employee_login') ? null : ($input['email'] ?? null), $input['password']);
 
         return redirect()->route('manager-invitation.welcome');
     }
