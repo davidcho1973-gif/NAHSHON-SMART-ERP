@@ -33,6 +33,7 @@
     <script src="{{ asset('js/admin-section-drawings.js') }}?v={{ filemtime(public_path('js/admin-section-drawings.js')) }}" defer></script>
     <script src="{{ asset('js/drawing-marker.js') }}?v={{ filemtime(public_path('js/drawing-marker.js')) }}" defer></script>
     <script src="{{ asset('js/claim-drawing-evidence.js') }}?v={{ filemtime(public_path('js/claim-drawing-evidence.js')) }}" defer></script>
+    <script src="{{ asset('js/claim-line-workspace.js') }}?v={{ filemtime(public_path('js/claim-line-workspace.js')) }}" defer></script>
     <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
     <script src="{{ asset('js/admin-crew.js') }}?v={{ filemtime(public_path('js/admin-crew.js')) }}" defer></script>
     <script src="{{ asset('js/admin-kakao.js') }}?v={{ filemtime(public_path('js/admin-kakao.js')) }}" defer></script>
