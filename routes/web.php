@@ -73,6 +73,7 @@ Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::
 Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
 use App\Http\Controllers\AssistantWorkspaceController;
 use App\Http\Controllers\ClaimEvidenceFileController;
+use App\Http\Controllers\DrawingStudioController;
 use App\Http\Controllers\JobApprovalController;
 use App\Http\Controllers\JobWorkspaceController;
 use App\Http\Controllers\PersonalPayslipController;
@@ -323,9 +324,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
-    Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(\App\Http\Controllers\DrawingStudioController::class)->group(function (): void {
+    Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(DrawingStudioController::class)->group(function (): void {
         Route::get('/', 'show');
         Route::put('/', 'save');
+        Route::post('/read-dimension', 'readDimension')->middleware('throttle:6,1');
         Route::get('/history', 'history');
         Route::get('/share-options', 'options');
         Route::get('/messages', 'messages');

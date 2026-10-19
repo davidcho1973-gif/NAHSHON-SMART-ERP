@@ -8,3 +8,22 @@ test('moving a group clamps once and preserves relative positions',()=>{const e=
 test('feature snaps win over an even nearer segment and ellipse snaps use real quadrants',()=>{const line=[{type:'line',points:[[0,0],[1,0]]}];assert.equal(C.snap([.502,.001],line,1000,1000,1).label,'중점');assert.equal(C.snap([.999,.001],line,1000,1000,1).label,'끝점');const ellipse=[{type:'ellipse',points:[[.2,.2],[.8,.8]]}];assert.equal(C.snap([.5,.2],ellipse,1000,1000,1).label,'사분점');assert.equal(C.snap([.2,.2],ellipse,1000,1000,1),null);});
 test('freehand simplification retains endpoints and bends',()=>{const p=[[0,0],[.1,0],[.2,0],[.3,.2],[.4,.2]];assert.equal(C.simplify(p,1,100,100).length,4);});
 test('SVG labels are escaped and measurement annotations retain calibration requirement',()=>{const e={type:'dimension',points:[[0,0],[1,0]],color:'#ff0000',fill:'none',width:1,opacity:1,dash:'solid',fontSize:12,text:'<script>alert(1)</script>'};const s=C.render(e,{W:100,H:100,wPt:100,hPt:100,fpp:null},{unit:'m',precision:2});assert.ok(!s.includes('<script>'));assert.ok(s.includes('&lt;script&gt;'));assert.ok(s.includes('축척 필요'));});
+test('orthographic mode never collapses opposite-corner shapes, while shift preserves physical aspect',()=>{
+  for(const type of ['cloud','rect','ellipse']){
+    assert.deepEqual(Array.from(C.drawingPoint(type,[.1,.1],[.7,.4],800,600,true,false)),[.7,.4]);
+    const square=C.drawingPoint(type,[.1,.1],[.4,.3],800,600,true,true);
+    assert.ok(Math.abs((square[0]-.1)*800-(square[1]-.1)*600)<1e-9);
+  }
+  const line=C.drawingPoint('line',[.1,.1],[.7,.4],800,600,true,false);
+  assert.ok(Math.abs(line[1]-.1)<1e-9);
+});
+test('revision clouds use closed round arcs with bounded counts, independent of draw direction and render scale',()=>{
+  const shape={type:'cloud',points:[[.1,.1],[.7,.4]],color:'#ef4444',width:1.5,fill:'none',opacity:1,fontSize:12,dash:'solid',text:''};
+  const view={W:800,H:600,wPt:800,hPt:600,fpp:null};
+  const normal=C.render(shape,view,{unit:'ft',precision:2}),reverse=C.render({...shape,points:[...shape.points].reverse()},view,{unit:'ft',precision:2});
+  assert.equal(normal,reverse);assert.match(normal,/ A /);assert.doesNotMatch(normal,/ Q |NaN|Infinity/);assert.match(normal,/ Z"/);
+  const zoom=C.render(shape,{...view,W:1600,H:1200},{unit:'ft',precision:2});
+  assert.equal(normal.match(/ A /g).length,zoom.match(/ A /g).length);
+  assert.ok(normal.match(/ A /g).length<100);
+  assert.equal(C.cloudPath({x:0,y:0,right:10,bottom:0},1),'M 0 0 L 10 0');
+});
