@@ -335,6 +335,7 @@ return [
         'setupRentalSheet' => ['office', 'edit'],
     ],
     'controllers' => [
+        'FieldClaimController' => ['_module' => 'progress', 'assign' => ['system', 'edit']],
         'ClaimSubmissionController' => ['_module' => 'contracts', 'response' => ['contracts', 'export']],
         'ClaimEvidenceFileController' => ['_module' => 'contracts', 'show' => ['contracts', 'export']],
         'WorkerEnrollmentController' => ['_module' => 'people', 'index' => ['people', 'view'], 'approve' => ['people', 'edit'], 'reject' => ['people', 'edit']],

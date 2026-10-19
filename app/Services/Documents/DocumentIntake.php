@@ -4,7 +4,9 @@ namespace App\Services\Documents;
 
 use App\Jobs\AnalyzeIntelligentDocumentJob;
 use App\Models\IntelligentDocument;
+use App\Models\Scopes\JobDataScope;
 use App\Support\DocumentPhoto;
+use App\Support\FieldClaimAccess;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +38,7 @@ class DocumentIntake
      */
     public function ingest(UploadedFile $file, array $scope = [], array $meta = []): array
     {
+        $fieldUpload = FieldClaimAccess::restricted() && ($meta['source'] ?? null) === 'evidence_batch';
         $batchEvidence = ($meta['source'] ?? null) === 'evidence_batch';
         $evidence = $batchEvidence || ($meta['source'] ?? null) === 'claim_evidence';
         $originalName = $file->getClientOriginalName();
@@ -61,11 +64,11 @@ class DocumentIntake
         $safeName = $this->safeFileName($originalName);
         $sha256 = hash_file('sha256', $file->getRealPath());
 
-        $duplicate = $scopes->findDuplicate($sha256, $scope);
+        $duplicate = $scopes->findDuplicate($sha256, $scope, fieldUpload: $fieldUpload);
 
         if ($duplicate) {
             if ($evidence) {
-                return $this->reuseEvidenceDuplicate($duplicate, $file, $safeName, $diskName);
+                return $this->reuseEvidenceDuplicate($duplicate, $file, $safeName, $diskName, $fieldUpload);
             }
 
             return $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
@@ -98,7 +101,7 @@ class DocumentIntake
                 'ai_status' => $batchEvidence ? 'uploaded' : 'queued',
             ]));
         } catch (UniqueConstraintViolationException $e) {
-            $duplicate = $scopes->findDuplicate($sha256, $scope);
+            $duplicate = $scopes->findDuplicate($sha256, $scope, fieldUpload: $fieldUpload);
             if (! $duplicate) {
                 throw $e;
             }
@@ -107,7 +110,7 @@ class DocumentIntake
             Storage::disk($usedDisk)->delete($path);
 
             return $evidence
-                ? $this->reuseEvidenceDuplicate($duplicate, $file, $safeName, $diskName)
+                ? $this->reuseEvidenceDuplicate($duplicate, $file, $safeName, $diskName, $fieldUpload)
                 : $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
         }
 
@@ -120,10 +123,10 @@ class DocumentIntake
 
     // ── 중복·유실 처리 ─────────────────────────────────────────────────
 
-    private function reuseEvidenceDuplicate(IntelligentDocument $duplicate, UploadedFile $file, string $safeName, string $diskName): array
+    private function reuseEvidenceDuplicate(IntelligentDocument $duplicate, UploadedFile $file, string $safeName, string $diskName, bool $fieldUpload = false): array
     {
-        return DB::transaction(function () use ($duplicate, $file, $safeName, $diskName): array {
-            $duplicate = IntelligentDocument::whereKey($duplicate->id)->lockForUpdate()->firstOrFail();
+        return DB::transaction(function () use ($duplicate, $file, $safeName, $diskName, $fieldUpload): array {
+            $duplicate = IntelligentDocument::query()->when($fieldUpload, fn ($q) => $q->withoutGlobalScope(JobDataScope::class))->whereKey($duplicate->id)->lockForUpdate()->firstOrFail();
             if (! $this->fileStillThere($duplicate->disk ?: $diskName, (string) $duplicate->file_path)) {
                 // Exact raw SHA was already matched. Restore only those bytes; keep the
                 // canonical source, scope, analysis, approvals and processing state intact.

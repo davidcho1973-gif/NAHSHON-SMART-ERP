@@ -1,0 +1,11 @@
+.field-claims { margin:0; background:var(--bg-base); color:var(--text-primary); font-family:system-ui,sans-serif; }
+.field-claims header, .field-claims main { max-width:1160px; margin:auto; padding:24px; }
+.field-claims header { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border-default); }
+.field-claims h1 { margin:8px 0 0; font-size:26px; }
+.field-claims p,.field-claims small { color:var(--text-secondary); line-height:1.6; }
+.field-claims section { margin:24px 0; }
+.field-claims article { border:1px solid var(--border-default); border-radius:12px; padding:20px; margin:12px 0; background:var(--bg-surface); }
+.field-claims button { padding:9px 14px; border-radius:8px; background:var(--bg-surface-elevated); color:var(--text-primary); border:1px solid var(--border-default); cursor:pointer; margin:4px; }
+.field-claims .record { border-top:1px solid var(--border-default); padding-top:12px; margin-top:12px; }
+.field-claims .missing { color:#fbbf24; }
+@media(max-width:600px){.field-claims header,.field-claims main{padding:16px}.field-claims article{padding:14px}}

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\FieldClaimAccess;
 use App\Support\JobAccess;
 use App\Support\PersonalAppAccess;
 use Database\Factories\UserFactory;
@@ -263,6 +264,10 @@ class User extends Authenticatable implements OAuthenticatable
      */
     public function landingPath(): string
     {
+        if (FieldClaimAccess::restricted($this)) {
+            return '/field-claims';
+        }
+
         if ($this->access_role === 'worker') {
             return '/app';
         }

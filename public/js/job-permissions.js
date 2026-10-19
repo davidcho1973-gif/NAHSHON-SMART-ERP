@@ -8,6 +8,7 @@
     panel.innerHTML = '<h3>사무실 담당 업무</h3><div class="job-duties"></div>' +
       '<h3>담당 현장 선택</h3><p>회사 범위는 소속 회사 전체 현장입니다. 공정팀장은 선택한 현장에서 담당 공정의 모든 팀을 관리합니다. 작업반장은 담당 팀을 관리합니다.</p><div class="job-sites"></div>' +
       '<label class="job-trade-wrap">담당 공정 <select name="jobTrade" aria-label="담당 공정"></select></label>' +
+      '<p>공정팀장 · 기성 작성 전용은 담당 공정의 수량·작업 기록·증빙 제출만 사용할 수 있습니다. 공정별 도면에서 담당 공종을 배정하세요.</p>' +
       '<h3>업무별 세부 권한</h3><p>조회·작성·승인·지급·삭제·다운로드를 따로 선택합니다. 직책을 바꾸면 기본 권한으로 설정됩니다.</p>' +
       '<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr><th>업무</th>' +
       Object.values(catalog.actions).map(function (label) { return '<th>'+esc(label)+'</th>'; }).join('') + '</tr></thead><tbody>' +
@@ -46,7 +47,14 @@
       });
       paint(permissions);
     }
-    function paint(permissions){panel.querySelectorAll('[data-job-module]').forEach(function(el){el.checked=!el.disabled && (permissions[el.dataset.jobModule]||[]).includes(el.dataset.jobAction);});}
+    function paint(permissions){
+      var restricted=wrap.querySelector('[name="jobRole"]').value==='claim_recorder';
+      panel.querySelectorAll('[data-job-module]').forEach(function(el){
+        el.disabled=(el.dataset.jobAction==='pay' && !['payroll','finance'].includes(el.dataset.jobModule)) ||
+          (restricted && (el.dataset.jobModule!=='progress' || !['view','edit'].includes(el.dataset.jobAction)));
+        el.checked=!el.disabled && (permissions[el.dataset.jobModule]||[]).includes(el.dataset.jobAction);
+      });
+    }
     panel.querySelectorAll('[data-job-duty]').forEach(function(el){el.checked=Boolean(saved && (saved.duties||[]).includes(el.dataset.jobDuty));el.addEventListener('change',defaults);});
     wrap.querySelector('[name="jobRole"]').addEventListener('change',function(){defaults();wrap.querySelector('[name="scope"]').value=(catalog.jobs[this.value]||{}).scope||'site';renderTrade();});
     wrap.querySelector('[name="scope"]').addEventListener('change',renderTrade);

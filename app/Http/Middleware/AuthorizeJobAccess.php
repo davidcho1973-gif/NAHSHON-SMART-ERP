@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\FieldClaimAccess;
 use App\Support\JobAccess;
 use App\Support\JobEndpointPolicy;
 use App\Support\WorkerDeviceSession;
@@ -19,6 +20,15 @@ class AuthorizeJobAccess
             return $next($request);
         }
         $controller = class_basename(explode('@', $request->route()?->getActionName() ?? '')[0]);
+        if (FieldClaimAccess::restricted($user)) {
+            if ($request->isMethod('GET') && $request->is('/', 'erp', 'dashboard', 'workspace', 'attendance-app', 'attendance-app/workspace', 'manager-invitation/complete')) {
+                return redirect('/field-claims');
+            }
+            // A closed workspace also blocks raw documents, exports, AI and legacy carrier-role paths.
+            abort_unless($controller === 'FieldClaimController'
+                || in_array($controller, ['GoogleAuthController', 'EmailPasswordAuthController'], true), 403,
+                '공정팀장은 담당 공정 작업 화면에서 기록과 증빙을 제출하세요.');
+        }
         $personal = ['AttendanceAppController', 'WorkerAppEntryController', 'GoogleAuthController', 'EmailPasswordAuthController',
             'JobWorkspaceController', 'PersonalPayslipController', 'ExpenseAppController', 'MobileAskController', 'CommunicationController',
             'ManagerInvitationController', 'WebManifestController', 'AttendanceGeoController', 'PushSubscriptionController', 'MobileDocumentController'];

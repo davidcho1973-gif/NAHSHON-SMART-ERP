@@ -25,6 +25,10 @@ final class JobAccess
             return true;
         }
 
+        if (FieldClaimAccess::restricted($user) && ($module !== 'progress' || ! in_array($action, ['view', 'edit'], true))) {
+            return false;
+        }
+
         return self::managed($user) && in_array($action, (array) ($user->job_permissions[$module] ?? []), true);
     }
 
@@ -80,6 +84,9 @@ final class JobAccess
         if (! empty($permissions['system'])) {
             throw ValidationException::withMessages(['jobPermissions' => '계정·조직 설정은 별도 슈퍼관리자 권한입니다.']);
         }
+        if ($job === 'claim_recorder') {
+            $permissions = ['progress' => array_values(array_intersect($permissions['progress'] ?? [], ['view', 'edit']))];
+        }
         $company = Company::find((int) ($input['companyId'] ?? 0));
         $scope = $input['scope'] ?? config('job_access.jobs.'.$job.'.scope');
         $ids = $input['siteIds'] ?? (filled($input['siteId'] ?? null) ? [(int) $input['siteId']] : []);
@@ -98,7 +105,7 @@ final class JobAccess
             throw ValidationException::withMessages(['teamId' => '담당 회사·현장의 팀을 선택하세요.']);
         }
         $trade = $scope === 'trade' ? ($input['jobTrade'] ?? null) : null;
-        if (($job === 'trade_manager' && $scope !== 'trade') || ($scope === 'trade' && (! is_string($trade) || ! Team::withoutGlobalScopes()->where('company_id', $company->id)->whereIn('site_id', $ids)->where('trade_type', $trade)->exists()))) {
+        if ((in_array($job, ['trade_manager', 'claim_recorder'], true) && $scope !== 'trade') || ($scope === 'trade' && (! is_string($trade) || ! Team::withoutGlobalScopes()->where('company_id', $company->id)->whereIn('site_id', $ids)->where('trade_type', $trade)->exists()))) {
             throw ValidationException::withMessages(['jobTrade' => '공정팀장은 담당 현장과 해당 회사의 공정을 선택하세요.']);
         }
         if ($job === 'worker' && $scope !== 'self') {
