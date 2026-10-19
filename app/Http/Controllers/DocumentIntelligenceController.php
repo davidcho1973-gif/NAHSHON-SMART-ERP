@@ -263,6 +263,7 @@ class DocumentIntelligenceController extends Controller
         $request->validate([
             'files' => ['required', 'array', 'min:1', 'max:50'],
             'files.*' => ['required', 'file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
+            'purpose' => ['nullable', 'in:claim_evidence'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'site_id' => ['nullable', 'integer', 'exists:sites,id'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
@@ -289,7 +290,7 @@ class DocumentIntelligenceController extends Controller
             $result = $intake->ingest(
                 $file,
                 ['company_id' => $companyId, 'site_id' => $siteId, 'project_id' => $projectId],
-                ['uploaded_by' => $request->user()->id, 'source' => 'dropzone'],
+                ['uploaded_by' => $request->user()->id, 'source' => $request->input('purpose') === 'claim_evidence' ? 'claim_evidence' : 'dropzone'],
             );
 
             match ($result['status']) {

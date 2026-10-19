@@ -206,6 +206,11 @@ class IntelligentDocument extends Model
         return $this->hasMany(DocumentActionItem::class);
     }
 
+    public function isClaimEvidence(): bool
+    {
+        return in_array($this->source, ['evidence_batch', 'claim_evidence'], true);
+    }
+
     public function scopeVisibleTo(Builder $query, ?User $user): Builder
     {
         if (! $user) {

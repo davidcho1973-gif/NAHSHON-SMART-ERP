@@ -64,6 +64,7 @@ use App\Services\Finance\ClaimEditingService;
 use App\Services\Finance\ClaimEvidenceAutomation;
 use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimLineWorkspaceService;
 use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ClaimSubmissionService;
 use App\Services\Finance\ClaimWorklistService;
@@ -359,6 +360,8 @@ class SmartCompanyData
             'api_transitionClaimSubmission' => app(ClaimSubmissionService::class)->transition((array) ($args[0] ?? [])),
             'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
             'api_getClaimEvidence' => app(ClaimEvidenceService::class)->getLedger((int) ($args[0] ?? 0)),
+            'api_getClaimLineWorkspace' => app(ClaimLineWorkspaceService::class)->get((int) ($args[0] ?? 0), (int) ($args[1] ?? 0), (int) ($args[2] ?? 1)),
+            'api_attachClaimDocument' => app(ClaimEvidenceInboxService::class)->attachDocument((array) ($args[0] ?? [])),
             'api_getClaimEvidenceSources' => app(ClaimEvidenceService::class)->searchSources((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_saveClaimEvidenceRequirements' => app(ClaimEvidenceService::class)->saveRequirements((array) ($args[0] ?? [])),
             'api_getClaimEditor' => app(ClaimEditingService::class)->workspace((int) ($args[0] ?? 0)),

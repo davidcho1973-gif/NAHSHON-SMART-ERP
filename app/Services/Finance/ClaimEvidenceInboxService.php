@@ -51,8 +51,11 @@ class ClaimEvidenceInboxService
                 $query->where('source_type', $filters['sourceType']);
             }
             if (filled($filters['lineId'] ?? null)) {
-                $ids = $this->validLineIds($contract, [$filters['lineId']]);
-                $query->whereJsonContains('line_ids', $ids[0]);
+                $line = ContractBoqLine::where('project_contract_id', $contract->id)->find((int) $filters['lineId']);
+                if (! $line) {
+                    throw new InvalidArgumentException('이 계약의 공정이 아닙니다.');
+                }
+                $query->whereJsonContains('line_ids', (int) $line->id);
             }
             // A drawing is a view of the same associations, not another evidence ledger.
             // Derive its lines from this contract's sections; never trust browser line lists.
@@ -164,7 +167,10 @@ class ClaimEvidenceInboxService
                         $attributes = ['source_date' => $meta['date'], 'source_updated_at' => $source->updated_at,
                             'source_fingerprint' => $meta['fingerprint'] ?? null];
                         if ($changed && $item->status !== 'ignored') {
-                            $attributes += ['status' => 'review', 'classification' => 'lines', 'line_ids' => [], 'locators' => [],
+                            // A queued upload's BOQ is a human-selected review context, not an approved association.
+                            $history = $item->review_history ?? [];
+                            $keepUploadContext = $item->status === 'review' && ($history === [] ? null : $history[array_key_last($history)]['action'] ?? null) === 'upload_review';
+                            $attributes += ['status' => 'review', 'classification' => 'lines', 'line_ids' => $keepUploadContext ? $item->line_ids : [], 'locators' => [],
                                 'source_sha256' => null, 'reviewed_at' => null, 'reviewed_by' => null, 'last_matched_at' => null,
                                 'reason' => $meta['blockReason'] ?: '새 자료 또는 변경된 자료입니다. 공정 연결을 확인하세요.'];
                         }
@@ -294,6 +300,41 @@ class ClaimEvidenceInboxService
             }
 
             return ['success' => true, 'linked' => $linked];
+        });
+    }
+
+    /** Explicit upload from a BOQ: reuse the reviewed association and retain other linked lines. */
+    public function attachDocument(array $input): array
+    {
+        return $this->respond(function () use ($input): array {
+            $contract = $this->contract((int) ($input['contractId'] ?? 0), true);
+            $ids = $this->validLineIds($contract, [$input['lineId'] ?? 0]);
+            $documentId = (int) ($input['documentId'] ?? 0);
+            $meta = $this->resolveSource($contract, 'document', $documentId);
+
+            return DB::transaction(function () use ($contract, $ids, $documentId, $input, $meta): array {
+                ProjectContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
+                $sync = $this->syncContract($contract->id, 1, [$documentId]);
+                if (! ($sync['success'] ?? false)) {
+                    throw new InvalidArgumentException($sync['error'] ?? '자료를 연결하지 못했습니다.');
+                }
+                $item = ClaimEvidenceInboxItem::where('project_contract_id', $contract->id)->where('source_type', 'document')->where('source_id', $documentId)->firstOrFail();
+                if (! empty($input['reviewOnly'])) {
+                    return ['success' => true, 'reviewOnly' => true];
+                }
+                if ($meta['blockReason']) {
+                    if ($item->status !== 'linked') {
+                        $this->history($item, 'upload_review');
+                        $item->forceFill(['status' => 'review', 'classification' => 'lines', 'line_ids' => array_values(array_unique(array_merge($item->line_ids ?? [], $ids))),
+                            'reason' => '이 공정에서 접수 · '.$meta['blockReason']])->save();
+                    }
+
+                    return ['success' => true, 'reviewOnly' => true, 'message' => $meta['blockReason']];
+                }
+                $ids = array_values(array_unique(array_merge($item->status === 'linked' ? ($item->line_ids ?? []) : [], $ids)));
+
+                return $this->review(['id' => $item->id, 'action' => 'link', 'lineIds' => $ids]);
+            });
         });
     }
 

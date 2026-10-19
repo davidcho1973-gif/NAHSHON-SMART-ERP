@@ -6,6 +6,7 @@ use App\Models\ClaimEvidenceInboxItem;
 use App\Models\ClaimWorkRecord;
 use App\Models\Company;
 use App\Models\ContractBoqLine;
+use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
 use App\Models\MaterialReceipt;
 use App\Models\MobileExpense;
@@ -20,6 +21,7 @@ use App\Models\WorkSection;
 use App\Models\WorkSectionSheet;
 use App\Services\Drawings\DrawingMarkService;
 use App\Services\Finance\ClaimEvidenceInboxService;
+use App\Services\Finance\ClaimLineWorkspaceService;
 use App\Services\Ocr\OcrEngine;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,6 +64,69 @@ class ClaimEvidenceInboxTest extends TestCase
     private function service(): ClaimEvidenceInboxService
     {
         return app(ClaimEvidenceInboxService::class);
+    }
+
+    public function test_line_upload_retains_other_links_and_never_creates_work_or_claims(): void
+    {
+        $doc = $this->document();
+        $input = ['contractId' => $this->contract->id, 'lineId' => $this->line->id, 'documentId' => $doc->id];
+        $this->assertTrue($this->service()->attachDocument($input)['success']);
+        $this->assertTrue($this->service()->attachDocument(array_replace($input, ['lineId' => $this->secondLine->id]))['success']);
+        $this->assertTrue($this->service()->attachDocument($input)['success']);
+        $this->assertSame([$this->line->id, $this->secondLine->id], $this->item('document', $doc->id)->line_ids);
+        $view = app(ClaimLineWorkspaceService::class)->get($this->contract->id, $this->line->id);
+        $this->assertSame($doc->id, $view['evidence']['rows'][0]['sourceId']);
+        $this->assertSame($this->contract->site_id, $view['siteId']);
+        $this->assertDatabaseCount('claim_work_records', 0);
+        $this->assertDatabaseCount('pay_applications', 0);
+        $this->assertDatabaseCount('claim_evidence_inbox_items', 1);
+    }
+
+    public function test_unready_line_upload_stays_visible_as_review_and_wrong_scope_is_rejected(): void
+    {
+        $doc = $this->document(['ai_status' => 'queued', 'document_date' => null]);
+        $input = ['contractId' => $this->contract->id, 'lineId' => $this->line->id, 'documentId' => $doc->id];
+        $result = $this->service()->attachDocument($input);
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['reviewOnly']);
+        $view = app(ClaimLineWorkspaceService::class)->get($this->contract->id, $this->line->id);
+        $this->assertSame('review', $view['evidence']['rows'][0]['status']);
+        $this->assertSame(0, $view['evidence']['summary']['linked']);
+        $this->travel(1)->minutes();
+        $doc->update(['ai_status' => 'ready', 'document_date' => '2026-10-10']);
+        $this->service()->syncContract($this->contract->id, 1, [$doc->id]);
+        $this->assertSame([$this->line->id], $this->item('document', $doc->id)->line_ids, 'Analysis completion must retain the upload review context.');
+        $this->assertSame('review', $this->item('document', $doc->id)->status);
+        $this->assertFalse($this->service()->attachDocument(array_replace($input, ['lineId' => 999999]))['success']);
+        $this->assertFalse(app(ClaimLineWorkspaceService::class)->get($this->contract->id, 999999)['success']);
+        $doc->update(['access_level' => 'private']);
+        $this->assertSame([], app(ClaimLineWorkspaceService::class)->get($this->contract->id, $this->line->id)['evidence']['rows']);
+        $this->assertFalse($this->service()->attachDocument($input)['success']);
+    }
+
+    public function test_explicit_review_upload_does_not_assign_a_guessed_line(): void
+    {
+        $doc = $this->document();
+        $this->assertTrue($this->service()->attachDocument(['contractId' => $this->contract->id, 'lineId' => $this->line->id, 'documentId' => $doc->id, 'reviewOnly' => true])['success']);
+        $this->assertSame([], $this->item('document', $doc->id)->line_ids);
+        $this->assertSame('review', $this->item('document', $doc->id)->status);
+        $this->line->update(['status' => 'draft']);
+        $this->assertTrue(app(ClaimLineWorkspaceService::class)->get($this->contract->id, $this->line->id)['success']);
+    }
+
+    public function test_line_workspace_drawings_follow_the_contract_section_and_permissions(): void
+    {
+        $section = WorkSection::create(['project_contract_id' => $this->contract->id, 'company_id' => $this->contract->company_id,
+            'site_id' => $this->contract->site_id, 'division' => 'Mechanical', 'code' => 'M1', 'name' => 'Piping']);
+        $this->line->update(['work_section_id' => $section->id]);
+        WorkSectionSheet::create(['work_section_id' => $section->id, 'sheet_no' => 'P-101']);
+        $doc = $this->document(['mime_type' => 'application/pdf', 'extension' => 'pdf']);
+        $sheet = DrawingSheet::create(['intelligent_document_id' => $doc->id, 'site_id' => $this->contract->site_id, 'page_no' => 1, 'sheet_no' => 'P-101', 'status' => 'done']);
+        $service = app(ClaimLineWorkspaceService::class);
+        $this->assertSame($sheet->id, $service->get($this->contract->id, $this->line->id)['drawings'][0]['id']);
+        $this->assertSame([], $service->get($this->contract->id, $this->secondLine->id)['drawings']);
+        auth()->user()->update(['account_status' => 'inactive']);
+        $this->assertFalse($service->get($this->contract->id, $this->line->id)['success']);
     }
 
     public function test_linked_evidence_follows_section_drawings_without_geometry_or_claim_writes(): void

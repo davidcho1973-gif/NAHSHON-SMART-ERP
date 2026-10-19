@@ -119,7 +119,7 @@ class DocumentIntelligenceAnalyzer
             'extracted_text' => $extractedText,
             'image_derivative' => str_starts_with((string) $document->mime_type, 'image/')
                 ? array_diff_key($image, ['data' => true]) : null,
-            'image_derivative_file' => $document->source === 'evidence_batch' && $image['resized'] ? $image : null,
+            'image_derivative_file' => $document->isClaimEvidence() && $image['resized'] ? $image : null,
             'text_truncated' => mb_strwidth($extractedText ?? '', 'UTF-8') > 120000,
             'email_attachment_review_required' => (strtolower((string) $document->extension) === 'eml' || strtolower((string) $document->mime_type) === 'message/rfc822')
                 && str_contains($extractedText ?? '', DocumentTextExtractor::EMAIL_ATTACHMENT_REVIEW_MARKER),
