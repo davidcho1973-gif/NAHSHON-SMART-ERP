@@ -689,6 +689,7 @@ class ClaimSubmissionService
             'line' => data_get($allocation->snapshot, 'line.lineNo'),
             'description' => data_get($allocation->snapshot, 'line.description'),
             'quantity' => (string) $allocation->quantity,
+            'unit' => data_get($allocation->snapshot, 'line.unit'),
             'amount' => (string) $allocation->amount,
             'workDate' => data_get($allocation->snapshot, 'record.workDate'),
             'location' => data_get($allocation->snapshot, 'record.location'),
@@ -733,10 +734,10 @@ class ClaimSubmissionService
     private function quantityReport(array $package, array $files): string
     {
         $esc = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $html = '<!doctype html><html lang="ko"><meta charset="utf-8"><title>수량 산출·증빙 목차</title><style>body{font:14px/1.6 sans-serif;padding:30px;color:#172333}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbc7d1;padding:9px;text-align:left}article{break-inside:avoid;margin:25px 0}img{max-width:90%;max-height:650px}pre{white-space:pre-wrap}h2{border-bottom:2px solid #234}</style><h1>수량 산출·증빙 목차</h1><p>'.$esc($package['contract']['title']).' · 제출본 v'.$esc($package['revision']).'</p>';
+        $html = '<!doctype html><html lang="ko"><meta charset="utf-8"><title>수량 산출·증빙 목차</title><style>body{font:14px/1.6 sans-serif;padding:30px;color:#172333}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbc7d1;padding:9px;text-align:left}@page{size:A4;margin:16mm}article{margin:25px 0}h2,table{break-inside:avoid}thead{display:table-header-group}li{overflow-wrap:anywhere}.photo{height:440px;display:flex;align-items:center;justify-content:center;break-inside:avoid;list-style:none;margin:12px 0;border:1px solid #ddd}.photo img{max-width:95%;max-height:420px;object-fit:contain}@media print{body{padding:0}a{color:#172333}}pre{white-space:pre-wrap}h2{border-bottom:2px solid #234}</style><h1>수량 산출·증빙 목차</h1><p>'.$esc($package['contract']['title']).' · 제출본 v'.$esc($package['revision']).'</p>';
         foreach ($package['lines'] as $index => $line) {
             $no = 'E-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT);
-            $html .= '<article><h2>'.$no.' · BOQ '.$esc($line['line']).' '.$esc($line['description']).'</h2><table><tr><th>작업일</th><th>위치</th><th>단계</th><th>금회 수량</th><th>금액</th></tr><tr><td>'.$esc($line['workDate']).'</td><td>'.$esc($line['location']).'</td><td>'.$esc($line['stage']).'</td><td>'.$esc($line['quantity']).'</td><td>'.$esc($line['amount']).'</td></tr></table><pre>'.$esc($line['calculation']).'</pre><ul>';
+            $html .= '<article><h2>'.$no.' · BOQ '.$esc($line['line']).' '.$esc($line['description']).'</h2><table><tr><th>작업일</th><th>위치</th><th>단계</th><th>금회 수량</th><th>금액</th></tr><tr><td>'.$esc($line['workDate']).'</td><td>'.$esc($line['location']).'</td><td>'.$esc($line['stage']).'</td><td>'.$esc($line['quantity'].' '.($line['unit'] ?? '')).'</td><td>'.$esc($package['contract']['currency'].' '.number_format((float) $line['amount'], 2)).'</td></tr></table><pre>'.$esc($line['calculation']).'</pre><ul>';
             foreach ($line['evidence'] as $proof) {
                 $key = ($proof['type'] ?? '').':'.($proof['id'] ?? '');
                 $file = $files[$key] ?? null;
@@ -747,7 +748,7 @@ class ClaimSubmissionService
                 $html .= '</li>';
                 if ($file && preg_match('/\.(jpg|jpeg|png|webp)$/i', $file['name'])) {
                     preg_match('/presentationRotation:(90|180|270)\b/', (string) ($proof['note'] ?? ''), $rotation);
-                    $html .= '<li style="min-height:400px;display:flex;align-items:center;justify-content:center"><img style="transform:rotate('.($rotation[1] ?? '0').'deg)" src="'.$esc($file['name']).'" alt="'.$esc($proof['title'] ?? $no).'"></li>';
+                    $html .= '<li class="photo"><img style="'.(in_array($rotation[1] ?? '', ['90', '270'], true) ? 'max-width:420px;' : '').'transform:rotate('.($rotation[1] ?? '0').'deg)" src="'.$esc($file['name']).'" alt="'.$esc($proof['title'] ?? $no).'"></li>';
                 }
             }
             $html .= '</ul></article>';
