@@ -342,7 +342,9 @@
     $('[data-export]').onclick = function () { exportPng(); };
 
     // ── 불러오기 ──
-    call('api_getSheetMarks', [opts.siteId, opts.sheetNo]).then(function (r) {
+    var sheetArgs = [opts.siteId, opts.sheetNo];
+    if (global.apiCache) delete global.apiCache['api_getSheetMarks' + JSON.stringify(sheetArgs)];
+    call('api_getSheetMarks', sheetArgs).then(function (r) {
       if (r.success === false) throw new Error(r.error || '도면을 불러오지 못했습니다.');
       st.data = r;
       st.marks = r.marks || [];
@@ -1045,6 +1047,12 @@
             '<div style="font-size:12px;color:#94a3b8">' + esc(s.label + (m.record ? ' · ' + (STAGE[m.record.stage] || '') + ' ' + num(m.record.reportedQty) + ' ' + (m.line.unit || '') + ' · ' + (m.record.workDate || '') : m.label ? ' · ' + m.label : '')) + '</div></div></div>';
         }).join('') : '<div style="padding:20px 6px;color:#64748b;font-size:13px">아직 표시가 없습니다. 줄에서 «기록» 할 때 도면에 찍거나, 아래 도구로 더하세요.</div>');
       // 이 도면에 아직 표시가 없는 이 공정의 줄 — 남은 일. 누르면 바로 그 줄을 찍는다.
+      if (global.AdminDrawingEvidence && st.data) {
+        side.insertAdjacentHTML('beforeend', global.AdminDrawingEvidence.sheetHtml(st.data.evidenceGroups));
+        Array.prototype.forEach.call(side.querySelectorAll('[data-evidence-contract]'), function (button) {
+          button.onclick = function () { close(); global.AdminDrawingEvidence.list(Number(button.getAttribute('data-evidence-contract')), null, st.data.sheetNo); };
+        });
+      }
       var marked = {};
       st.marks.forEach(function (m) { if (m.line) marked[m.line.id] = true; });
       var left = (opts.lines || []).filter(function (l) { return !marked[l.id]; });

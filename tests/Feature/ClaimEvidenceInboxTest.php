@@ -17,6 +17,8 @@ use App\Models\Site;
 use App\Models\User;
 use App\Models\WbsPhoto;
 use App\Models\WorkSection;
+use App\Models\WorkSectionSheet;
+use App\Services\Drawings\DrawingMarkService;
 use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Services\Ocr\OcrEngine;
 use App\Support\ReceiptFilePayload;
@@ -60,6 +62,52 @@ class ClaimEvidenceInboxTest extends TestCase
     private function service(): ClaimEvidenceInboxService
     {
         return app(ClaimEvidenceInboxService::class);
+    }
+
+    public function test_linked_evidence_follows_section_drawings_without_geometry_or_claim_writes(): void
+    {
+        $section = WorkSection::create(['project_contract_id' => $this->contract->id, 'company_id' => $this->contract->company_id,
+            'site_id' => $this->contract->site_id, 'division' => 'Mechanical', 'code' => 'M1', 'name' => 'Piping']);
+        $this->line->update(['work_section_id' => $section->id]);
+        $pick = WorkSectionSheet::create(['work_section_id' => $section->id, 'sheet_no' => 'P-101']);
+        $document = $this->document();
+        $this->service()->syncContract($this->contract->id);
+        $item = $this->item('document', $document->id);
+        $marks = app(DrawingMarkService::class);
+        $this->assertSame([], $marks->sheet($this->contract->site_id, 'P-101')['evidenceGroups'][0]['rows'], 'Unclassified evidence must not be assigned to a drawing.');
+        $this->assertTrue($this->link($item)['success']);
+        $view = $marks->sheet($this->contract->site_id, ' p-101 ');
+        $this->assertSame($document->id, $view['evidenceGroups'][0]['rows'][0]['sourceId']);
+        $this->assertSame([], $view['marks'], 'A documentary association must not invent coordinates.');
+        $this->assertCount(1, $this->service()->getInbox($this->contract->id, ['sectionId' => $section->id])['rows']);
+        $this->assertSame([], $this->service()->getInbox($this->contract->id, ['sheetNo' => 'OTHER'])['rows']);
+        $pick->update(['sheet_no' => 'P-102']);
+        $this->assertSame([], $marks->sheet($this->contract->site_id, 'P-101')['evidenceGroups']);
+        $this->assertCount(1, $marks->sheet($this->contract->site_id, 'P-102')['evidenceGroups'][0]['rows']);
+        $this->service()->review(['id' => $item->id, 'action' => 'reopen']);
+        $this->assertSame([], $marks->sheet($this->contract->site_id, 'P-102')['evidenceGroups'][0]['rows']);
+        $this->assertSame('review', $item->fresh()->status);
+        foreach (['claim_work_records', 'drawing_marks', 'pay_applications'] as $table) {
+            $this->assertDatabaseCount($table, 0);
+        }
+        $this->assertCount(2, $item->fresh()->review_history);
+    }
+
+    public function test_drawing_projection_rechecks_source_privacy_and_contract_access(): void
+    {
+        $section = WorkSection::create(['project_contract_id' => $this->contract->id, 'company_id' => $this->contract->company_id,
+            'site_id' => $this->contract->site_id, 'division' => 'Mechanical', 'code' => 'M1', 'name' => 'Piping']);
+        $this->line->update(['work_section_id' => $section->id]);
+        WorkSectionSheet::create(['work_section_id' => $section->id, 'sheet_no' => 'P-101']);
+        $document = $this->document();
+        $this->service()->syncContract($this->contract->id);
+        $this->assertTrue($this->link($this->item('document', $document->id))['success']);
+        $document->update(['access_level' => 'private', 'owner_user_id' => User::factory()->create()->id]);
+        $view = app(DrawingMarkService::class)->sheet($this->contract->site_id, 'P-101');
+        $this->assertSame([], $view['evidenceGroups'][0]['rows']);
+        $this->assertStringNotContainsString($document->title, json_encode($view));
+        $this->actingAs(User::factory()->create(['access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']));
+        $this->assertFalse($this->service()->getInbox($this->contract->id, ['sheetNo' => 'P-101'])['success']);
     }
 
     private function line(string $number, string $description): ContractBoqLine

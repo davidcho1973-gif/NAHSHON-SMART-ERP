@@ -426,6 +426,7 @@
               '<span style="font-size:14px;font-weight:700;flex:1">' + u.esc(s.name) + '</span>' +
               (s.contractAmount && !s.billing ? '<span style="font-size:12px;color:var(--text-secondary)">계약 ' + money(s.contractAmount) + '</span>' : '') +
               '<span style="font-size:12px;color:var(--text-tertiary)">도면 ' + s.sheets.length + '장' + (s.sheets.length && found < s.sheets.length ? ' · ' + (s.sheets.length - found) + '장은 아직 없음' : '') + '</span>' +
+              (s.contractId && d.billing && d.billing.canView ? u.rowButton('연결 증빙', 'window.AdminDrawingEvidence.list(' + s.contractId + ',' + s.id + ')') : '') +
               (d.canManage ? u.rowButton('도면 고르기', 'window.AdminSectionDrawings.pick(' + s.id + ')') : '') +
               (d.billing && d.billing.canManage && s.contractId ? u.rowButton('작업 추가 RFI', 'window.AdminSectionDrawings.rfi(' + s.id + ')') : '') +
             '</div>' + changeList(u, s, d.billing && d.billing.canManage) + sectionMoney(u, s) +
@@ -451,6 +452,8 @@
         '<div style="padding:40px;text-align:center;color:var(--text-tertiary)">위에서 현장을 고르면 그 현장의 공정과 도면이 나옵니다.</div>';
     }
     var actions = siteSel +
+      (d.billing && d.billing.canManage ? u.primaryButton('증빙 한 번에 올리기', 'window.AdminDrawingEvidence.upload(' + d.siteId + ',' + (d.billing.contractId || 0) + ')', 'upload-simple') +
+        (d.billing.contractId ? u.rowButton('증빙 확인 대기', 'window.AdminDrawingEvidence.review(' + d.billing.contractId + ')') : '') : '') +
       (d.canManage ? '<label style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer">' +
         '<i class="ph ph-upload-simple"></i>도면 올리기<input type="file" accept="application/pdf,.pdf" multiple style="display:none" onchange="window.AdminSectionDrawings.upload(this)"></label>' : '') +
       (d.billing && d.billing.canImport ? '<label style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary);font-size:13px;font-weight:600;cursor:pointer">' +
@@ -1168,6 +1171,7 @@
   }
 
   global.AdminSectionDrawings = {
+    reload: reload,
     render: renderScreen,
     read: read,
     upload: upload,

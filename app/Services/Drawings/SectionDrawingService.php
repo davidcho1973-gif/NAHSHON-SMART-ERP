@@ -315,6 +315,7 @@ class SectionDrawingService
             'pendingCount' => array_sum(array_column($out, 'pendingCount')),
             'canImport' => $billing->canManage() && $this->canManage(auth()->user()),
             'canManage' => $billing->canManage(),
+            'canView' => true,
         ]];
     }
 

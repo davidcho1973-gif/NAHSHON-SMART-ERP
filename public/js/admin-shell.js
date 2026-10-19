@@ -165,7 +165,11 @@
 
     var resolveFn;
     var result = new Promise(function (r) { resolveFn = r; });
-    function close(v) { if (opts.beforeClose && opts.beforeClose(v) === false) return; wrap.remove(); document.removeEventListener('keydown', onKey); resolveFn(v === undefined ? null : v); }
+    function close(v) {
+      if (opts.beforeClose && opts.beforeClose(wrap) === false) return;
+      wrap.remove(); document.removeEventListener('keydown', onKey); resolveFn(v === undefined ? null : v);
+    }
+
     function onKey(e) { if (e.key === 'Escape') close(null); }
 
     wrap.addEventListener('click', function (e) {

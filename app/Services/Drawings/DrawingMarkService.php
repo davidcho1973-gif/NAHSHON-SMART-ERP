@@ -12,6 +12,7 @@ use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkSection;
+use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Support\AiInformationAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -53,9 +54,28 @@ class DrawingMarkService
                     'pdfUrl' => route('document-intelligence.preview', ['document' => $sheet->intelligent_document_id]),
                 ] : null,
                 'marks' => $this->rows($marks),
+                'evidenceGroups' => $this->evidenceGroups($site, $no),
                 'canManage' => $this->drawings->canManage($user),
             ];
         });
+    }
+
+    /** Evidence is attached through its BOQ section, without inventing a position or earned quantity. */
+    private function evidenceGroups(Site $site, string $no): array
+    {
+        $groups = [];
+        $contracts = WorkSection::where('site_id', $site->id)
+            ->whereHas('sheets', fn ($q) => $q->whereRaw('upper(sheet_no) = ?', [$no]))
+            ->whereNotNull('project_contract_id')->pluck('project_contract_id')->unique();
+        foreach ($contracts as $contractId) {
+            $result = app(ClaimEvidenceInboxService::class)->getInbox((int) $contractId,
+                ['sheetNo' => $no, 'status' => 'linked', 'perPage' => 25]);
+            if ($result['success'] ?? false) {
+                $groups[] = ['contractId' => (int) $contractId, 'rows' => $result['rows'], 'pagination' => $result['pagination']];
+            }
+        }
+
+        return $groups;
     }
 
     /**
