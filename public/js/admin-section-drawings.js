@@ -1195,7 +1195,7 @@
     editor: function (contractId) {
       var sheets = [], seen = {};
       (state.data.sections || []).forEach(function (s) {
-        (s.sheets || []).forEach(function (p) { if (p.sheet && !seen[p.sheet.id]) { seen[p.sheet.id] = true; sheets.push(p.sheet); } });
+        (s.sheets || []).forEach(function (p) { if (!p.sheet) return; if (!seen[p.sheet.id]) { seen[p.sheet.id] = Object.assign({}, p.sheet, { sectionIds: [] }); sheets.push(seen[p.sheet.id]); } seen[p.sheet.id].sectionIds.push(s.id); });
       });
       global.AdminClaimEditor.open(contractId, state.data.siteId, sheets);
     },
