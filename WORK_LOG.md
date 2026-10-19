@@ -1,3 +1,7 @@
+## CODEX — 2026-10-19 BOQ child process cards
+
+Parent sections used drawing cards while BOQ children rendered compact record rows. Child rows now expose drawing/evidence/progress/claim cards and open the existing full-screen studio at the exact line. Drawings inherit from the parent until explicitly selected per BOQ line; selections use existing contract metadata and cannot change parent/sibling choices. Empty selection stays empty. Ledger quantities, trade assignments, approval rules and originals are unchanged. Writes require drawing and billing management rights and accessible section/contract scope. Targeted PHP and Chromium integration checks cover isolation and correct line entry; full CI/staging/main gates remain required.
+
 ## CODEX — 2026-10-19 Protect unsubmitted field originals
 
 The existing document deletion hook removes bytes before the database delete. Field upload receipt foreign keys therefore need an early canonical source-protection guard, even before a work record has been submitted. Added field receipt references to ClaimEvidenceService::sourceIsProtected, with a regression test asserting that administrator deletion is rejected and both original bytes and metadata survive. This is a release prerequisite for the quantity-only workspace; no production records were modified.
