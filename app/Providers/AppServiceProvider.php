@@ -10,6 +10,7 @@ use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Models\IntegratedDocument;
 use App\Models\IntelligentDocument;
+use App\Models\ManagerInvitation;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
@@ -71,6 +72,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Reusable links serve several people behind one site's network. Keep each
+        // registration step bounded without letting page views consume POST limits.
+        RateLimiter::for('manager-invitation-registration', function (Request $request) {
+            $hash = hash('sha256', (string) $request->route('token'));
+            $reusable = ManagerInvitation::where('token_hash', $hash)->where('reusable', true)->exists();
+
+            return Limit::perMinute($reusable ? 30 : 5)->by($request->ip().'|'.$request->route()->getName().'|'.$hash);
+        });
+
         // One actor boundary protects lists, record lookups and direct file routes. Console jobs retain their trusted scope.
         $jobScope = new JobDataScope;
         foreach (glob(app_path('Models/*.php')) as $file) {

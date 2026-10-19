@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\ManagerInvitationException;
+use App\Models\Company;
+use App\Models\Site;
 use App\Models\User;
 use App\Services\Auth\ManagerInvitationService;
 use Illuminate\Http\Request;
@@ -23,6 +25,10 @@ class ManagerInvitationController extends Controller
         return response()->view('auth.manager-invitation', [
             'token' => $token, 'user' => $invite->user_id ? User::findOrFail($invite->user_id) : null,
             'newEmployee' => $invite->kind === 'new_employee',
+            'reusable' => $invite->reusable,
+            'companyName' => $invite->reusable ? Company::find($invite->grant['allowed_company_id'])?->name : null,
+            'siteNames' => $invite->reusable ? Site::whereIn('id', $invite->grant['job_site_ids'] ?? [])->pluck('name')->all() : [],
+            'scopeLabel' => User::SCOPE_LABELS_KO[$invite->grant['access_scope']] ?? '',
             'jobLabel' => config('job_access.jobs.'.($invite->grant['job_role'] ?? '').'.label'),
             'jobTrade' => $invite->grant['job_trade'] ?? null,
             'enrollmentName' => $request->session()->get(ManagerInvitationService::SESSION.'.name'),

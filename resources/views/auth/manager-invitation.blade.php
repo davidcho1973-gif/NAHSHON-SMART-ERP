@@ -2,7 +2,9 @@
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>관리자 초대 등록</title>
 @include('partials.personal-app-meta')
 <style>body{margin:0;background:#f3f5f8;font:16px system-ui;color:#17233b}main{max-width:430px;margin:40px auto;padding:28px;background:white;border-radius:16px}h1{font-size:24px}p{line-height:1.6;color:#526078}label{display:block;margin:18px 0 8px}input{box-sizing:border-box;width:100%;padding:13px;border:1px solid #bdc8d8;border-radius:8px;font:inherit}button,.button{display:block;box-sizing:border-box;width:100%;padding:14px;margin-top:22px;background:#234ed8;color:white;border:0;border-radius:8px;text-align:center;text-decoration:none;font:inherit}.error{color:#b42318}@media(max-width:500px){main{margin:16px;padding:24px}}</style></head><body><main>
-<h1>{{ $newEmployee ? '새 입사자 관리자 등록' : '관리자 초대 등록' }}</h1>
+<h1>{{ $reusable ? '공용 관리자 등록' : ($newEmployee ? '새 입사자 관리자 등록' : '관리자 초대 등록') }}</h1>
+@if($reusable)<p><strong>공용 관리자 등록 링크 · 유효기간 없음</strong><br>등록을 완료하면 링크에 지정된 직책과 담당 범위의 권한이 바로 적용됩니다. 기존 직원은 본인 개인앱에 연결된 브라우저에서 진행하세요.</p>
+<p>소속 회사: {{ $companyName }}<br>담당 범위: {{ $scopeLabel }}@if(count($siteNames))<br>담당 현장: {{ implode(' · ', $siteNames) }}@endif</p>@endif
 @if($jobLabel)<p><strong>초대 직책: {{ $jobLabel }}</strong>@if($jobTrade)<br>담당 공정: {{ $jobTrade }}@endif</p>@endif
 <p>{{ $newEmployee ? '이름·전화번호와 로그인 정보를 입력하면 직원 등록과 관리자 설정이 함께 완료됩니다.' : '기존 직원 기록에 로그인 정보를 연결합니다.' }} 등록을 완료하면 관리자가 지정한 범위에서 ERP와 개인앱을 사용할 수 있습니다.</p>
 @foreach($errors->all() as $error)<p class="error">{{ $error }}</p>@endforeach

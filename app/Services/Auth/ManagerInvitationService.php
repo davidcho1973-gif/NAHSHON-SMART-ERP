@@ -64,6 +64,11 @@ class ManagerInvitationService
         if (! in_array($kind, ['existing_worker', 'new_employee'], true)) {
             return ['success' => false, 'error' => '초대 종류를 확인하세요.'];
         }
+        $mode = $input['useMode'] ?? 'single';
+        if (! in_array($mode, ['single', 'reusable'], true) || ($mode === 'reusable' && $kind !== 'new_employee')) {
+            return ['success' => false, 'error' => '반복사용 링크는 공용 관리자 등록에서만 만들 수 있습니다.'];
+        }
+        $reusable = $mode === 'reusable';
         $jobGrant = null;
         if (filled($input['jobRole'] ?? null)) {
             try {
@@ -78,6 +83,9 @@ class ManagerInvitationService
         }
         $role = $input['role'] ?? '';
         $scope = $input['scope'] ?? '';
+        if ($reusable && (! $jobGrant || $jobGrant['job_role'] === 'worker')) {
+            return ['success' => false, 'error' => '반복사용 링크의 관리자 직책과 담당 회사·범위를 지정하세요.'];
+        }
         if (! $jobGrant && (! in_array($role, ['admin', 'site_manager'], true) || ! in_array($scope, ['site', 'company', 'all_sites'], true))) {
             return ['success' => false, 'error' => '관리자 역할과 관리 범위를 선택하세요.'];
         }
@@ -101,7 +109,7 @@ class ManagerInvitationService
             $enrollment = ['site_id' => $homeSite?->id, 'company_id' => $homeCompany?->id ?? $homeSite?->company_id];
         }
 
-        return DB::transaction(function () use ($input, $kind, $label, $enrollment, $role, $scope, $site, $company, $jobGrant) {
+        return DB::transaction(function () use ($input, $kind, $label, $enrollment, $role, $scope, $site, $company, $jobGrant, $reusable) {
             $user = $kind === 'existing_worker' ? User::query()->lockForUpdate()->find((int) ($input['id'] ?? 0)) : null;
             if ($kind === 'existing_worker' && (! $user || ! $this->eligible($user))) {
                 return ['success' => false, 'error' => '이메일·로그인 정보가 없는 활성 작업자 또는 반장만 초대할 수 있습니다. 기존 관리자 계정은 계정 수정으로 관리하세요.'];
@@ -119,17 +127,38 @@ class ManagerInvitationService
             $invite = ManagerInvitation::create([
                 'user_id' => $user?->id, 'created_by_id' => auth()->id(), 'token_hash' => hash('sha256', $token),
                 'kind' => $kind, 'enrollment' => $enrollment, 'recipient_label' => $label ?: null,
-                'account_fingerprint' => $user ? $this->fingerprint($user) : hash('sha256', 'new_employee'), 'expires_at' => now()->addDays(7),
+                'account_fingerprint' => $user ? $this->fingerprint($user) : hash('sha256', 'new_employee'), 'expires_at' => $reusable ? null : now()->addDays(7),
+                'reusable' => $reusable, 'share_token' => $reusable ? $token : null,
                 'grant' => $jobGrant ?? ['access_role' => $role, 'access_scope' => $scope, 'allowed_site_id' => $site?->id,
                     'allowed_company_id' => $company?->id, 'allowed_team_id' => null],
             ]);
             AuthEvent::record('manager_invitation_created', user: $user, actor: auth()->user(), method: 'erp', request: request(), note: 'invitation_id='.$invite->id);
-            // Alias hosts do not share the canonical Google callback's session cookie.
-            $url = rtrim((string) config('app.url'), '/').route('manager-invitation.show', ['token' => $token], absolute: false);
 
-            return ['success' => true, 'id' => $invite->id, 'url' => $url, 'qr' => QrSvg::dataUri($url),
-                'expiresAt' => $invite->expires_at->toDateTimeString(), 'name' => $user?->name ?? ($label ?: '새 입사자'), 'kind' => $kind];
+            // Alias hosts do not share the canonical Google callback's session cookie.
+            return $this->sharingData($invite, $token, $user?->name ?? ($label ?: '새 입사자'));
         });
+    }
+
+    public function share(int $id): array
+    {
+        if (! $this->canIssue()) {
+            return ['success' => false, 'error' => '정식 로그인한 수퍼관리자만 초대 링크를 볼 수 있습니다.'];
+        }
+        $invite = ManagerInvitation::find($id);
+        if (! $invite || ! $invite->reusable || ! $this->valid($invite) || ! $invite->share_token) {
+            return ['success' => false, 'error' => '사용 가능한 반복사용 링크가 아닙니다.'];
+        }
+
+        return $this->sharingData($invite, $invite->share_token, $invite->recipient_label ?: '공용 관리자 등록');
+    }
+
+    private function sharingData(ManagerInvitation $invite, string $token, string $name): array
+    {
+        $url = rtrim((string) config('app.url'), '/').route('manager-invitation.show', ['token' => $token], absolute: false);
+
+        return ['success' => true, 'id' => $invite->id, 'url' => $url, 'qr' => QrSvg::dataUri($url),
+            'expiresAt' => $invite->expires_at?->toDateTimeString(), 'reusable' => $invite->reusable,
+            'useCount' => $invite->use_count, 'name' => $name, 'kind' => $invite->kind];
     }
 
     public function revoke(int $userId): array
@@ -181,7 +210,8 @@ class ManagerInvitationService
         $issuer = User::find($invite->created_by_id);
         $grant = $invite->grant;
 
-        return ! $invite->accepted_at && ! $invite->revoked_at && $invite->expires_at->isFuture()
+        return ! $invite->accepted_at && ! $invite->revoked_at
+            && ($invite->reusable ? $invite->kind === 'new_employee' && isset($grant['job_role']) && $grant['job_role'] !== 'worker' && $invite->expires_at === null : $invite->expires_at?->isFuture())
             && $issuer?->account_status === 'active' && $issuer->access_role === 'super_admin'
             && (isset($grant['job_role']) ? $this->validJobGrant($grant) : (in_array($grant['access_role'] ?? null, ['admin', 'site_manager'], true)
                 && in_array($grant['access_scope'] ?? null, ['site', 'company', 'all_sites'], true)
@@ -221,10 +251,14 @@ class ManagerInvitationService
             if ($phone === null) {
                 throw ValidationException::withMessages(['phone' => '전화번호 전체와 국가번호를 입력하세요. 미국 번호는 10자리로 입력할 수 있습니다.']);
             }
-            $this->ensureNewPhone($phone);
+            $existing = $invite->reusable ? $this->existingReusableUser($invite, $phone, $request) : null;
+            if (! $existing) {
+                $this->ensureNewPhone($phone);
+            }
             $request->session()->regenerate();
             $request->session()->put(self::SESSION, ['token' => $token, 'expires' => now()->addMinutes(15)->timestamp,
-                'name' => $name, 'phone' => '+'.$phone]);
+                'name' => $existing?->name ?? $name, 'phone' => '+'.$phone,
+                'existing_user_id' => $existing?->id, 'existing_fingerprint' => $existing ? $this->fingerprint($existing) : null]);
 
             return;
         }
@@ -254,9 +288,16 @@ class ManagerInvitationService
         $user = DB::transaction(function () use ($token, $email, $password, $googleId, $request) {
             $invite = $this->find($token);
             // Existing identity mutations lock the account first; new enrollments lock their invitation.
-            $user = $invite->kind === 'existing_worker' ? User::query()->lockForUpdate()->findOrFail($invite->user_id) : null;
+            $session = $request->session()->get(self::SESSION);
+            $existingId = $invite->kind === 'existing_worker' ? $invite->user_id : ($invite->reusable ? ($session['existing_user_id'] ?? null) : null);
+            $user = $existingId ? User::query()->lockForUpdate()->findOrFail($existingId) : null;
             $invite = ManagerInvitation::query()->lockForUpdate()->findOrFail($invite->id);
             if (! $this->valid($invite)) {
+                throw ManagerInvitationException::unavailable();
+            }
+            if ($invite->reusable && $user && (! $this->eligible($user)
+                || ! hash_equals($this->fingerprint($user), (string) ($session['existing_fingerprint'] ?? ''))
+                || ! $this->withinReusableScope($invite, $user))) {
                 throw ManagerInvitationException::unavailable();
             }
             // Distinct invitations can present the same login identity concurrently.
@@ -298,8 +339,12 @@ class ManagerInvitationService
             }
             $user->forceFill($data)->save();
             JobAccess::applyEmployeePosition($user);
-            $invite->update(['user_id' => $user->id, 'accepted_at' => now()]);
-            AuthEvent::record('manager_invitation_accepted', user: $user, actor: User::find($invite->created_by_id), method: $googleId ? 'google' : 'password', request: $request);
+            // A reusable invitation is a fixed grant, never the identity of its first recipient.
+            $invite->update($invite->reusable
+                ? ['use_count' => $invite->use_count + 1, 'last_used_at' => now()]
+                : ['user_id' => $user->id, 'accepted_at' => now()]);
+            AuthEvent::record('manager_invitation_accepted', user: $user, actor: User::find($invite->created_by_id), method: $googleId ? 'google' : 'password', request: $request,
+                note: 'invitation_id='.$invite->id.';reusable='.(int) $invite->reusable);
 
             return $user;
         });
@@ -309,6 +354,29 @@ class ManagerInvitationService
         PersonalAppAccessService::clearSession($request);
         WorkerDeviceSession::clear($request);
         $request->session()->put(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id);
+
+        return $user;
+    }
+
+    private function withinReusableScope(ManagerInvitation $invite, User $user): bool
+    {
+        $employee = $user->employee;
+
+        return $employee && (int) $employee->company_id === (int) $invite->grant['allowed_company_id']
+            && ($invite->grant['access_scope'] === 'company' || in_array((int) $employee->site_id, $invite->grant['job_site_ids'] ?? [], true));
+    }
+
+    private function existingReusableUser(ManagerInvitation $invite, string $phone, Request $request): ?User
+    {
+        $matches = WorkerPhone::employees($phone)->get();
+        if ($matches->isEmpty()) {
+            return null;
+        }
+        $user = $request->user()?->fresh();
+        if ($matches->count() !== 1 || ! $user || (int) $user->employee_id !== (int) $matches->first()->id
+            || ! $this->eligible($user) || ! $this->withinReusableScope($invite, $user)) {
+            throw ValidationException::withMessages(['phone' => '기존 직원은 본인 개인앱에 연결된 브라우저에서 열어 주세요. 연결되지 않거나 다른 담당 범위이면 기존 직원용 관리자 초대를 요청하세요.']);
+        }
 
         return $user;
     }

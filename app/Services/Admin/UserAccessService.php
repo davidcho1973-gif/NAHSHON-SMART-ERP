@@ -152,7 +152,8 @@ class UserAccessService
                     'roleLabel' => isset($invite->grant['job_role']) ? config('job_access.jobs.'.$invite->grant['job_role'].'.label') : User::ROLE_LABELS_KO[$invite->grant['access_role']],
                     'scopeLabel' => User::SCOPE_LABELS_KO[$invite->grant['access_scope']],
                     'grant' => $invite->grant, 'enrollment' => $invite->enrollment,
-                    'expiresAt' => $invite->expires_at->toDateTimeString(), 'expired' => $invite->expires_at->isPast(),
+                    'expiresAt' => $invite->expires_at?->toDateTimeString(), 'expired' => $invite->expires_at?->isPast() ?? false,
+                    'reusable' => $invite->reusable, 'useCount' => $invite->use_count, 'lastUsedAt' => $invite->last_used_at?->toDateTimeString(),
                 ])->all() : [];
 
         return ['success' => true, 'rows' => $rows, 'newInvitations' => $newInvitations];

@@ -69,10 +69,11 @@ use App\Support\MailReady;
 
 Route::get('/manager-invitation/complete', [ManagerInvitationController::class, 'welcome'])->middleware(['auth', RequireApprovedErpAccess::class])->name('manager-invitation.welcome');
 Route::get('/manager-invitation/{token}', [ManagerInvitationController::class, 'show'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('manager-invitation.show');
-Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::class, 'verify'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.verify');
-Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
+Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::class, 'verify'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:manager-invitation-registration')->name('manager-invitation.verify');
+Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:manager-invitation-registration')->name('manager-invitation.complete');
 use App\Http\Controllers\AssistantWorkspaceController;
 use App\Http\Controllers\ClaimEvidenceFileController;
+use App\Http\Controllers\DrawingStudioController;
 use App\Http\Controllers\JobApprovalController;
 use App\Http\Controllers\JobWorkspaceController;
 use App\Http\Controllers\PersonalPayslipController;
@@ -323,7 +324,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
-    Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(\App\Http\Controllers\DrawingStudioController::class)->group(function (): void {
+    Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(DrawingStudioController::class)->group(function (): void {
         Route::get('/', 'show');
         Route::put('/', 'save');
         Route::get('/history', 'history');

@@ -213,6 +213,7 @@ class SmartCompanyData
             // 권한 판단은 전부 서비스 안에서 한다 — 화면에서 버튼을 숨기는 건 방어가 아니다.
             'api_getUserAccessList' => app(UserAccessService::class)->list(),
             'api_createManagerInvitation' => app(ManagerInvitationService::class)->issue(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_shareManagerInvitation' => app(ManagerInvitationService::class)->share((int) ($args[0] ?? 0)),
             'api_revokeManagerInvitation' => app(ManagerInvitationService::class)->revoke((int) ($args[0] ?? 0)),
             'api_revokeNewManagerInvitation' => app(ManagerInvitationService::class)->revokeNew((int) ($args[0] ?? 0)),
             'api_getUserAccessOptions' => app(UserAccessService::class)->options(),
