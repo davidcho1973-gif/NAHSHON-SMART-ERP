@@ -739,9 +739,12 @@ if(window.parent===window || typeof window.parent.ERPDocumentNavigate!=='functio
 @if($canEvidenceManage)
 <script src="{{ asset('js/document-evidence-batch.js') }}?v={{ filemtime(public_path('js/document-evidence-batch.js')) }}"></script>
 <script>
-DocumentEvidenceBatch.mount({url:@json(route('evidence-batches.index')),csrf:csrf,maxBytes:MAX_UPLOAD_BYTES,projectId:@json($defaultProjectId),
+window.documentEvidenceWorkflow = DocumentEvidenceBatch.mount({url:@json(route('evidence-batches.index')),csrf:csrf,maxBytes:MAX_UPLOAD_BYTES,projectId:@json($defaultProjectId),contractId:@json(request()->integer('contract_id')),
     claimUrl:'/?view=billing-admin',onChanged:loadDocuments,openDocument:openDocument,
-    openClaim:function(id){if(window.parent!==window && window.parent.AdminClaimEvidence){window.parent.AdminClaimEvidence.open(id);return true;}return false;}});
+    openClaim:function(id){if(window.parent!==window && window.parent.AdminDrawingEvidence){window.parent.AdminDrawingEvidence.review(id);return true;}if(window.parent!==window && window.parent.AdminClaimEvidence){window.parent.AdminClaimEvidence.openEvidence(id);return true;}return false;}});
+@if(request()->boolean('evidence'))
+document.getElementById('evidence-open').click();
+@endif
 </script>
 @endif
 </body>

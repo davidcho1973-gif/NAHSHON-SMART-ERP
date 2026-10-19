@@ -461,10 +461,11 @@
     } });
   }
   // lineId: 공정별 도면 화면의 «줄 보기» 에서 한 줄을 바로 열 때.
-  function open(contractId, lineId) {
+  function open(contractId, lineId, evidenceMode) {
     ++state.inboxRequest;
     state.contractId = Number(contractId); state.ledger = null; state.lineId = lineId ? Number(lineId) : null; state.packet = null; state.filter = 'all';
-    state.tab = 'ledger'; state.inbox = null; state.inboxLineId = null; state.inboxLoading = false; state.inboxError = '';
+    state.tab = evidenceMode ? 'inbox' : 'ledger'; state.inboxStatus = 'review'; state.inboxPage = 1;
+    state.inbox = null; state.inboxLineId = null; state.inboxLoading = false; state.inboxError = '';
     if (global.goToView) global.goToView('claim-evidence-admin'); else render();
   }
   function render() {
@@ -550,6 +551,7 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
   global.AdminClaimEvidence = {
+    openEvidence: function (contractId) { open(contractId, null, true); },
     render: render, open: open, backToBilling: backToBilling,
     reload: function () { return refresh().catch(fail); },
     openLine: function (id) { state.tab = 'ledger'; ++state.inboxRequest; state.lineId = id; draw(); },
