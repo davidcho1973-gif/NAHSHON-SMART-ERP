@@ -35,7 +35,7 @@
     function changed(before){if(before){undo.push(before);if(undo.length>60)undo.shift();redo=[];}dirty=true;preview=null;sent=false;sendId=null;render();renderPanel();}
     function mutate(fn){if(!canManage||conflict)return;const before=C.clone(doc);fn();if(JSON.stringify(before)!==JSON.stringify(doc))changed(before);}
     function history(back){if(!canManage||conflict)return;const from=back?undo:redo,to=back?redo:undo;if(!from.length)return;to.push(C.clone(doc));doc=from.pop();selected=[];draft=[];dirty=true;preview=null;render();renderPanel();}
-    function setTool(t){tool=t;draft=[];hover=null;gesture=null;if(!['select','hand'].includes(t))selected=[];renderToolbar();renderPanel();render();if(['dimension','polygon'].includes(t)&&!v().fpp)host.hint('먼저 위의 축척 맞추기로 실제 치수를 설정하세요.');}
+    function setTool(t){if(tool!==t)newText='';tool=t;draft=[];hover=null;gesture=null;if(!['select','hand'].includes(t))selected=[];renderToolbar();renderPanel();render();if(['dimension','polygon'].includes(t)&&!v().fpp)host.hint('먼저 위의 축척 맞추기로 실제 치수를 설정하세요.');}
     function activate(next='edit'){if(sending)return;if(!doc){host.hint('편집 자료를 불러오는 중입니다.');return;}active=true;mode=next;panel.style.display='block';toolbar.style.display=next==='edit'?'grid':'none';footer.style.display=next==='edit'?'block':'none';
       host.side.style.display='none';host.tools.style.display='none';host.setHand();renderToolbar();renderPanel();render();}
     function deactivate(){if(sending)return;active=false;panel.style.display='none';toolbar.style.display='none';footer.style.display='none';host.side.style.display='';host.tools.style.display=host.canManage?'':'none';svg.style.pointerEvents='none';draft=[];render();}
