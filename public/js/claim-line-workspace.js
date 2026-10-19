@@ -3,6 +3,7 @@
   'use strict';
   var context, data, generation = 0, page = 1;
   function ui() { return w.AdminUI; }
+  function sameLine(c) { return context && context.contractId === c.contractId && context.line.id === c.line.id; }
   function esc(v) { return ui().esc(String(v == null ? '' : v)); }
   function button(label, action) { return ui().rowButton(label, 'window.AdminClaimLineWorkspace.' + action); }
   function url(value) { return w.AdminDrawingEvidence._safeUrl(value); }
@@ -66,7 +67,7 @@
     var r=row(id);if(!r || r.sourceType!=='document' || !context.canManage)return;
     var c=context;
     var modal=ui().modal({title:'문서 정보 수정 · 원본 검토',width:1200,body:'<iframe title="문서 정보 편집" src="/document-hub?embed=1&document='+Number(r.sourceId)+'" style="width:100%;height:76vh;border:0"></iframe>',actions:[{label:'닫기 / 새로고침',value:null}]});
-    modal.result.then(function(){if(context===c){w.apiCache={};c.reload();}});
+    modal.result.then(function(){if(sameLine(c)){w.apiCache={};context.reload();}});
   }
   function upload() {
     if (!context.canManage || !data) return;
@@ -103,7 +104,7 @@
         busy=false;
         if(pending.every(function(r){return r.done;})){pending=[];input.value='';input.disabled=false;choice.disabled=false;}
         if(w.apiCache)w.apiCache={};
-        if(context===c) await c.reload();
+        if(sameLine(c)) await context.reload();
       }
     });
     return m;
