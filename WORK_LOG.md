@@ -1,3 +1,9 @@
+## CODEX — 2026-10-19 Email-less employee invitation login
+
+Root cause: manager invitation enrollment and password sign-in treated email as mandatory identity, excluding existing employees without email. Existing verified invitations can now bind a chosen password to the canonical employee number while keeping email null and retaining employee history. New-employee enrollment still requires email; employee-number login requires an enrolled password, rejects ambiguous accounts, observes existing active/lockout rules and never accepts phone digits. Fixed invitation grants, one-use expiry, strong sessions and field-claim authorization remain enforced. Shared login and invitation forms explain the email-less path. No passwords or fabricated emails are provisioned by administrators.
+
+Validation: focused PostgreSQL invitation/auth/field-access tests (69 passed before final regression additions), then full Linux CI and staging/main/NAHSHON deployment gates. Actual Kim Chang-don onboarding remains a separate production invitation; the employee must choose their own password.
+
 ## CODEX — 2026-10-19 Protect unsubmitted field originals
 
 The existing document deletion hook removes bytes before the database delete. Field upload receipt foreign keys therefore need an early canonical source-protection guard, even before a work record has been submitted. Added field receipt references to ClaimEvidenceService::sourceIsProtected, with a regression test asserting that administrator deletion is rejected and both original bytes and metadata survive. This is a release prerequisite for the quantity-only workspace; no production records were modified.

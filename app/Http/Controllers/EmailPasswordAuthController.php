@@ -21,7 +21,7 @@ class EmailPasswordAuthController extends Controller
             return redirect(EmailPasswordAuthService::takeAppDestination($request) ?? $request->user()->landingPath());
         }
         $data = $request->validate([
-            'email' => ['required', 'email', 'max:255'],
+            'email' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', 'max:128'],
         ]);
         $result = $service->attempt($data['email'], $data['password'], $request);
@@ -36,7 +36,7 @@ class EmailPasswordAuthController extends Controller
         }
 
         return redirect()->route('login', $erpLogin ? ['erp' => 1] : ($appLogin ? ['app' => 1] : []))->withInput(['email' => $data['email']])->withErrors([
-            'email_login' => '로그인할 수 없습니다. 이메일·비밀번호와 계정 활성 상태를 확인해 주세요. 반복 실패 시 15분 후 다시 시도하세요. / Unable to sign in. Check your details or ask your administrator. After repeated failures, wait 15 minutes.',
+            'email_login' => '로그인할 수 없습니다. 이메일 또는 직원번호·비밀번호와 계정 활성 상태를 확인해 주세요. 반복 실패 시 15분 후 다시 시도하세요. / Unable to sign in. Check your details or ask your administrator. After repeated failures, wait 15 minutes.',
         ]);
     }
 

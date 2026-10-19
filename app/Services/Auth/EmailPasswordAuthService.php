@@ -70,7 +70,17 @@ class EmailPasswordAuthService
     {
         $request->session()->forget([self::SETUP_SESSION, self::STRONG_AUTH_SESSION]);
         $result = DB::transaction(function () use ($email, $password, $request) {
-            $user = User::query()->whereRaw('lower(email) = ?', [Str::lower(trim($email))])->lockForUpdate()->first();
+            // Email is contact data, not a prerequisite for an invited employee's password.
+            $employeeLogin = ! str_contains($email, '@');
+            $query = User::query();
+            if ($employeeLogin) {
+                $query->whereNull('email')->whereNotNull('password_set_at')
+                    ->whereHas('employee', fn ($q) => $q->where('employee_number', trim($email)));
+            } else {
+                $query->whereRaw('lower(email) = ?', [Str::lower(trim($email))]);
+            }
+            $matches = $query->lockForUpdate()->limit(2)->get();
+            $user = $matches->count() === 1 ? $matches->first() : null;
             if (! $user || ! $this->active($user)) {
                 return ['result' => 'denied'];
             }
@@ -79,7 +89,7 @@ class EmailPasswordAuthService
             }
 
             // 전화 뒷자리 호환은 아래 역할·세션 검사로 제한한다.
-            $initial = $this->initialDigits($user);
+            $initial = $employeeLogin ? null : $this->initialDigits($user);
             $byDigits = $initial !== null && hash_equals($initial, $password);
             $byPassword = $user->password_set_at && Hash::check($password, $user->password);
             $appUpgrade = $request->session()->has(PersonalAppAccessService::SESSION)
