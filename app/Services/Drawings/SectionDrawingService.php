@@ -147,7 +147,7 @@ class SectionDrawingService
      * @param  array<int, mixed>  $sheetNos
      * @return array<string, mixed>
      */
-    public function setSheets(int $sectionId, array $sheetNos): array
+    public function setSheets(int $sectionId, array $sheetNos, ?int $lineId = null): array
     {
         $user = auth()->user();
         if (! $user instanceof User || ! $this->canManage($user)) {
@@ -161,6 +161,27 @@ class SectionDrawingService
 
         $wanted = collect($sheetNos)->map(fn ($n) => DrawingSheet::normalizeNo(is_scalar($n) ? (string) $n : null))
             ->filter()->unique()->values();
+
+        // BOQ children own their selection; never overwrite the parent's shared drawings.
+        if ($lineId !== null) {
+            $billing = app(BillingAdminService::class);
+            $line = $this->visibleLines(collect([$sectionId]))->firstWhere('id', $lineId);
+            if (! $billing->canManage($user) || ! $line) {
+                return ['success' => false, 'error' => '세부 공정을 수정할 권한이 없습니다.'];
+            }
+            if ($wanted->count() > 100 || $wanted->contains(fn ($no) => mb_strlen($no) > 120)) {
+                return ['success' => false, 'error' => '도면 번호는 100개, 각 120자 이내로 선택하세요.'];
+            }
+            DB::transaction(function () use ($line, $wanted, $user): void {
+                $contract = $line->contract()->lockForUpdate()->firstOrFail();
+                $payload = $contract->payload ?? [];
+                $payload['lineDrawingSheets'][$line->id] = $wanted->all();
+                $payload['lineDrawingUpdated'][$line->id] = ['by' => $user->id, 'at' => now()->toIso8601String()];
+                $contract->update(['payload' => $payload]);
+            });
+
+            return ['success' => true, 'id' => $lineId, 'count' => $wanted->count()];
+        }
 
         DB::transaction(function () use ($section, $wanted, $user): void {
             WorkSectionSheet::query()->where('work_section_id', $section->id)
@@ -353,6 +374,7 @@ class SectionDrawingService
 
         return [
             'id' => $l->id, 'lineNo' => $l->line_no, 'group' => $l->group_label, 'description' => $l->description, 'spec' => $l->spec,
+            'sheetNos' => $l->contract?->payload['lineDrawingSheets'][$l->id] ?? null,
             'unit' => $l->unit, 'contractQty' => (float) $l->contract_qty, 'unitPrice' => (float) $l->unit_price, 'amount' => $amount,
             'materialPrice' => $l->material_price !== null ? (float) $l->material_price : null,
             'splitsMaterial' => $split, 'status' => $l->status, 'stageWeights' => $l->stage_weights,

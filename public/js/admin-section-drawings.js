@@ -285,11 +285,11 @@
   }
 
   /** 공정 카드의 도면 한 장 — 누르면 표시가 얹힌 도면이 크게 열린다. */
-  function sheetChip(u, pick, sectionId) {
+  function sheetChip(u, pick, sectionId, lineId) {
     var s = pick.sheet;
     var marks = (state.data.markCounts || {})[String(pick.sheetNo).toUpperCase()] || 0;
     var badge = marks ? '<span style="position:absolute;top:6px;right:6px;padding:2px 7px;border-radius:999px;background:#0f172a;color:#fff;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.25)">표시 ' + marks + '</span>' : '';
-    var open = 'window.AdminSectionDrawings.view(' + sectionId + ',\'' + u.esc(String(pick.sheetNo).replace(/'/g, '')) + '\')';
+    var open = lineId ? 'window.AdminSectionDrawings.record(' + sectionId + ',' + lineId + ',\'' + u.esc(String(pick.sheetNo).replace(/'/g, '')) + '\')' : 'window.AdminSectionDrawings.view(' + sectionId + ',\'' + u.esc(String(pick.sheetNo).replace(/'/g, '')) + '\')';
     if (!s) {
       return '<div onclick="' + open + '" title="이 번호의 도면이 아직 읽히지 않았습니다" style="position:relative;width:150px;border:1px dashed var(--border-default);border-radius:10px;padding:8px;background:var(--bg-base);cursor:pointer">' + badge +
         '<div style="height:96px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:11px;text-align:center">파일 없음<br>또는 아직 안 읽음</div>' +
@@ -343,6 +343,15 @@
     }).join('') + '</div>';
   }
 
+  function lineSheets(section, line) {
+    if (!Array.isArray(line.sheetNos)) return section.sheets || [];
+    return line.sheetNos.map(function(no) {
+      var matches = (state.data.catalog || []).filter(function(s) { return String(s.sheetNo || '').toUpperCase() === String(no).toUpperCase(); });
+      matches.sort(function(a,b) { return Number(b.documentId) - Number(a.documentId) || Number(b.id) - Number(a.id); });
+      return {sheetNo:no, found:!!matches.length, sheet:matches[0] || null};
+    });
+  }
+
   /** 공정 카드 안의 계약 줄 — 줄마다 진행률, 반입·설치, 바로 기록. */
   function lineList(u, s) {
     var can = state.data.billing && state.data.billing.canManage;
@@ -358,19 +367,19 @@
           (r.kind === 'add' ? '추가' : '감액 ' + qtyText(r.qtyDelta)) + ' · ' + (STATUS_TEXT[r.status] || r.status) + '</span>';
       }).join('');
       var draft = l.status !== 'accepted';
-      return head + '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 2px;border-top:1px solid var(--border-subtle)' + (draft ? ';opacity:.8' : '') + '">' +
-        '<div style="flex:1 1 300px;min-width:0"><div style="font-size:13px;font-weight:700">#' + u.esc(l.lineNo) + ' ' + u.esc(l.description) + tags + '</div>' +
-          (l.spec ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + u.esc(l.spec) + '</div>' : '') +
-          '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + ' · ' + money(l.amount) +
-          (draft ? ' · 원청 승인 전이라 청구에 안 들어갑니다' : '') + '</div></div>' +
-        '<div style="flex:1 1 200px;font-size:12px">' + bar(l.percent) +
-          '<div style="margin-top:4px"><b>' + pct(l.percent) + '</b> · ' + money(l.earned) + '</div>' +
-          '<div style="color:var(--text-tertiary)">' + done + waiting + '</div>' +
-          (l.installGap ? '<div style="color:var(--status-danger)">설치가 반입보다 많음 · 반입 기록을 더하세요</div>' : '') + '</div>' +
-        '<div style="flex:0 0 auto;align-self:flex-start;display:flex;gap:6px">' +
-          (can && l.contractQty > 0 ? u.rowButton('기록', 'window.AdminSectionDrawings.record(' + s.id + ',' + l.id + ')') : '') +
-          (s.contractId ? u.rowButton(can ? '확인' : '근거', 'window.AdminSectionDrawings.ledger(' + s.contractId + ',' + l.id + ')') : '') +
-        '</div></div>';
+      var picks = lineSheets(s, l);
+      return head + '<article data-boq-card="' + l.id + '" style="padding:14px;margin:10px 0;border:1px solid var(--border-default);border-radius:12px;background:var(--bg-base)' + (draft ? ';opacity:.8' : '') + '">' +
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><strong style="flex:1;min-width:180px">#' + u.esc(l.lineNo) + ' ' + u.esc(l.description) + tags + '</strong>' +
+        '<span style="font-size:12px;color:var(--text-secondary)">도면 ' + picks.length + '장 · ' + (l.sheetNos === null || l.sheetNos === undefined ? '상위 공정 도면' : '개별 선택') + '</span>' +
+        (s.contractId ? u.rowButton('연결 증빙', 'window.AdminSectionDrawings.ledger(' + s.contractId + ',' + l.id + ')') : '') +
+        (state.data.canManage && can ? u.rowButton('도면 고르기', 'window.AdminSectionDrawings.pick(' + s.id + ',' + l.id + ')') : '') +
+        (can && l.contractQty > 0 ? u.rowButton('기성 편집', 'window.AdminSectionDrawings.record(' + s.id + ',' + l.id + ')') : '') + '</div>' +
+        (l.spec ? '<div style="font-size:12px;color:var(--text-tertiary);margin-top:5px">' + u.esc(l.spec) + '</div>' : '') +
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0"><div style="flex:1;min-width:120px">' + bar(l.percent) + '</div><b>' + pct(l.percent) + '</b><span style="font-size:12px">기성 ' + money(l.earned) + ' / 계약 ' + money(l.amount) + '</span></div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + ' · ' + done + waiting +
+        (s.trade ? ' · 담당 공종: ' + u.esc(s.trade) : '') + (draft ? ' · 원청 승인 전' : '') + '</div>' +
+        (l.installGap ? '<div style="color:var(--status-danger);font-size:12px">설치가 반입보다 많음 · 반입 근거 확인 필요</div>' : '') +
+        '<div style="display:flex;flex-wrap:wrap;gap:10px">' + (picks.length ? picks.map(function(p) { return sheetChip(u, p, s.id, can ? l.id : null); }).join('') : '<span style="font-size:12px;color:var(--text-tertiary)">고른 도면이 없습니다.</span>') + '</div></article>';
     }).join('') + '</div>';
   }
 
@@ -560,12 +569,14 @@
   }
 
   /** 공정 하나의 도면 고르기 — 읽힌 도면을 번호별로 보여 주고, 아직 없는 번호는 직접 적는다. */
-  function pick(sectionId) {
+  function pick(sectionId, lineId) {
     var u = ui();
     var d = state.data;
     var section = d.sections.filter(function (s) { return s.id === sectionId; })[0];
     if (!section) return;
-    var chosen = section.sheets.map(function (p) { return p.sheetNo; });
+    var child = lineId && section.billing ? section.billing.lines.find(function(l) { return l.id === lineId; }) : null;
+    if (lineId && !child) return;
+    var chosen = (child ? lineSheets(section, child) : section.sheets).map(function (p) { return p.sheetNo; });
     var byNo = {};
     (d.catalog || []).forEach(function (s) { if (s.sheetNo && !byNo[s.sheetNo]) byNo[s.sheetNo] = s; });
     var nos = Object.keys(byNo).sort();
@@ -593,7 +604,7 @@
       u.esc(missing.join('\n')) + '</textarea></div>';
 
     var m = u.modal({
-      title: section.code + ' ' + section.name + ' — 도면 고르기',
+      title: (child ? '#' + child.lineNo + ' ' + child.description : section.code + ' ' + section.name) + ' — 도면 고르기',
       subtitle: '이 공정의 일을 그 위에 그리고 적을 도면을 고르세요. 평면을 먼저, 일람표·상세는 참고로.',
       width: 900,
       body: body,
@@ -608,7 +619,7 @@
       var ordered = chosen.filter(function (n) { return picked.indexOf(n) !== -1 || extra.indexOf(n) !== -1; })
         .concat(picked.filter(function (n) { return chosen.indexOf(n) === -1; }))
         .concat(extra.filter(function (n) { return chosen.indexOf(n) === -1 && picked.indexOf(n) === -1; }));
-      call('api_setSectionSheets', [section.id, ordered]).then(function (res) {
+      call('api_setSectionSheets', [section.id, ordered, lineId || null]).then(function (res) {
         if (res.success === false) { u.toast(res.error || '저장하지 못했습니다.', 'error'); return; }
         u.toast(section.name + ' — 도면 ' + res.count + '장을 저장했습니다.');
         return reload();
@@ -809,10 +820,14 @@
   var INPUT = 'width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-base);color:var(--text-primary);font-size:13px;font-family:inherit;box-sizing:border-box';
 
   /** 줄 하나에 반입·설치(시공) 기록 — 사진은 문서함에 올라가 그 기록의 근거가 된다. 확인은 담당자가 한다. */
-  function record(sectionId, lineId) {
+  function record(sectionId, lineId, sheetNo) {
     var section = findSection(sectionId);
     if (!section || !section.billing || !global.AdminClaimEditor) return;
-    var sheets = (section.sheets || []).filter(function (p) { return p.found && p.sheet; }).map(function (p) {
+    var child = section.billing.lines.find(function(l) { return l.id === lineId; });
+    if (!child) return;
+    var picks = lineSheets(section, child);
+    if (sheetNo) picks = picks.slice().sort(function(a,b) { return Number(b.sheetNo === sheetNo) - Number(a.sheetNo === sheetNo); });
+    var sheets = picks.filter(function (p) { return p.found && p.sheet; }).map(function (p) {
       return Object.assign({}, p.sheet, {sheetNo:p.sheetNo, sectionIds:[section.id]});
     });
     global.AdminClaimEditor.open(section.contractId || state.data.billing.contractId, state.data.siteId, sheets,

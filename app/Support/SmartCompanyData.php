@@ -466,7 +466,7 @@ class SmartCompanyData
             'api_getWeekBoard' => app(WeekBoardService::class)->board($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
             // 공정별 도면 — 계약서 공정마다 쓸 도면(도면 번호로 잇는다).
             'api_getSectionDrawings' => app(SectionDrawingService::class)->board($siteId),
-            'api_setSectionSheets' => app(SectionDrawingService::class)->setSheets((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : []),
+            'api_setSectionSheets' => app(SectionDrawingService::class)->setSheets((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : [], isset($args[2]) ? (int) $args[2] : null),
             'api_saveWorkSection' => app(SectionDrawingService::class)->saveSection(is_array($args[0] ?? null) ? $args[0] : [], $siteId),
             'api_updateDrawingSheet' => app(SectionDrawingService::class)->updateSheet((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null, isset($args[2]) ? (string) $args[2] : null),
             // 3주 나란히 — 지난주 · 이번 주 · 다음 주. 가운데가 보고 있는 주.
