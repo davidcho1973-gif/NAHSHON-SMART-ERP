@@ -1,3 +1,15 @@
+## CODEX — 2026-10-19 Protect unsubmitted field originals
+
+The existing document deletion hook removes bytes before the database delete. Field upload receipt foreign keys therefore need an early canonical source-protection guard, even before a work record has been submitted. Added field receipt references to ClaimEvidenceService::sourceIsProtected, with a regression test asserting that administrator deletion is rejected and both original bytes and metadata survive. This is a release prerequisite for the quantity-only workspace; no production records were modified.
+
+## CODEX — 2026-10-19 Quantity-only trade claim workspace
+
+Added the explicit “공정팀장 · 기성 작성 전용” job profile, distinct from the existing trade manager's attendance/report responsibilities. Strongly authenticated users in this profile enter `/field-claims`; a closed endpoint policy and MCP denial prevent financial APIs, raw documents, exports, AI, approval and legacy carrier-role bypasses even with stale/custom grants. Server-derived company/site/trade assignments fail closed when missing or revoked. Superadmins assign existing site trades to WorkSections in the drawing board; changes are audited. Account/profile assignment remains the existing superadmin flow; no production people or trades are guessed or auto-assigned.
+
+Whitelisted quantity/status responses and own-record/own-upload receipt checks feed the existing ClaimEvidenceService/ClaimWorkRecord review ledger. Uploads use canonical immutable DocumentIntake originals; attachment rows only bind actor + BOQ line + exact document hash. Same-byte receipt dedup never returns another document's financial metadata. Team users can submit and amend their pending actual records, but cannot verify quantities or edit reviewed/allocated records. Reviewers retain original evidence access; the field portal shows attachment names/counts and missing-proof warnings. Assignment revocation and work writes serialize on the section row.
+
+Shared route/middleware/config changes are required to enforce the profile outside the UI. Existing trade manager and administrator workflows remain available under their existing roles. Validation: 74 focused PHP tests / 511 assertions and all 180 JavaScript tests passed before final checks; full Linux CI and staging → main → NAHSHON deployment gates follow. Initial full Linux run: 3,232 tests, with one company-branding assertion identifying a hardcoded page heading; replaced it with the shared Org name provider and reran the gate. No external mail or synthetic production records sent.
+
 ## CODEX — 2026-10-18 Full-screen field record studio
 
 Cause: section-line recording had a separate small form, disconnected from the existing claim draft editor and CAD workspace. The Record entry now opens the selected BOQ in the existing editor with a persistent embedded drawing canvas, direct original-preserving evidence upload/preview, pending-record editing, templates, spreadsheet paste, undo/history and explicit review submission. Drawing and record keyboard shortcuts are scoped so they do not steal one another's save actions. No second work or financial ledger is introduced.

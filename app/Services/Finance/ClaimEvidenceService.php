@@ -13,6 +13,7 @@ use App\Models\ProjectContract;
 use App\Models\WbsPhoto;
 use App\Models\WorkSection;
 use App\Services\Admin\BillingAdminService;
+use App\Support\FieldClaimAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -202,10 +203,20 @@ class ClaimEvidenceService
             if (! $line) {
                 throw new InvalidArgumentException('계약 항목을 찾을 수 없습니다.');
             }
-            $contract = $this->contract($line->project_contract_id);
+            $field = FieldClaimAccess::restricted();
+            if ($field) {
+                $line = FieldClaimAccess::line($line->id, true);
+                FieldClaimAccess::editable($record);
+                abort_unless(($input['recordKind'] ?? 'actual') === 'actual', 403);
+            }
+            $contract = $field ? $line->contract : $this->contract($line->project_contract_id);
 
-            return DB::transaction(function () use ($input, $record, $line, $contract): array {
+            return DB::transaction(function () use ($input, $record, $line, $contract, $field): array {
                 $this->lock($contract);
+                if ($field) {
+                    $line->section()->lockForUpdate()->firstOrFail();
+                    FieldClaimAccess::line($line->id, true);
+                }
                 $record?->refresh();
                 if ($record && ($record->status !== 'pending' || $record->allocations()->exists())) {
                     throw new InvalidArgumentException('검토·청구된 기록은 수정할 수 없습니다. 미청구 기록은 검토 취소 후 수정하세요.');
@@ -233,7 +244,8 @@ class ClaimEvidenceService
                 if ($sourceRef && ClaimWorkRecord::where('contract_boq_line_id', $line->id)->where('source_ref', $sourceRef)->when($record, fn ($q) => $q->whereKeyNot($record->id))->exists()) {
                     throw new InvalidArgumentException('이미 접수된 원본 기록입니다. 기존 기록을 사용하세요.');
                 }
-                $evidence = $this->resolveEvidence($contract, $input['evidence'] ?? $record?->evidence ?? []);
+                $evidence = $field ? FieldClaimAccess::evidence($line, $input['evidence'] ?? [])
+                    : $this->resolveEvidence($contract, $input['evidence'] ?? $record?->evidence ?? []);
                 $location = $this->text($input['location'] ?? $record?->location, '작업 위치', 255);
                 if ($kind === 'actual') {
                     $fingerprint = fn (array $proof): string => collect($proof)->map(fn ($p) => $p['type'].':'.$p['id'].':'.$p['locator'])->sort()->implode('|');
@@ -566,6 +578,10 @@ class ClaimEvidenceService
     /** Guard before existing model hooks delete the actual file. */
     public static function sourceIsProtected(string $type, int $id): bool
     {
+        if ($type === 'document' && Schema::hasTable('field_claim_attachments')
+            && DB::table('field_claim_attachments')->where('intelligent_document_id', $id)->exists()) {
+            return true;
+        }
         if (ClaimEvidenceInboxService::sourceIsProtected($type, $id)) {
             return true;
         }

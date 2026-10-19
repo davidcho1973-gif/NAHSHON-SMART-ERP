@@ -6,6 +6,7 @@ use App\Models\ContractBoqLine;
 use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
 use App\Models\Site;
+use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkSection;
 use App\Models\WorkSectionSheet;
@@ -79,6 +80,7 @@ class SectionDrawingService
                 'code' => $sec->code,
                 'name' => $sec->name,
                 'contractAmount' => $sec->contract_amount,
+                'trade' => $sec->claim_trade,
                 'contractId' => $sec->project_contract_id,
                 'billing' => $money['sections'][$sec->id] ?? null,
                 'changes' => $money['changes'][$sec->id] ?? [],
@@ -98,6 +100,8 @@ class SectionDrawingService
             'today' => Carbon::today($site->timezone ?: config('app.timezone'))->toDateString(),
             'sites' => $this->siteOptions($sites),
             'sections' => $sections,
+            'canAssignTrade' => $user->access_role === 'super_admin',
+            'tradeOptions' => $user->access_role === 'super_admin' ? Team::where('company_id', $site->company_id)->where('site_id', $site->id)->whereNotNull('trade_type')->distinct()->pluck('trade_type')->values()->all() : [],
             'documents' => $this->documents($user, $site, $sheets),
             'otherPdfs' => $this->otherPdfs($user, $site, $sheets),
             'catalog' => $sheets->map(fn (DrawingSheet $s): array => $this->sheetRow($s))->values()->all(),

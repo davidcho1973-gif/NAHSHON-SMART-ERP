@@ -74,8 +74,8 @@ Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController
 use App\Http\Controllers\AssistantWorkspaceController;
 use App\Http\Controllers\ClaimEvidenceFileController;
 use App\Http\Controllers\ClaimRecordReportController;
-
 use App\Http\Controllers\DrawingStudioController;
+use App\Http\Controllers\FieldClaimController;
 use App\Http\Controllers\JobApprovalController;
 use App\Http\Controllers\JobWorkspaceController;
 use App\Http\Controllers\PersonalPayslipController;
@@ -123,6 +123,14 @@ Route::get('/attendance-app/manager-access', function (Request $request) {
 Route::any('/personal-app-access/{path?}', fn () => response()->json([
     'success' => false, 'error' => '관리자 개인 QR 기능은 종료되었습니다. Google 또는 이메일로 로그인하세요.',
 ], 410))->where('path', '.*');
+
+Route::middleware('auth')->prefix('field-claims')->group(function (): void {
+    Route::get('/', [FieldClaimController::class, 'index']);
+    Route::get('/data', [FieldClaimController::class, 'data']);
+    Route::post('/lines/{line}/attachments', [FieldClaimController::class, 'upload'])->whereNumber('line')->middleware('throttle:30,1');
+    Route::post('/lines/{line}/records', [FieldClaimController::class, 'save'])->whereNumber('line');
+    Route::post('/sections/{section}/assignment', [FieldClaimController::class, 'assign'])->whereNumber('section');
+});
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/purchase-requests', [PurchaseRequestController::class, 'mobile'])->name('attendance-app.purchase-requests');

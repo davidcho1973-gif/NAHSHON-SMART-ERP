@@ -427,6 +427,7 @@
               (s.contractAmount && !s.billing ? '<span style="font-size:12px;color:var(--text-secondary)">계약 ' + money(s.contractAmount) + '</span>' : '') +
               '<span style="font-size:12px;color:var(--text-tertiary)">도면 ' + s.sheets.length + '장' + (s.sheets.length && found < s.sheets.length ? ' · ' + (s.sheets.length - found) + '장은 아직 없음' : '') + '</span>' +
               (s.contractId && d.billing && d.billing.canView ? u.rowButton('연결 증빙', 'window.AdminDrawingEvidence.list(' + s.contractId + ',' + s.id + ')') : '') +
+              (d.canAssignTrade ? u.rowButton('담당 공종: ' + (s.trade || '미배정'), 'window.AdminSectionDrawings.assignTrade(' + s.id + ')') : '') +
               (d.canManage ? u.rowButton('도면 고르기', 'window.AdminSectionDrawings.pick(' + s.id + ')') : '') +
               (d.billing && d.billing.canManage && s.contractId ? u.rowButton('작업 추가 RFI', 'window.AdminSectionDrawings.rfi(' + s.id + ')') : '') +
             '</div>' + changeList(u, s, d.billing && d.billing.canManage) + sectionMoney(u, s) +
@@ -655,6 +656,19 @@
         u.toast('도면 번호를 고쳤습니다. 다시 읽어도 이 번호가 유지됩니다.');
         return reload();
       });
+    });
+  }
+
+  function assignTrade(id) {
+    var u = ui(), s = state.data.sections.find(function (x) { return x.id === id; });
+    if (!s) return;
+    u.formModal({ title: '공정팀장 담당 공종 배정',
+      subtitle: '이 현장과 공종을 배정받은 공정팀장만 수량·기록·증빙을 작성합니다. 미배정은 접근할 수 없습니다.',
+      fields: [{ name: 'trade', label: '담당 공종', type: 'select', value: s.trade || '', options: state.data.tradeOptions || [], colSpan: 2 }],
+      onSave: function (v) { return request('/field-claims/sections/' + id + '/assignment', 'POST', {trade: v.trade || null}).then(function (r) {
+        if (r.success === false) return r;
+        return reload().then(function () { return {success: true}; });
+      }); }
     });
   }
 
@@ -1067,6 +1081,7 @@
     pickOther: pickOther,
     openSheet: openSheet,
     editSection: editSection,
+    assignTrade: assignTrade,
     pickSite: pickSite,
     uploadContract: uploadContract,
     lines: lines,
