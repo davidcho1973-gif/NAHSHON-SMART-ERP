@@ -26,6 +26,7 @@ use App\Support\EvidenceImage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Tests\TestCase;
@@ -55,10 +56,16 @@ class EvidenceBatchClaimBridgeTest extends TestCase
             'recognition_basis' => 'quantity', 'status' => 'accepted']);
     }
 
-    public function test_evidence_analysis_and_reanalysis_preserve_original_notes_without_any_business_effects(): void
+    public static function evidenceSources(): array
+    {
+        return [['evidence_batch'], ['claim_evidence']];
+    }
+
+    #[DataProvider('evidenceSources')]
+    public function test_evidence_analysis_and_reanalysis_preserve_original_notes_without_any_business_effects(string $source): void
     {
         $history = ['history' => [['reviewed_by' => auth()->id(), 'note' => 'Reviewed original before this run']]];
-        $document = $this->document(['ai_status' => 'queued', 'ai_payload' => ['evidence_review' => $history]]);
+        $document = $this->document(['source' => $source, 'ai_status' => 'queued', 'ai_payload' => ['evidence_review' => $history]]);
         $original = Storage::disk('local')->get($document->file_path);
         $existingAction = DocumentActionItem::create(['intelligent_document_id' => $document->id, 'action_type' => 'review', 'title' => 'Existing manual task']);
         $data = $this->analysisData();
@@ -73,7 +80,7 @@ class EvidenceBatchClaimBridgeTest extends TestCase
         $first = $service->process($document);
         $result = $service->process($first);
 
-        $this->assertSame('evidence_batch', $result->source);
+        $this->assertSame($source, $result->source);
         $this->assertSame('ready', $result->ai_status);
         $this->assertSame($this->contract->id, $result->project_contract_id);
         $this->assertSame(120, $result->ai_payload['money']['amount']);
