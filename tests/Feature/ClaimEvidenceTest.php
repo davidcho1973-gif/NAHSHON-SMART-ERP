@@ -17,13 +17,16 @@ use App\Models\User;
 use App\Services\Admin\BillingAdminService;
 use App\Services\Finance\ClaimEditingService;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimRecordReport;
 use App\Services\Ocr\OcrEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Concerns\PreparesClaimSubmissions;
 use Tests\TestCase;
 
@@ -58,6 +61,90 @@ class ClaimEvidenceTest extends TestCase
     private function svc(): ClaimEvidenceService
     {
         return app(ClaimEvidenceService::class);
+    }
+
+    public function test_record_report_exports_saved_version_without_prices_or_executable_cells(): void
+    {
+        $line = $this->line();
+        $saved = app(ClaimEditingService::class)->save(['lineId' => $line->id, 'content' => ['notes' => '<script>alert(1)</script>', 'location' => '=HYPERLINK("https://invalid")', 'quantity' => 7]]);
+        $revision = $saved['draft']['revision'];
+        $base = '/claim-editor/lines/'.$line->id.'/export/';
+        $html = $this->get($base.'html?revision='.$revision)->assertOk()->getContent();
+        $this->assertStringContainsString('&lt;script&gt;', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+        $this->assertStringNotContainsString('unitPrice', $html);
+        $s = app(ClaimRecordReport::class)->snapshot($line->id, $revision);
+        $path = tempnam(sys_get_temp_dir(), 'report-test');
+        try {
+            foreach (['docx', 'xlsx'] as $format) {
+                $file = app(ClaimRecordReport::class)->file($s, $format);
+                file_put_contents($path, $file['data']);
+                $zip = new \ZipArchive;
+                $this->assertTrue($zip->open($path));
+                $this->assertNotFalse($zip->getFromName($format === 'docx' ? 'word/document.xml' : 'xl/worksheets/sheet1.xml'));
+                $zip->close();
+                if ($format === 'xlsx') {
+                    $book = IOFactory::load($path);
+                    $this->assertSame('s', $book->getActiveSheet()->getCell('B4')->getDataType());
+                    $this->assertSame(7, $book->getActiveSheet()->getCell('B7')->getValue());
+                    $book->disconnectWorksheets();
+                }
+            }
+        } finally {
+            @unlink($path);
+        }
+        $this->getJson($base.'html?revision=999')->assertConflict();
+        $this->assertSame(0, ClaimWorkRecord::count());
+    }
+
+    public function test_record_report_is_private_and_does_not_send_without_confirmation(): void
+    {
+        $line = $this->line();
+        app(ClaimEditingService::class)->save(['lineId' => $line->id, 'content' => ['quantity' => 1]]);
+        $this->postJson('/claim-editor/lines/'.$line->id.'/send', ['revision' => 1, 'requestId' => (string) Str::uuid(), 'to' => 'test@example.org', 'subject' => 'Test', 'body' => '', 'format' => 'docx'])->assertUnprocessable();
+        $this->actingAs(User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']));
+        $this->getJson('/claim-editor/lines/'.$line->id.'/export/docx?revision=1')->assertNotFound();
+    }
+
+    public function test_record_report_recalculates_excel_and_rejects_changed_evidence(): void
+    {
+        $line = $this->line();
+        $saved = app(ClaimEditingService::class)->save(['lineId' => $line->id, 'content' => [
+            'calculations' => [['label' => 'Wall', 'length' => 2, 'height' => 3, 'count' => 1, 'deduction' => 1]],
+            'evidence' => [['type' => 'document', 'id' => $this->document->id, 'locator' => 'p1']],
+        ]]);
+        $this->assertTrue($saved['success'], $saved['error'] ?? '');
+        $reports = app(ClaimRecordReport::class);
+        $file = $reports->file($reports->snapshot($line->id, 1), 'xlsx');
+        $path = tempnam(sys_get_temp_dir(), 'report-formulas');
+        try {
+            file_put_contents($path, $file['data']);
+            $book = IOFactory::load($path);
+            $sheet = $book->getActiveSheet();
+            $this->assertSame('=ROUND(B10*C10*D10-E10,4)', $sheet->getCell('F10')->getValue());
+            $this->assertEquals(5, $sheet->getCell('B7')->getCalculatedValue());
+            $book->disconnectWorksheets();
+        } finally {
+            @unlink($path);
+        }
+        $this->document->update(['sha256' => hash('sha256', 'replaced')]);
+        $this->getJson('/claim-editor/lines/'.$line->id.'/export/docx?revision=1')->assertConflict();
+    }
+
+    public function test_record_report_email_reuses_outbound_ledger_and_prevents_duplicate_sends(): void
+    {
+        Mail::fake();
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => 'smtp.example.org', 'mail.from.address' => 'erp@example.org']);
+        $line = $this->line();
+        app(ClaimEditingService::class)->save(['lineId' => $line->id, 'content' => ['quantity' => 1]]);
+        $url = '/claim-editor/lines/'.$line->id.'/send';
+        $input = ['revision' => 1, 'requestId' => (string) Str::uuid(), 'to' => 'recipient@example.org', 'subject' => 'Work review', 'body' => 'Review only', 'format' => 'docx', 'confirmed' => true];
+        $this->postJson($url, $input)->assertOk()->assertJson(['sent' => 1]);
+        $this->postJson($url, $input)->assertOk()->assertJson(['duplicate' => true]);
+        $this->postJson($url, array_replace($input, ['to' => 'different@example.org']))->assertConflict();
+        Mail::assertSentCount(1);
+        $this->assertDatabaseHas('mail_messages', ['subject' => 'Work review', 'status' => 'sent', 'attachment_count' => 1]);
+        $this->assertSame(0, ClaimWorkRecord::count());
     }
 
     public function test_process_requirements_block_verification_and_new_claims_until_matched(): void

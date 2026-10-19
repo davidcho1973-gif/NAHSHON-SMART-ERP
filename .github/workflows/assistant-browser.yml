@@ -80,6 +80,7 @@ jobs:
           test "$ready" = true
           timeout 300s node tests/browser/assistant-workspace.cjs
           timeout 60s node tests/browser/claim-editor.cjs
+          timeout 60s node tests/browser/claim-record-studio.cjs
           timeout 60s node tests/browser/claim-drawing.cjs
           timeout 60s node tests/browser/drawing-studio.cjs
 
