@@ -58,6 +58,21 @@ class DocumentEvidenceBatchTest extends TestCase
         return app(DocumentEvidenceBatchService::class);
     }
 
+    public function test_direct_boq_upload_preserves_original_bytes_and_queues_analysis(): void
+    {
+        $photo = UploadedFile::fake()->image('original.png', 2000, 1800);
+        $sha = hash_file('sha256', $photo->getRealPath());
+        $response = $this->postJson('/document-hub/api/upload', ['files' => [$photo], 'purpose' => 'claim_evidence',
+            'company_id' => $this->project->company_id, 'site_id' => $this->project->site_id, 'project_id' => $this->project->id]);
+        $response->assertStatus(202)->assertJsonPath('success', true);
+        $document = IntelligentDocument::findOrFail($response->json('documents.0.id'));
+        $this->assertSame($sha, $document->sha256);
+        $this->assertSame($sha, hash('sha256', Storage::disk($document->disk)->get($document->file_path)));
+        $this->assertSame('claim_evidence', $document->source);
+        $this->assertSame('queued', $document->ai_status);
+        Queue::assertPushed(AnalyzeIntelligentDocumentJob::class);
+    }
+
     private function batch(): DocumentEvidenceBatch
     {
         return $this->service()->create($this->actor, $this->project->id, null);

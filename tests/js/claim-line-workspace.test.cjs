@@ -42,6 +42,6 @@ test('upload retries a failed association without uploading the original twice a
   const el={querySelector:s=>s==='[data-files]'?fileInput:s==='[data-link]'?choice:status};
   await modal.onAction(null,el);assert.equal(uploads,1);assert.match(status.textContent,/원본 저장됨/);
   await modal.onAction(null,el);assert.equal(uploads,1);assert.equal(links,2);assert.match(status.textContent,/확인 대기 접수/);
-  assert.deepEqual(fields.filter(f=>typeof f[1]==='string'),[['site_id','2'],['project_id','5'],['company_id','6']]);
+  assert.deepEqual(fields.filter(f=>typeof f[1]==='string'),[['site_id','2'],['purpose','claim_evidence'],['project_id','5'],['company_id','6']]);
   assert.equal(reloads,2);assert.equal(fileInput.disabled,false);
 });
