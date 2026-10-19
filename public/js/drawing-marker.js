@@ -804,15 +804,15 @@
         call('api_askClaimDrawing', [{ lineId: opts.line.id, sheetId: st.data.sheet.id, selection: selected.points, image: crop.toDataURL('image/jpeg', 0.9), question: panel.querySelector('[data-ai-question]').value }]).then(function (r) {
           if (!r || r.success === false) throw new Error(r && r.error || '분석하지 못했습니다.');
           var p = r.proposal;
-          answer.innerHTML = '<p style="white-space:pre-wrap">' + esc(p.answer) + '</p><p>' + esc(p.caution) + '</p><p>제안 ' + esc(p.quantity) + ' ' + esc(opts.line.unit) + ' · 확인 전</p><button class="dm-btn" data-apply-proposal>초안 산출표에 적용</button>';
-          answer.querySelector('[data-apply-proposal]').onclick = function () { opts.onProposal(p); this.disabled = true; toast('초안에 적용했습니다. 실제 수량 확인은 별도입니다.'); };
+          answer.innerHTML = '<p style="white-space:pre-wrap">' + esc(p.answer) + '</p><p>' + esc(p.caution) + '</p><p>제안 ' + esc(p.quantity) + ' ' + esc(opts.line.unit) + ' · 확인 전 · 표시안 ' + (p.annotations || []).length + '개</p><button class="dm-btn" data-apply-proposal>초안 산출표에 적용</button>';
+          answer.querySelector('[data-apply-proposal]').onclick = function () { rememberPicked(); st.picked = st.picked.concat(p.annotations || []); opts.onProposal(p); renderPickPanel(); draw(); toast('초안에 적용했습니다. 실제 수량 확인은 별도입니다.'); };
         }).catch(function (e) { answer.textContent = e.message; }).finally(function () { ask.disabled = false; });
       };
       panel.querySelector('[data-finish]').onclick = function () {
         var measured = st.picked.filter(function (g) { return g.shape !== 'note' && g.shape !== 'arrow'; });
         var total = measured.length && measured.every(function (g) { return g.measured; })
           ? Math.round(measured.reduce(function (t, g) { return t + g.measured.value; }, 0) * 100) / 100 : null;
-        var picked = { sheetNo: st.data.sheetNo, shapes: st.picked.slice(), label: panel.querySelector('[data-desc]').value.trim(),
+        var picked = { sheetId: st.data.sheet && st.data.sheet.id, sheetNo: st.data.sheetNo, shapes: st.picked.slice(), label: panel.querySelector('[data-desc]').value.trim(),
           measuredTotal: total, unit: opts.line ? opts.line.unit : null };
         var button = this; button.disabled = true;
         (opts.captureSnapshot ? captureSnapshot() : Promise.resolve(null)).then(function (blob) {

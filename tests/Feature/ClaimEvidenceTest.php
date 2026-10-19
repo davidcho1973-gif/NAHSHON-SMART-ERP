@@ -142,6 +142,7 @@ class ClaimEvidenceTest extends TestCase
         $sheet = DrawingSheet::create(['intelligent_document_id' => $this->document->id, 'site_id' => $this->contract->site_id, 'page_no' => 1, 'sheet_no' => 'A-1', 'text' => 'Wall 2 x 3 feet']);
         $this->mock(OcrEngine::class)->shouldReceive('analyze')->once()->andReturn(['model' => 'test', 'data' => [
             'answer' => '치수 확인 필요', 'caution' => '실제 시공 확인 전', 'sources' => ['document:999999', 'document:'.$this->document->id],
+            'annotations' => [['shape' => 'arrow', 'points' => [[0.1, 0.1], [0.2, 0.2]], 'label' => '확인할 벽'], ['shape' => 'line', 'points' => [[-1, 0], [2, 0]], 'label' => 'invalid']],
             'calculations' => [['label' => 'Wall', 'length' => 2, 'height' => 3, 'count' => 1, 'deduction' => 1]],
         ]]);
         $result = app(ClaimEditingService::class)->ask(['lineId' => $line->id, 'sheetId' => $sheet->id, 'question' => '면적 근거는?']);
@@ -150,6 +151,7 @@ class ClaimEvidenceTest extends TestCase
         $this->assertSame(['document:'.$this->document->id], $result['proposal']['sources']);
         $this->assertSame(0, ClaimWorkRecord::count());
         $this->assertSame(0, ClaimEditDraft::count());
+        $this->assertCount(1, $result['proposal']['annotations']);
         $this->document->update(['access_level' => 'private']);
         $this->assertFalse(app(ClaimEditingService::class)->ask(['lineId' => $line->id, 'sheetId' => $sheet->id, 'question' => '면적?'])['success']);
     }

@@ -757,7 +757,7 @@ class ClaimEvidenceService
             foreach ($rules as $rule) {
                 $type = (string) ($rule['type'] ?? '');
                 $stage = (string) ($rule['stage'] ?? '');
-                if (! in_array($type, array_merge(['photo', 'receipt'], array_keys(IntelligentDocument::TYPE_OPTIONS)), true)
+                if (! in_array($type, array_merge(['photo', 'material_receipt'], array_keys(IntelligentDocument::TYPE_OPTIONS)), true)
                     || ($stage !== '' && ! in_array($stage, $line->recognition_basis === 'milestone' ? array_keys($line->stage_weights ?? []) : ['installed'], true))) {
                     throw new InvalidArgumentException('증빙 종류·작업 단계를 확인하세요.');
                 }
@@ -794,10 +794,10 @@ class ClaimEvidenceService
             $seen[$key] = true;
             $type = ($proof['type'] ?? '') === 'document'
                 ? IntelligentDocument::visibleTo(auth()->user())->whereKey($proof['id'])->value('document_type')
-                : ($proof['type'] ?? '');
+                : (($proof['type'] ?? '') === 'receipt' ? 'material_receipt' : ($proof['type'] ?? ''));
             $counts[$type ?? ''] = ($counts[$type ?? ''] ?? 0) + 1;
         }
-        $labels = ['photo' => '시공 사진', 'receipt' => '입고 송장'] + IntelligentDocument::TYPE_OPTIONS;
+        $labels = ['photo' => '시공 사진', 'material_receipt' => '입고 송장'] + IntelligentDocument::TYPE_OPTIONS;
         $missing = [];
         foreach ($rules as $rule) {
             if (($rule['stage'] ?? '') !== '' && $rule['stage'] !== $stage) {
