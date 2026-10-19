@@ -55,6 +55,7 @@
     ['hand', 'ph-hand', '이동'],
     ['point', 'ph-map-pin', '점'],
     ['line', 'ph-line-segments', '선'],
+    ['arrow', 'ph-arrow-up-right', '화살표'],
     ['area', 'ph-polygon', '영역'],
     ['note', 'ph-chat-centered-text', '메모'],
   ];
@@ -202,6 +203,13 @@
     return [x / points.length, y / points.length];
   }
 
+  function arrowHead(points, color, px) {
+    if (points.length < 2) return '';
+    var p = points[points.length - 1], q = points[points.length - 2], a = Math.atan2(p[1]-q[1], p[0]-q[0]), size = px(18);
+    var left = [p[0]-size*Math.cos(a-.5),p[1]-size*Math.sin(a-.5)], right = [p[0]-size*Math.cos(a+.5),p[1]-size*Math.sin(a+.5)];
+    return '<polygon points="' + p.join(',') + ' ' + left.join(',') + ' ' + right.join(',') + '" fill="' + color + '"/>';
+  }
+
   function markTitle(m) {
     if (m.line) return '#' + m.line.lineNo + ' ' + m.line.description;
     return m.label || '메모';
@@ -271,7 +279,7 @@
     var st = {
       opts: opts, pick: opts.mode === 'pick', data: null, marks: [], filter: {}, tool: 'hand', draft: [], sel: null,
       W: 0, H: 0, k: 1, x: 0, y: 0, pointers: {}, gesture: null, suggestAt: null, labels: true,
-      colorMode: 'status', picked: [],
+      colorMode: 'status', picked: JSON.parse(JSON.stringify(opts.initialShapes || [])), pickedUndo: [], pickedRedo: [],
       wPt: 0, hPt: 0, fpp: null, scaleLabel: null, scales: [], period: 'all', pendingLine: null, calibrating: false,
     };
     var wrap = document.createElement('div');
@@ -378,6 +386,7 @@
         return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, background: '#ffffff' }).promise.then(function () {
           $('[data-empty]').style.display = 'none';
           fit();
+          if (st.pick && st.picked.length) renderPickPanel();
           if (opts.focusMarkId) focusMark(opts.focusMarkId);
           detectScale();
           if (st.pick && opts.suggest) return suggestFrom(page, vp);
@@ -669,12 +678,12 @@
         return;
       }
       var shape = st.tool;
-      var need = shape === 'line' ? 2 : shape === 'area' ? 3 : 1;
+      var need = (shape === 'line' || shape === 'arrow') ? 2 : shape === 'area' ? 3 : 1;
       if (st.draft.length < need) { toast(shape === 'line' ? '선은 두 점 이상 찍으세요.' : '영역은 세 점 이상 찍으세요.', 'error'); return; }
       var geom = { sheetNo: st.data.sheetNo, shape: shape, points: st.draft.map(function (p) { return [Math.round(p[0] * 1e6) / 1e6, Math.round(p[1] * 1e6) / 1e6]; }) };
       if (st.pick) {
         // 기록 창에서 연 도면 — 여러 개를 그리고 설명을 붙인 뒤 한 번에 기록과 함께 저장한다.
-        var push = function (g) { st.picked.push(g); st.draft = []; renderTools(); draw(); renderPickPanel(); };
+        var push = function (g) { rememberPicked(); st.picked.push(g); st.draft = []; renderTools(); draw(); renderPickPanel(); };
         if (shape === 'note') { askNote(geom, push); return; }
         withMeasure(geom, opts.line, push);
         return;
@@ -687,6 +696,7 @@
      * 규격에 «H:8'» 같은 높이가 있으면 그 값이 먼저 들어가고, 한 번 적은 높이는 이 기기가 기억한다.
      */
     function withMeasure(geom, line, done) {
+      if (geom.shape === 'arrow') { done(geom); return; }
       var m = measure(geom.points, geom.shape, st.wPt, st.hPt, st.fpp);
       if (!m || !line) { done(geom); return; }
       var u = String(line.unit || '').toUpperCase();
@@ -742,39 +752,86 @@
     }
 
     /** 기록 창에서 연 도면의 «이번에 그린 것» — 목록, 도면에 붙일 설명, 저장. */
+    function rememberPicked() { st.pickedUndo.push(JSON.stringify(st.picked)); st.pickedRedo = []; }
     function renderPickPanel() {
       var old = stage.querySelector('.dm-pickpanel');
       var keepText = old ? old.querySelector('[data-desc]').value : (opts.note || '');
       if (old) old.remove();
-      if (!st.picked.length) return;
+      if (!st.picked.length && !st.pickedUndo.length && !st.pickedRedo.length) return;
       var panel = document.createElement('div');
       panel.className = 'dm-pickpanel dm-form';
       panel.style.cssText = 'left:16px;top:auto;bottom:86px;transform:none;width:340px';
-      var name = { point: '점', line: '선', area: '영역', note: '메모' };
+      var name = { point: '점', line: '선', arrow: '화살표', area: '영역', note: '메모' };
       panel.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:6px">이번에 그린 표시 ' + st.picked.length + '개</div>' +
         st.picked.map(function (g, i) {
           return '<div style="display:flex;gap:8px;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(148,163,184,.15)">' +
             '<span style="color:#38bdf8;font-weight:700">' + name[g.shape] + '</span><span style="flex:1;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
             esc(g.shape === 'note' ? g.label : g.measured ? g.measured.text : '') + '</span>' +
-            '<button class="dm-btn" data-drop="' + i + '" style="height:26px;min-width:26px;padding:0 6px">✕</button></div>';
+            '<button class="dm-btn" data-transform="' + i + '" title="위치·크기">↔</button><button class="dm-btn" data-copy="' + i + '" title="복사">⧉</button><button class="dm-btn" data-drop="' + i + '" style="height:26px;min-width:26px;padding:0 6px">✕</button></div>';
         }).join('') +
         '<label style="display:block;font-size:12px;color:#94a3b8;margin-top:8px">도면에 붙일 설명 (붙여넣기 가능)<textarea data-desc rows="3" placeholder="예) 북쪽 벽 1차 마감 완료"></textarea></label>' +
         '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:10px"><span style="font-size:11px;color:#64748b">아래 도구로 더 그릴 수 있습니다</span>' +
-        '<button class="dm-btn primary" data-finish>✓ 기록 창으로</button></div>';
+        '<button class="dm-btn" data-pick-undo>↶</button><button class="dm-btn" data-pick-redo>↷</button><button class="dm-btn primary" data-finish>✓ 기록 창으로</button></div>' +
+        (opts.onProposal ? '<details><summary>선택 영역 AI 질문</summary><textarea data-ai-question rows="2" placeholder="이 영역의 치수와 산출 근거를 확인해줘"></textarea><button class="dm-btn" data-ai-ask>질문하기</button><div data-ai-answer style="max-height:240px;overflow:auto"></div></details>' : '');
       stage.appendChild(panel);
       panel.querySelector('[data-desc]').value = keepText;
       Array.prototype.forEach.call(panel.querySelectorAll('[data-drop]'), function (b) {
-        b.onclick = function () { st.picked.splice(Number(b.getAttribute('data-drop')), 1); draw(); renderPickPanel(); };
+        b.onclick = function () { rememberPicked(); st.picked.splice(Number(b.getAttribute('data-drop')), 1); draw(); renderPickPanel(); };
       });
+      panel.querySelector('[data-pick-undo]').onclick = function () { if (!st.pickedUndo.length) return; st.pickedRedo.push(JSON.stringify(st.picked)); st.picked = JSON.parse(st.pickedUndo.pop()); draw(); renderPickPanel(); };
+      panel.querySelector('[data-pick-redo]').onclick = function () { if (!st.pickedRedo.length) return; st.pickedUndo.push(JSON.stringify(st.picked)); st.picked = JSON.parse(st.pickedRedo.pop()); draw(); renderPickPanel(); };
+      panel.querySelectorAll('[data-copy]').forEach(function (b) { b.onclick = function () { rememberPicked(); st.picked.push(JSON.parse(JSON.stringify(st.picked[Number(b.dataset.copy)]))); draw(); renderPickPanel(); }; });
+      panel.querySelectorAll('[data-transform]').forEach(function (b) { b.onclick = function () {
+        var i = Number(b.dataset.transform), g = st.picked[i];
+        var raw = global.prompt('가로 이동 %, 세로 이동 %, 크기 % (예: 1,0,100)', '0,0,100');
+        if (raw === null) return;
+        var v = raw.split(',').map(Number); if (v.length !== 3 || !v.every(Number.isFinite) || v[2] <= 0 || v[2] > 1000) { toast('숫자 세 개를 확인하세요.', 'error'); return; }
+        var c = centroid(g.points), pts = g.points.map(function (p) { return [c[0] + (p[0] - c[0]) * v[2] / 100 + v[0] / 100, c[1] + (p[1] - c[1]) * v[2] / 100 + v[1] / 100]; });
+        if (pts.some(function (p) { return p.some(function (x) { return x < 0 || x > 1; }); })) { toast('도면 밖으로 이동할 수 없습니다.', 'error'); return; }
+        rememberPicked(); g.points = pts; delete g.measured; draw(); renderPickPanel();
+      }; });
+      var ask = panel.querySelector('[data-ai-ask]');
+      if (ask) ask.onclick = function () {
+        var selected = st.picked.filter(function (g) { return g.shape === 'area'; }).slice(-1)[0];
+        if (!selected) { toast('영역을 먼저 그려주세요.', 'error'); return; }
+        var xs = selected.points.map(function (p) { return p[0]; }), ys = selected.points.map(function (p) { return p[1]; });
+        var x = Math.min.apply(null, xs), y = Math.min.apply(null, ys), w = Math.max.apply(null, xs) - x, h = Math.max.apply(null, ys) - y;
+        if (w <= 0 || h <= 0) return;
+        var crop = document.createElement('canvas'), ratio = Math.min(1, 2200 / Math.max(w * canvas.width, h * canvas.height));
+        crop.width = Math.max(1, Math.round(w * canvas.width * ratio)); crop.height = Math.max(1, Math.round(h * canvas.height * ratio));
+        crop.getContext('2d').drawImage(canvas, x * canvas.width, y * canvas.height, w * canvas.width, h * canvas.height, 0, 0, crop.width, crop.height);
+        ask.disabled = true; var answer = panel.querySelector('[data-ai-answer]'); answer.textContent = '선택 영역 확인 중…';
+        call('api_askClaimDrawing', [{ lineId: opts.line.id, sheetId: st.data.sheet.id, selection: selected.points, image: crop.toDataURL('image/jpeg', 0.9), question: panel.querySelector('[data-ai-question]').value }]).then(function (r) {
+          if (!r || r.success === false) throw new Error(r && r.error || '분석하지 못했습니다.');
+          var p = r.proposal;
+          answer.innerHTML = '<p style="white-space:pre-wrap">' + esc(p.answer) + '</p><p>' + esc(p.caution) + '</p><p>제안 ' + esc(p.quantity) + ' ' + esc(opts.line.unit) + ' · 확인 전 · 표시안 ' + (p.annotations || []).length + '개</p><button class="dm-btn" data-apply-proposal>초안 산출표에 적용</button>';
+          answer.querySelector('[data-apply-proposal]').onclick = function () { rememberPicked(); st.picked = st.picked.concat(p.annotations || []); opts.onProposal(p); renderPickPanel(); draw(); toast('초안에 적용했습니다. 실제 수량 확인은 별도입니다.'); };
+        }).catch(function (e) { answer.textContent = e.message; }).finally(function () { ask.disabled = false; });
+      };
       panel.querySelector('[data-finish]').onclick = function () {
-        var measured = st.picked.filter(function (g) { return g.shape !== 'note'; });
+        var measured = st.picked.filter(function (g) { return g.shape !== 'note' && g.shape !== 'arrow'; });
         var total = measured.length && measured.every(function (g) { return g.measured; })
           ? Math.round(measured.reduce(function (t, g) { return t + g.measured.value; }, 0) * 100) / 100 : null;
-        if (opts.onPick) opts.onPick({ sheetNo: st.data.sheetNo, shapes: st.picked.slice(), label: panel.querySelector('[data-desc]').value.trim(),
-          measuredTotal: total, unit: opts.line ? opts.line.unit : null });
-        st.picked = [];
-        close();
+        var picked = { sheetId: st.data.sheet && st.data.sheet.id, sheetNo: st.data.sheetNo, shapes: st.picked.slice(), label: panel.querySelector('[data-desc]').value.trim(),
+          measuredTotal: total, unit: opts.line ? opts.line.unit : null };
+        var button = this; button.disabled = true;
+        (opts.captureSnapshot ? captureSnapshot() : Promise.resolve(null)).then(function (blob) {
+          picked.blob = blob;
+          return opts.onPick ? opts.onPick(picked) : null;
+        }).then(function () { st.picked = []; close(); }).catch(function (e) { toast(e.message || '도면을 저장하지 못했습니다.', 'error'); button.disabled = false; });
       };
+    }
+
+    function captureSnapshot() {
+      return new Promise(function (resolve, reject) {
+        var scale = Math.min(1, 3000 / Math.max(st.W, st.H));
+        var out = document.createElement('canvas'); out.width = Math.round(st.W * scale); out.height = Math.round(st.H * scale) + 90;
+        var context = out.getContext('2d'); context.fillStyle = '#fff'; context.fillRect(0,0,out.width,out.height); context.drawImage(canvas, 0, 90, out.width, out.height - 90); context.fillStyle = '#123'; context.font = 'bold 20px sans-serif'; context.fillText((opts.sheetNo || '') + ' · BOQ #' + (opts.line && opts.line.lineNo || '') + ' · 표시 도면 초안', 20, 30); context.font = '15px sans-serif'; context.fillText('파랑: 이번 편집 · 기존 표시는 참조용 · 실제 시공 및 청구 확정은 담당자 확인',20,60);
+        var source = '<svg xmlns="http://www.w3.org/2000/svg" width="' + st.W + '" height="' + st.H + '" viewBox="0 0 ' + st.W + ' ' + st.H + '">' + build(st.k, false) + '</svg>';
+        var url = URL.createObjectURL(new Blob([source], {type:'image/svg+xml'})), img = new Image();
+        img.onload = function () { context.drawImage(img, 0, 90, out.width, out.height - 90); URL.revokeObjectURL(url); out.toBlob(function (blob) { if (blob) resolve(blob); else reject(new Error('표시 도면을 만들지 못했습니다.')); }, 'image/jpeg', 0.94); };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('표시 도면을 만들지 못했습니다.')); }; img.src = url;
+      });
     }
 
     /** 보기 화면에서 더한 표시 — 어느 줄의 것인지(또는 메모만) 묻고 저장. */
@@ -782,7 +839,7 @@
       var lines = opts.lines || [];
       var form = document.createElement('div');
       form.className = 'dm-form';
-      form.innerHTML = '<div style="font-weight:800;font-size:15px;margin-bottom:8px">' + ({ point: '점', line: '선', area: '영역', note: '메모' }[geom.shape]) + ' 저장</div>' +
+      form.innerHTML = '<div style="font-weight:800;font-size:15px;margin-bottom:8px">' + ({ point: '점', line: '선', arrow: '화살표', area: '영역', note: '메모' }[geom.shape]) + ' 저장</div>' +
         (geom.shape !== 'note' && lines.length ? '<label style="font-size:12px;color:#94a3b8">계약 줄<select data-line><option value="">— 줄 없이 메모만 —</option>' +
           lines.map(function (l) { return '<option value="' + l.id + '"' + (st.pendingLine && st.pendingLine.id === l.id ? ' selected' : '') + '>#' + esc(l.lineNo) + ' ' + esc(l.description) + '</option>'; }).join('') + '</select></label>' : '') +
         '<label style="display:block;font-size:12px;color:#94a3b8;margin-top:10px">메모<textarea data-label rows="3" placeholder="예) 여기까지 설치 · 내일 마감"></textarea></label>' +
@@ -836,11 +893,12 @@
         var pts = m.points.map(function (p) { return [p[0] * W, p[1] * H]; });
         var dash = m.status === 'plan' ? ' stroke-dasharray="' + px(8) + ' ' + px(6) + '"' : '';
         var g = '<g class="dm-mark' + (st.sel === m.id ? ' dm-sel' : '') + '" data-mark="' + m.id + '">';
-        if (m.shape === 'line') {
+        if (m.shape === 'line' || m.shape === 'arrow') {
           var d = pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ');
           g += '<polyline points="' + d + '" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="' + px(9) + '" stroke-linecap="round" stroke-linejoin="round"/>' +
             '<polyline class="dm-shape" points="' + d + '" fill="none" stroke="' + c + '" stroke-width="' + px(5) + '" stroke-linecap="round" stroke-linejoin="round"' + dash + '/>' +
             pts.map(function (p) { return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + px(4) + '" fill="#fff" stroke="' + c + '" stroke-width="' + px(2) + '"/>'; }).join('');
+          if (m.shape === 'arrow') g += arrowHead(pts, c, px);
         } else if (m.shape === 'area') {
           g += '<polygon class="dm-shape" points="' + pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ') + '" fill="' + c + '" fill-opacity=".2" stroke="' + c + '" stroke-width="' + px(2.5) + '" stroke-linejoin="round"' + dash + '/>';
         } else if (m.shape === 'note') {
@@ -862,9 +920,10 @@
       if (!exporting) st.picked.forEach(function (g) {
         var pp = g.points.map(function (p) { return [p[0] * W, p[1] * H]; });
         var ps = pp.map(function (p) { return p[0] + ',' + p[1]; }).join(' ');
-        if (g.shape === 'line') out.push('<polyline points="' + ps + '" fill="none" stroke="#fff" stroke-width="' + px(9) + '" stroke-linecap="round"/><polyline points="' + ps + '" fill="none" stroke="#0ea5e9" stroke-width="' + px(5) + '" stroke-linecap="round"/>');
+        if (g.shape === 'line' || g.shape === 'arrow') out.push('<polyline points="' + ps + '" fill="none" stroke="#fff" stroke-width="' + px(9) + '" stroke-linecap="round"/><polyline points="' + ps + '" fill="none" stroke="#0ea5e9" stroke-width="' + px(5) + '" stroke-linecap="round"/>');
         else if (g.shape === 'area') out.push('<polygon points="' + ps + '" fill="#0ea5e9" fill-opacity=".22" stroke="#0ea5e9" stroke-width="' + px(2.5) + '"/>');
         else out.push('<circle cx="' + pp[0][0] + '" cy="' + pp[0][1] + '" r="' + px(9) + '" fill="' + (g.shape === 'note' ? '#8b5cf6' : '#0ea5e9') + '" stroke="#fff" stroke-width="' + px(2) + '"/>');
+        if (g.shape === 'arrow') out.push(arrowHead(pp, '#0ea5e9', px));
         if (g.shape === 'note') out.push('<text x="' + pp[0][0] + '" y="' + (pp[0][1] - px(18)) + '" font-size="' + px(13) + '" font-weight="700" fill="#4c1d95" stroke="#fff" stroke-width="' + px(3) + '" paint-order="stroke" text-anchor="middle">' + esc(g.label) + '</text>');
       });
       // 그리는 중인 모양

@@ -79,6 +79,8 @@ jobs:
           done
           test "$ready" = true
           timeout 300s node tests/browser/assistant-workspace.cjs
+          timeout 60s node tests/browser/claim-editor.cjs
+          timeout 60s node tests/browser/claim-drawing.cjs
 
       - name: Upload synthetic-only screenshots, workbook and diagnostics
         if: always()

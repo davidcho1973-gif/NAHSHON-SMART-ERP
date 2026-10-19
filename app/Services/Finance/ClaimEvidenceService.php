@@ -75,6 +75,11 @@ class ClaimEvidenceService
                     if (! $record->evidence) {
                         $issues[] = ['lineId' => $line->id, 'recordId' => $record->id, 'message' => '연결된 ERP 근거 자료가 없습니다.'];
                     }
+                    if ($record->record_kind === 'actual' && ($r['availableQty'] > 0 || $record->status === 'pending')) {
+                        foreach ($this->missingRequirements($contract, $line->id, $record->stage, $record->evidence ?? []) as $missing) {
+                            $issues[] = ['lineId' => $line->id, 'recordId' => $record->id, 'message' => $missing];
+                        }
+                    }
                 }
                 $weightedQty = 0.0;
                 $allocatedAmount = 0.0;
@@ -83,6 +88,11 @@ class ClaimEvidenceService
                     $allocatedAmount += $group['allocatedAmount'];
                 }
                 $earned = $this->lineValue($line, $weightedQty);
+                $row['verifiedAmount'] = $earned;
+                $row['evidenceRequirements'] = data_get($contract->payload, 'claimLineRequirements.'.$line->id, []);
+                $row['allocatedAmount'] = round($allocatedAmount, 2);
+                $row['remainingContractAmount'] = max(0, round($row['contractAmount'] - $earned, 2));
+                $row['stageQuantities'] = array_map(fn ($group) => $group['qty'], $groups);
                 $row['availableAmount'] = max(0, round($earned - $allocatedAmount, 2));
                 $summary['verifiedAmount'] += $earned;
                 $row['availableAmount'] = round($row['availableAmount'], 2);
@@ -233,6 +243,14 @@ class ClaimEvidenceService
                     }
                 }
                 $entry = $record ?? new ClaimWorkRecord;
+                if ($record) {
+                    $history = $record->review_history ?? [];
+                    $history[] = ['action' => 'edit', 'by' => auth()->id(), 'at' => now()->toIso8601String(),
+                        'previous' => ['workDate' => $record->work_date?->toDateString(), 'location' => $record->location, 'stage' => $record->stage, 'reportedQty' => $record->reported_qty, 'notes' => $record->notes],
+                        'next' => ['workDate' => $date, 'location' => $location, 'stage' => $stage, 'reportedQty' => $qty],
+                    ];
+                    $entry->review_history = $history;
+                }
                 $entry->fill([
                     'contract_boq_line_id' => $line->id, 'record_kind' => $kind, 'work_date' => $date,
                     'location' => $location,
@@ -247,12 +265,11 @@ class ClaimEvidenceService
     }
 
     /**
-     * 설치(시공) 기록 — 반입 단계가 있는 줄이면 설치한 만큼 빠진 반입도 함께 적는다. 설치한 자재는
-     * 들어온 것이다. 반입이 빠지면 그 자재값을 못 받고, 원청 청구서(설치 = 단가 전체)와 대장 금액이
-     * 어긋난다. 공정별 도면의 «기록» 과 상황실 글이 같은 규칙을 쓰도록 여기 한 곳에 둔다.
+     * 설치(시공)만 기록한다. 설치 보고는 입고 수량·단위·증빙을 보증하지 않는다.
+     * 기존 명시적 withDelivery 호출은 호환되지만 기본값은 false이며 화면은 별도 반입 기록을 사용한다.
      *
      * @param  array<string, mixed>  $input  saveRecord 와 같은 값(stage 는 줄에 맞춰 정한다)
-     * @return array<string, mixed>  id(설치 기록), storedId, storedQty
+     * @return array<string, mixed> id(설치 기록), storedId, storedQty
      */
     public function recordInstallation(array $input): array
     {
@@ -271,7 +288,7 @@ class ClaimEvidenceService
                 }
                 $gap = 0.0;
                 $storedId = null;
-                if ($split && ($input['withDelivery'] ?? true)) {
+                if ($split && ($input['withDelivery'] ?? false)) {
                     $sum = fn (string $st): float => (float) ClaimWorkRecord::where('contract_boq_line_id', $line->id)->where('record_kind', 'actual')
                         ->where('stage', $st)->whereIn('status', ['pending', 'verified'])
                         ->selectRaw('coalesce(sum(coalesce(verified_qty, reported_qty)), 0) as q')->value('q');
@@ -339,6 +356,10 @@ class ClaimEvidenceService
                         throw new InvalidArgumentException('검토 확인에는 연결된 ERP 원문·현장 기록·사진 근거가 필요합니다.');
                     }
                     $record->evidence = $this->resolveEvidence($contract, $record->evidence, true);
+                    $missing = $this->missingRequirements($contract, $record->line->id, $record->stage, $record->evidence);
+                    if ($missing) {
+                        throw new InvalidArgumentException(implode(' · ', $missing));
+                    }
                 }
                 $history = $record->review_history ?? [];
                 $history[] = ['action' => $action, 'from' => $record->status, 'previousVerifiedQty' => $record->verified_qty, 'verifiedQty' => $verified, 'note' => $note, 'by' => auth()->id(), 'at' => now()->toIso8601String()];
@@ -382,6 +403,10 @@ class ClaimEvidenceService
                         continue;
                     }
                     $evidence = $this->resolveEvidence($contract, $record->evidence ?? [], true);
+                    $missing = $this->missingRequirements($contract, $record->line->id, $record->stage, $evidence);
+                    if ($missing) {
+                        throw new InvalidArgumentException('공정 #'.$record->line->line_no.' · '.implode(' · ', $missing));
+                    }
                     $this->ensureUnchanged($record->evidence ?? [], $evidence);
                     if (! $evidence) {
                         throw new InvalidArgumentException('확인된 실적의 근거가 없어 초안을 만들 수 없습니다.');
@@ -516,6 +541,12 @@ class ClaimEvidenceService
                 if (! $currentEvidence) {
                     return '근거 원문을 확인할 수 없습니다.';
                 }
+                if ($app->status === 'draft') {
+                    $missing = $this->missingRequirements($contract, $record->line->id, $record->stage, $currentEvidence);
+                    if ($missing) {
+                        return implode(' · ', $missing);
+                    }
+                }
                 $this->ensureUnchanged($allocation->snapshot['evidence'] ?? [], $currentEvidence);
                 $currentContract = $this->resolveEvidence($contract, [['type' => 'document', 'id' => $record->line->source_document_id, 'locator' => $record->line->source_locator]], true);
                 $this->ensureUnchanged($allocation->snapshot['contractEvidence'] ?? [], $currentContract);
@@ -558,6 +589,7 @@ class ClaimEvidenceService
         if (! $archived && trim($text) === '') {
             throw new InvalidArgumentException('사진만 있는 현장 기록은 제출할 사진을 공정 사진 또는 문서로 연결하세요.');
         }
+
         return ['type' => 'intake', 'id' => $id, 'title' => $proof['title'], 'rawText' => $text,
             'date' => $record->occurred_on?->toDateString(), 'dateBasis' => 'occurred_on',
             'sha256' => hash('sha256', $text), 'name' => 'intake-'.$id.'.txt', 'mime' => 'text/plain', 'url' => null];
@@ -707,13 +739,94 @@ class ClaimEvidenceService
         }
     }
 
-    private function sourceOptions(ProjectContract $contract): array
+    public function searchSources(int $contractId, string $search): array
+    {
+        return $this->respond(fn () => ['success' => true] + $this->sourceOptions($this->contract($contractId, false), mb_substr(trim($search), 0, 200)));
+    }
+
+    public function saveRequirements(array $input): array
+    {
+        return $this->respond(function () use ($input): array {
+            $line = ContractBoqLine::findOrFail((int) ($input['lineId'] ?? 0));
+            $contract = $this->contract($line->project_contract_id);
+            $rules = (array) ($input['requirements'] ?? []);
+            if (count($rules) > 20) {
+                throw new InvalidArgumentException('필수자료는 20종 이내로 설정하세요.');
+            }
+            $normalized = [];
+            foreach ($rules as $rule) {
+                $type = (string) ($rule['type'] ?? '');
+                $stage = (string) ($rule['stage'] ?? '');
+                if (! in_array($type, array_merge(['photo', 'material_receipt'], array_keys(IntelligentDocument::TYPE_OPTIONS)), true)
+                    || ($stage !== '' && ! in_array($stage, $line->recognition_basis === 'milestone' ? array_keys($line->stage_weights ?? []) : ['installed'], true))) {
+                    throw new InvalidArgumentException('증빙 종류·작업 단계를 확인하세요.');
+                }
+                $normalized[] = ['type' => $type, 'stage' => $stage, 'count' => max(1, min(20, (int) ($rule['count'] ?? 1)))];
+            }
+
+            return DB::transaction(function () use ($contract, $line, $normalized): array {
+                $this->lock($contract);
+                $contract->refresh();
+                $payload = $contract->payload ?? [];
+                $before = data_get($payload, 'claimLineRequirements.'.$line->id, []);
+                $payload['claimLineRequirements'][(string) $line->id] = $normalized;
+                $payload['claimRequirementHistory'][] = ['lineId' => $line->id, 'before' => $before, 'after' => $normalized, 'by' => auth()->id(), 'at' => now()->toIso8601String()];
+                $contract->update(['payload' => $payload]);
+
+                return ['success' => true];
+            });
+        });
+    }
+
+    private function missingRequirements(ProjectContract $contract, int $lineId, string $stage, array $evidence): array
+    {
+        $rules = data_get($contract->payload, 'claimLineRequirements.'.$lineId, []);
+        if (! $rules) {
+            return [];
+        }
+        $counts = [];
+        $seen = [];
+        foreach ($evidence as $proof) {
+            $key = ($proof['type'] ?? '').':'.($proof['id'] ?? 0);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $type = ($proof['type'] ?? '') === 'document'
+                ? IntelligentDocument::visibleTo(auth()->user())->whereKey($proof['id'])->value('document_type')
+                : (($proof['type'] ?? '') === 'receipt' ? 'material_receipt' : ($proof['type'] ?? ''));
+            $counts[$type ?? ''] = ($counts[$type ?? ''] ?? 0) + 1;
+        }
+        $labels = ['photo' => '시공 사진', 'material_receipt' => '입고 송장'] + IntelligentDocument::TYPE_OPTIONS;
+        $missing = [];
+        foreach ($rules as $rule) {
+            if (($rule['stage'] ?? '') !== '' && $rule['stage'] !== $stage) {
+                continue;
+            }
+            $count = max(0, (int) $rule['count'] - ($counts[$rule['type']] ?? 0));
+            if ($count) {
+                $missing[] = ($labels[$rule['type']] ?? $rule['type']).' '.$count.'건 필요';
+            }
+        }
+
+        return $missing;
+    }
+
+    public function editableReferences(int $contractId, array $references): array
+    {
+        return $this->resolveEvidence($this->contract($contractId, false), $references);
+    }
+
+    private function sourceOptions(ProjectContract $contract, string $search = ''): array
     {
         $docs = IntelligentDocument::visibleTo(auth()->user())->where(function ($q) use ($contract): void {
             $q->where('project_contract_id', $contract->id)->orWhere(function ($q) use ($contract): void {
                 $q->whereNull('project_contract_id');
                 $contract->project_id ? $q->where('project_id', $contract->project_id) : $q->where('site_id', $contract->site_id ?: -1);
             });
+        })->when($search !== '', function ($q) use ($search): void {
+            $term = '%'.addcslashes($search, '\\%_').'%';
+            $q->where(fn ($q) => $q->where('title', 'ilike', $term)->orWhere('original_file_name', 'ilike', $term));
         })->orderByDesc('id')->limit(200)->get();
         $sources = [];
         $documentOptions = [];
@@ -730,9 +843,20 @@ class ClaimEvidenceService
         $code = $contract->project?->project_code;
         foreach (['intake' => OpsIntakeItem::class, 'photo' => WbsPhoto::class] as $type => $model) {
             $query = $model::where('site_id', $contract->site_id ?: -1)->when($code, fn ($q) => $q->where('project_code', $code))->orderByDesc('id')->limit(200);
+            if ($search !== '') {
+                $term = '%'.addcslashes($search, '\\%_').'%';
+                $columns = $type === 'intake' ? ['summary', 'raw_text'] : ['caption', 'original_name'];
+                $query->where(fn ($q) => $q->where($columns[0], 'ilike', $term)->orWhere($columns[1], 'ilike', $term));
+            }
             foreach ($query->get() as $source) {
                 $sources[] = ['value' => $type.':'.$source->id, 'label' => ($type === 'intake' ? '현장 기록' : '사진').' #'.$source->id.' · '.($type === 'intake' ? ($source->summary ?: mb_substr($source->raw_text ?? '', 0, 100)) : ($source->caption ?: $source->original_name))];
             }
+        }
+
+        foreach (MaterialReceipt::query()->visibleTo(auth()->user())->where('site_id', $contract->site_id ?: -1)
+            ->when($search !== '', fn ($q) => $q->where('vendor', 'ilike', '%'.addcslashes($search, '\\%_').'%'))
+            ->whereNotNull('photo_path')->orderByDesc('id')->limit(200)->get() as $receipt) {
+            $sources[] = ['value' => 'receipt:'.$receipt->id, 'label' => '입고 송장 #'.$receipt->id.' · '.$receipt->vendor.' · '.$receipt->received_on?->toDateString()];
         }
 
         return ['sourceOptions' => $sources, 'sourceDocumentOptions' => $documentOptions];
