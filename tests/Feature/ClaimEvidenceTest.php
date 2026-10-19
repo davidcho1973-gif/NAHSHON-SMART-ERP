@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\ClaimEditDraft;
 use App\Models\ClaimWorkRecord;
 use App\Models\Company;
 use App\Models\ContractBoqLine;
+use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
 use App\Models\PayApplication;
 use App\Models\PayApplicationAllocation;
@@ -13,18 +15,22 @@ use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Admin\BillingAdminService;
+use App\Services\Finance\ClaimEditingService;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Ocr\OcrEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Tests\TestCase;
 use Tests\Concerns\PreparesClaimSubmissions;
+use Tests\TestCase;
 
 class ClaimEvidenceTest extends TestCase
 {
-    use RefreshDatabase;
     use PreparesClaimSubmissions;
+    use RefreshDatabase;
 
     private ProjectContract $contract;
 
@@ -52,6 +58,124 @@ class ClaimEvidenceTest extends TestCase
     private function svc(): ClaimEvidenceService
     {
         return app(ClaimEvidenceService::class);
+    }
+
+    public function test_process_requirements_block_verification_and_new_claims_until_matched(): void
+    {
+        $line = $this->line();
+        $record = $this->record($line);
+        $this->assertTrue($this->svc()->saveRequirements(['lineId' => $line->id, 'requirements' => [['type' => 'inspection', 'stage' => 'installed', 'count' => 1]]])['success']);
+        $review = $this->svc()->reviewRecord(['id' => $record->id, 'action' => 'verify', 'verifiedQty' => 15, 'reviewNote' => 'Measured']);
+        $this->assertFalse($review['success']);
+        $this->assertStringContainsString('1건 필요', $review['error']);
+        $this->document->update(['document_type' => 'inspection']);
+        $this->verify($record);
+        $this->assertTrue($this->svc()->saveRequirements(['lineId' => $line->id, 'requirements' => [['type' => 'inspection', 'stage' => '', 'count' => 2]]])['success']);
+        $this->assertFalse($this->svc()->draft($this->contract->id, '2026-09-30')['success']);
+        $this->assertCount(2, $this->contract->fresh()->payload['claimRequirementHistory']);
+    }
+
+    public function test_evidence_search_preserves_scope_and_can_find_older_documents(): void
+    {
+        $this->document->update(['title' => 'Old 100% evidence']);
+        $result = $this->svc()->searchSources($this->contract->id, '100%');
+        $this->assertTrue($result['success']);
+        $this->assertContains('document:'.$this->document->id, array_column($result['sourceOptions'], 'value'));
+        $this->document->update(['access_level' => 'private']);
+        $this->assertSame([], $this->svc()->searchSources($this->contract->id, '100%')['sourceOptions']);
+    }
+
+    public function test_marked_drawing_is_scoped_ready_evidence_not_verified_work(): void
+    {
+        $line = $this->line();
+        config(['document-intelligence.disk' => 'local']);
+        Queue::fake();
+        $file = UploadedFile::fake()->image('marked.jpg', 100, 100);
+        $editor = app(ClaimEditingService::class);
+        $result = $editor->saveDrawingImage(['lineId' => $line->id, 'sheetNo' => 'A-1', 'image' => 'data:image/jpeg;base64,'.base64_encode($file->getContent())]);
+        $this->assertTrue($result['success'], $result['error'] ?? '');
+        $doc = IntelligentDocument::findOrFail($result['id']);
+        $this->assertEquals($this->contract->id, $doc->project_contract_id);
+        $this->assertSame('ready', $doc->ai_status);
+        $this->assertSame('drawing', $doc->document_type);
+        $this->assertSame(0, ClaimWorkRecord::count());
+        $this->assertFalse($editor->saveDrawingImage(['lineId' => $line->id, 'image' => 'data:image/jpeg;base64,not-an-image'])['success']);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_edit_draft_calculation_commits_once_without_verifying_or_allocating(): void
+    {
+        $line = $this->line();
+        $editor = app(ClaimEditingService::class);
+        $content = ['workDate' => '2026-09-23', 'location' => 'North wall', 'stage' => 'installed',
+            'calculations' => [['length' => 2, 'height' => 3, 'count' => 1, 'deduction' => 1]],
+            'evidence' => [['type' => 'document', 'id' => $this->document->id, 'locator' => 'p.1']]];
+        $saved = $editor->save(['lineId' => $line->id, 'revision' => 0, 'content' => $content]);
+        $this->assertTrue($saved['success'], $saved['error'] ?? '');
+        $this->assertSame(0, ClaimWorkRecord::count());
+        $this->assertFalse($editor->save(['lineId' => $line->id, 'revision' => 0, 'content' => $content])['success']);
+        $committed = $editor->commit(['lineId' => $line->id, 'revision' => $saved['draft']['revision']]);
+        $this->assertTrue($committed['success'], $committed['error'] ?? '');
+        $again = $editor->commit(['lineId' => $line->id, 'revision' => $saved['draft']['revision']]);
+        $this->assertSame($committed['id'], $again['id']);
+        $record = ClaimWorkRecord::findOrFail($committed['id']);
+        $this->assertSame('pending', $record->status);
+        $this->assertEquals(5, $record->reported_qty);
+        $this->assertNull($record->verified_qty);
+        $this->assertSame(0, PayApplicationAllocation::count());
+        $this->assertSame(1, ClaimWorkRecord::count());
+    }
+
+    public function test_edit_drafts_are_private_to_the_editor_and_reject_foreign_sources(): void
+    {
+        $line = $this->line();
+        $editor = app(ClaimEditingService::class);
+        $this->assertTrue($editor->save(['lineId' => $line->id, 'content' => ['location' => 'Private draft']])['success']);
+        $this->actingAs(User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']));
+        $this->assertSame([], $editor->workspace($this->contract->id)['drafts']);
+        $this->assertFalse($editor->save(['lineId' => $line->id, 'content' => ['evidence' => [['type' => 'document', 'id' => 999999]]]])['success']);
+    }
+
+    public function test_drawing_ai_returns_a_proposal_without_creating_work_or_trusting_source_ids(): void
+    {
+        $line = $this->line();
+        $sheet = DrawingSheet::create(['intelligent_document_id' => $this->document->id, 'site_id' => $this->contract->site_id, 'page_no' => 1, 'sheet_no' => 'A-1', 'text' => 'Wall 2 x 3 feet']);
+        $this->mock(OcrEngine::class)->shouldReceive('analyze')->once()->andReturn(['model' => 'test', 'data' => [
+            'answer' => '치수 확인 필요', 'caution' => '실제 시공 확인 전', 'sources' => ['document:999999', 'document:'.$this->document->id],
+            'annotations' => [['shape' => 'arrow', 'points' => [[0.1, 0.1], [0.2, 0.2]], 'label' => '확인할 벽'], ['shape' => 'line', 'points' => [[-1, 0], [2, 0]], 'label' => 'invalid']],
+            'calculations' => [['label' => 'Wall', 'length' => 2, 'height' => 3, 'count' => 1, 'deduction' => 1]],
+        ]]);
+        $result = app(ClaimEditingService::class)->ask(['lineId' => $line->id, 'sheetId' => $sheet->id, 'question' => '면적 근거는?']);
+        $this->assertTrue($result['success']);
+        $this->assertSame(5.0, $result['proposal']['quantity']);
+        $this->assertSame(['document:'.$this->document->id], $result['proposal']['sources']);
+        $this->assertSame(0, ClaimWorkRecord::count());
+        $this->assertSame(0, ClaimEditDraft::count());
+        $this->assertCount(1, $result['proposal']['annotations']);
+        $this->document->update(['access_level' => 'private']);
+        $this->assertFalse(app(ClaimEditingService::class)->ask(['lineId' => $line->id, 'sheetId' => $sheet->id, 'question' => '면적?'])['success']);
+    }
+
+    public function test_changed_evidence_does_not_commit_work(): void
+    {
+        $line = $this->line();
+        $editor = app(ClaimEditingService::class);
+        $content = ['workDate' => '2026-09-23', 'location' => 'North', 'quantity' => 5, 'stage' => 'installed', 'evidence' => [['type' => 'document', 'id' => $this->document->id, 'locator' => 'p1']]];
+        $saved = $editor->save(['lineId' => $line->id, 'content' => $content]);
+        $this->document->update(['sha256' => hash('sha256', 'replacement')]);
+        $this->assertFalse($editor->commit(['lineId' => $line->id, 'revision' => $saved['draft']['revision']])['success']);
+        $this->assertSame(0, ClaimWorkRecord::count());
+    }
+
+    public function test_bulk_edit_rolls_back_all_changes_when_one_record_is_verified(): void
+    {
+        $line = $this->line();
+        $first = $this->record($line);
+        $second = $this->svc()->saveRecord(['lineId' => $line->id, 'recordKind' => 'actual', 'workDate' => '2026-09-23', 'location' => 'Second wall', 'stage' => 'installed', 'reportedQty' => 3]);
+        $this->verify($first);
+        $result = app(ClaimEditingService::class)->bulk(['contractId' => $this->contract->id, 'ids' => [$second['id'], $first->id], 'changes' => ['location' => 'Changed']]);
+        $this->assertFalse($result['success']);
+        $this->assertSame('Second wall', ClaimWorkRecord::findOrFail($second['id'])->location);
     }
 
     public function test_actual_work_uses_the_site_day_instead_of_the_server_day(): void

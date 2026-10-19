@@ -8,12 +8,14 @@ use App\Models\DrawingMark;
 use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
 use App\Models\PayApplicationAllocation;
+use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkSection;
 use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Support\AiInformationAccess;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -166,9 +168,19 @@ class DrawingMarkService
                 throw new InvalidArgumentException('표시를 찾을 수 없습니다.');
             }
             $this->access($mark->site_id, true);
-            $mark->delete();
 
-            return ['success' => true];
+            return DB::transaction(function () use ($mark): array {
+                if ($mark->record) {
+                    ProjectContract::whereKey($mark->record->line->project_contract_id)->lockForUpdate()->firstOrFail();
+                    $record = $mark->record->refresh();
+                    if ($record->status !== 'pending' || $record->allocations()->exists()) {
+                        throw new InvalidArgumentException('검토·청구된 도면 표시는 삭제할 수 없습니다.');
+                    }
+                }
+                $mark->delete();
+
+                return ['success' => true];
+            });
         });
     }
 
@@ -207,7 +219,7 @@ class DrawingMarkService
         }
         [$min, $max] = match ($shape) {
             'point', 'note' => [1, 1],
-            'line' => [2, 200],
+            'line', 'arrow' => [2, 200],
             default => [3, 200],
         };
         if (count($out) < $min || count($out) > $max) {

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ClaimSubmission;
 use App\Models\Company;
 use App\Models\ContractBoqLine;
 use App\Models\ContractChange;
@@ -11,7 +12,9 @@ use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkSection;
+use App\Services\Finance\ClaimEditingService;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimSubmissionService;
 use App\Services\Finance\ContractChangeService;
 use App\Services\Finance\ContractSheetImportService;
 use App\Services\Finance\GcClaimWorkbookService;
@@ -84,7 +87,6 @@ class GcClaimWorkbookTest extends TestCase
         ]);
         $this->assertTrue($import['success'], $import['error'] ?? '');
 
-
         Storage::disk('local')->put('proof/photo.jpg', 'photo-bytes');
         $this->proof = IntelligentDocument::create(['uuid' => (string) Str::uuid(), 'source' => 'dropzone', 'disk' => 'local', 'file_path' => 'proof/photo.jpg',
             'original_file_name' => 'photo.jpg', 'stored_file_name' => 'photo.jpg', 'extension' => 'jpg', 'mime_type' => 'image/jpeg', 'file_size' => 11,
@@ -95,6 +97,35 @@ class GcClaimWorkbookTest extends TestCase
     private function line(string $no): ContractBoqLine
     {
         return ContractBoqLine::where('project_contract_id', $this->contract->id)->where('line_no', $no)->firstOrFail();
+    }
+
+    public function test_editor_to_verified_claim_to_workbook_and_evidence_archive(): void
+    {
+        $line = $this->line('2');
+        // This packet fixture has completed source-document review, separately from work approval.
+        IntelligentDocument::whereKey($line->source_document_id)->update(['ai_status' => 'ready']);
+        $editor = app(ClaimEditingService::class);
+        $saved = $editor->save(['lineId' => $line->id, 'content' => [
+            'workDate' => '2026-10-20', 'location' => 'Kitchen wall', 'stage' => 'installed',
+            'calculations' => [['label' => 'Wall minus opening', 'length' => 3, 'height' => 4, 'count' => 1, 'deduction' => 2]],
+            'evidence' => [['type' => 'document', 'id' => $this->proof->id, 'locator' => 'Wall photograph']],
+        ]]);
+        $this->assertTrue($saved['success'], $saved['error'] ?? '');
+        $record = $editor->commit(['lineId' => $line->id, 'revision' => $saved['draft']['revision']]);
+        $this->assertTrue($record['success'], $record['error'] ?? '');
+        $review = app(ClaimEvidenceService::class)->reviewRecord(['id' => $record['id'], 'action' => 'verify', 'verifiedQty' => 10, 'reviewNote' => 'Measured quantity and source checked']);
+        $this->assertTrue($review['success'], $review['error'] ?? '');
+        $ready = $editor->prepare($this->contract->id, '2026-10-20');
+        $this->assertTrue($ready['success'], $ready['error'] ?? '');
+        $prepared = app(ClaimSubmissionService::class)->prepare($ready['draft']['id'], true);
+        $this->assertTrue($prepared['success'], $prepared['error'] ?? '');
+        $submission = ClaimSubmission::findOrFail($prepared['submission']['id']);
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open(Storage::disk($submission->disk)->path($submission->file_path)));
+        $this->assertNotFalse($zip->getFromName('claim-workbook.xlsx'));
+        $this->assertStringContainsString('3 × 4 × 1 − 2 = 10', $zip->getFromName('quantity-and-evidence.html'));
+        $this->assertTrue($submission->manifest['includesContractorWorkbook']);
+        $zip->close();
     }
 
     private function work(ContractBoqLine $line, string $stage, float $qty, string $date): void

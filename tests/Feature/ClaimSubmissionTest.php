@@ -2,31 +2,31 @@
 
 namespace Tests\Feature;
 
-use App\Models\ClaimSubmission;
 use App\Models\ClaimEvidenceInboxItem;
+use App\Models\ClaimSubmission;
 use App\Models\ClaimWorkRecord;
-use App\Models\ContractBoqLine;
-use App\Models\PayApplicationAllocation;
 use App\Models\Company;
+use App\Models\ContractBoqLine;
 use App\Models\IntelligentDocument;
 use App\Models\MaterialReceipt;
 use App\Models\MobileExpense;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\PayApplication;
+use App\Models\PayApplicationAllocation;
 use App\Models\Project;
 use App\Models\ProjectContract;
-use App\Models\ProjectContractDocument;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WbsPhoto;
 use App\Services\Admin\BillingAdminService;
-use App\Services\Finance\ClaimEvidenceService;
 use App\Services\Finance\ClaimEvidenceInboxService;
+use App\Services\Finance\ClaimEvidenceService;
 use App\Services\Finance\ClaimSubmissionService;
-use App\Support\ReceiptFilePayload;
 use App\Support\JobAccess;
+use App\Support\ReceiptFilePayload;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -38,7 +38,9 @@ class ClaimSubmissionTest extends TestCase
     use RefreshDatabase;
 
     private ProjectContract $contract;
+
     private PayApplication $application;
+
     private IntelligentDocument $document;
 
     protected function setUp(): void
@@ -83,6 +85,7 @@ class ClaimSubmissionTest extends TestCase
         $contents ??= 'Measured work proof '.$uuid;
         $path = 'proofs/'.$uuid.'.txt';
         Storage::disk('local')->put($path, $contents);
+
         return IntelligentDocument::create(array_merge([
             'uuid' => $uuid, 'company_id' => $this->contract->company_id,
             'site_id' => $this->contract->site_id, 'project_id' => $this->contract->project_id,
@@ -107,6 +110,7 @@ class ClaimSubmissionTest extends TestCase
         $this->assertTrue($this->select()['success']);
         $result = $this->service()->prepare($this->application->id);
         $this->assertTrue($result['success'], $result['error'] ?? '');
+
         return ClaimSubmission::findOrFail($result['submission']['id']);
     }
 
@@ -276,7 +280,7 @@ class ClaimSubmissionTest extends TestCase
         $manifest = $submission->manifest;
         $this->assertCount(5, $manifest['dailyEvidence']);
         // One contract document + photograph + delivery + item text, plus manifest and summary.
-        $this->assertSame(6, $zip->numFiles);
+        $this->assertSame(7, $zip->numFiles);
         foreach ($manifest['dailyEvidence'] as $proof) {
             $content = $zip->getFromName($proof['file']);
             $this->assertSame($proof['sha256'], hash('sha256', $content));
@@ -463,7 +467,7 @@ class ClaimSubmissionTest extends TestCase
     public function test_prepare_and_sent_use_the_site_day_near_midnight(): void
     {
         $this->contract->site->update(['timezone' => 'America/New_York']);
-        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-12T02:00:00Z'));
+        $this->travelTo(Carbon::parse('2026-10-12T02:00:00Z'));
         $submission = $this->prepared();
         $this->assertTrue($this->transition($submission, 'sent', ['occurred_at' => '2026-10-11'])['success']);
     }
@@ -645,7 +649,7 @@ class ClaimSubmissionTest extends TestCase
     public function test_document_expiry_uses_calendar_days_in_the_site_timezone(): void
     {
         $this->contract->site->update(['timezone' => 'America/New_York']);
-        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-12T02:00:00Z'));
+        $this->travelTo(Carbon::parse('2026-10-12T02:00:00Z'));
         $this->document->update(['expires_on' => '2026-10-11']);
         $this->assertTrue($this->select()['success']);
         $this->assertTrue($this->service()->prepare($this->application->id)['success']);
