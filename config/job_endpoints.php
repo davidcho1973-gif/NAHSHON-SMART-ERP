@@ -95,6 +95,8 @@ return [
         'api_getBoq' => ['progress', 'view'],
         'api_getCardPermits' => ['safety', 'view'],
         'api_getClaimEvidence' => ['contracts', 'view'],
+        'api_getClaimLineWorkspace' => ['contracts', 'view'],
+        'api_attachClaimDocument' => ['contracts', 'edit'],
         'api_getClaimEvidenceSources' => ['contracts', 'view'],
         'api_saveClaimEvidenceRequirements' => ['contracts', 'edit'],
         'api_getClaimEditor' => ['contracts', 'view'],
