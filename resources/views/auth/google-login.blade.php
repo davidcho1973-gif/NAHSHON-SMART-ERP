@@ -524,15 +524,15 @@
         @if ($errors->has('email_login') || $errors->has('email') || $errors->has('password'))
           <div class="notice error" role="alert">{{ $errors->first('email_login') ?: ($errors->first('email') ?: $errors->first('password')) }}</div>
         @endif
-        <label for="login-email" style="display:block;font-weight:600;font-size:14px;margin-bottom:7px">등록 이메일 / Email</label>
-        <input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" value="{{ old('email') }}" required maxlength="255"
+        <label for="login-email" style="display:block;font-weight:600;font-size:14px;margin-bottom:7px">이메일 또는 직원번호 / Email or employee ID</label>
+        <input id="login-email" name="email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" value="{{ old('email') }}" required maxlength="255"
           style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
         <label for="login-password" style="display:block;font-weight:600;font-size:14px;margin:14px 0 7px">비밀번호 / Password</label>
         <input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="128" aria-describedby="email-login-help"
           style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
-        <button type="submit" style="width:100%;min-height:50px;margin-top:16px;border:0;border-radius:10px;background:#183b62;color:#fff;font:inherit;font-weight:700;cursor:pointer">이메일로 로그인 / Sign in</button>
+        <button type="submit" style="width:100%;min-height:50px;margin-top:16px;border:0;border-radius:10px;background:#183b62;color:#fff;font:inherit;font-weight:700;cursor:pointer">로그인 / Sign in</button>
         <div id="email-login-help" style="font-size:12px;line-height:1.65;color:#526174;margin-top:13px">
-          비밀번호가 없으면 등록된 Google 계정으로 로그인하세요.
+          이메일 없이 초대 등록한 직원은 직원번호와 직접 설정한 비밀번호로 로그인하세요. 비밀번호가 없으면 관리자에게 초대 등록을 요청하세요.
           <br>Use your password or your registered Google account.
           <details style="margin-top:8px"><summary style="cursor:pointer">로그인 도움말 / Need help?</summary>
             계정이 없거나 비밀번호가 기억나지 않으면 인사담당자에게 계정 연결·복구를 요청하세요. 이미 등록한 직원은 다시 등록하지 않습니다.

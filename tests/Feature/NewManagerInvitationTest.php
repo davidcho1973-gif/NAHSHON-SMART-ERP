@@ -63,6 +63,18 @@ class NewManagerInvitationTest extends TestCase
             'role' => 'super_admin', 'scope' => 'all_sites', 'name' => 'Forged', 'phone' => '2025550999']);
     }
 
+    public function test_employee_number_enrollment_cannot_create_an_unregistered_identity(): void
+    {
+        $invite = $this->issue();
+        $this->details($invite);
+        $this->post($invite['url'].'/complete', ['employee_login' => 1, 'password' => 'NewPassword123',
+            'password_confirmation' => 'NewPassword123'])->assertSessionHasErrors('email');
+        $this->assertDatabaseCount('employees', 0);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertNull(ManagerInvitation::first()->accepted_at);
+        $this->assertGuest();
+    }
+
     public function test_one_private_link_creates_employee_and_account_only_on_completion_with_fixed_grant(): void
     {
         $invite = $this->issue();
