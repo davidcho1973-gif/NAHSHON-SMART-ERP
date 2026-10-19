@@ -26,6 +26,7 @@ use ZipArchive;
 class ClaimSubmissionService
 {
     private const MAX_FILE_BYTES = 26214400;
+
     private const MAX_PACKET_BYTES = 104857600;
 
     public function __construct(private readonly BillingAdminService $billing) {}
@@ -77,6 +78,7 @@ class ClaimSubmissionService
     {
         return $this->respond(function () use ($input): array {
             [$application, $contract] = $this->context((int) ($input['application_id'] ?? 0));
+
             return DB::transaction(function () use ($application, $contract, $input): array {
                 $this->lock($application, $contract);
                 $this->editable($application);
@@ -99,20 +101,21 @@ class ClaimSubmissionService
                     $evidence[$key] = array_values($evidence[$key]);
                 }
                 $application->update(['payload' => array_merge($application->payload ?? [], ['claimSubmissionEvidence' => $evidence])]);
+
                 return ['success' => true, 'applicationId' => $application->id];
             });
         });
     }
 
-    public function prepare(int $applicationId): array
+    public function prepare(int $applicationId, bool $includeWorkbook = false): array
     {
-        return $this->respond(function () use ($applicationId): array {
+        return $this->respond(function () use ($applicationId, $includeWorkbook): array {
             [$application, $contract] = $this->context($applicationId);
             $storedPath = null;
             $temporaryFiles = [];
             $diskName = (string) config('document-intelligence.disk', 'local');
             try {
-                return DB::transaction(function () use ($application, $contract, $diskName, &$storedPath, &$temporaryFiles): array {
+                return DB::transaction(function () use ($application, $contract, $diskName, $includeWorkbook, &$storedPath, &$temporaryFiles): array {
                     $this->lock($application, $contract);
                     $this->editable($application);
                     if (! ContractClaimProfile::confirmed($contract)) {
@@ -173,6 +176,14 @@ class ClaimSubmissionService
                         $dailyManifest[] = $daily->manifest($source, $files[$key]);
                         unset($bytes);
                     }
+                    if ($includeWorkbook) {
+                        $workbook = app(GcClaimWorkbookService::class)->build($application->id);
+                        if (! ($workbook['success'] ?? false)) {
+                            throw new InvalidArgumentException($workbook['error'] ?? '원청 청구서 양식을 확인하세요.');
+                        }
+                        $temporaryFiles[] = $workbook['path'];
+                        $this->retainSource('generated:workbook', 'claim-workbook.xlsx', (string) file_get_contents($workbook['path']), $files, $totalBytes, $temporaryFiles);
+                    }
                     $snapshot = $this->financialSnapshot($application);
                     $revision = 1 + (int) ClaimSubmission::where('pay_application_id', $application->id)->max('revision');
                     $package = [
@@ -182,7 +193,7 @@ class ClaimSubmissionService
                         'preparedAt' => now()->toIso8601String(), 'documents' => $manifest, 'dailyEvidence' => $dailyManifest,
                         'historicalSubmittedOn' => $historicalDate,
                         'documentsValidatedOn' => $historicalDate ?? Carbon::today($contract->site?->timezone ?: config('app.timezone'))->toDateString(),
-                        'lines' => $this->claimLines($application),
+                        'lines' => $this->claimLines($application), 'includesContractorWorkbook' => $includeWorkbook,
                     ];
                     $zipPath = $this->zip($package, $files);
                     $temporaryFiles[] = $zipPath;
@@ -211,6 +222,7 @@ class ClaimSubmissionService
                         'sha256' => $zipHash, 'file_size' => $zipSize, 'prepared_at' => now(),
                         'history' => [['status' => 'prepared', 'recordedAt' => now()->toIso8601String(), 'actorId' => auth()->id()]],
                     ]);
+
                     return ['success' => true, 'submission' => $this->row($submission)];
                 });
             } catch (Throwable $e) {
@@ -305,6 +317,7 @@ class ClaimSubmissionService
                             throw new InvalidArgumentException($billingResult['error'] ?? implode(' ', $billingResult['errors'] ?? ['청구 제출 검증에 실패했습니다.']));
                         }
                     }
+
                     return $billingResult + ['submission' => $this->row($submission->fresh())];
                 });
             } catch (Throwable $e) {
@@ -325,6 +338,7 @@ class ClaimSubmissionService
                 throw new InvalidArgumentException('제출본을 준비한 뒤 실제 제출일과 접수 참조를 기록하세요. 다운로드는 제출이 아닙니다.');
             }
             $this->assertCurrent($submission, $application, $application->contract);
+
             return null;
         } catch (InvalidArgumentException $e) {
             return $e->getMessage();
@@ -343,6 +357,7 @@ class ClaimSubmissionService
             if ($submission->application_snapshot !== $this->financialSnapshot($application)) {
                 throw new InvalidArgumentException('승인 응답의 제출본과 청구 금액이 다릅니다.');
             }
+
             return null;
         } catch (InvalidArgumentException $e) {
             return $e->getMessage();
@@ -367,6 +382,7 @@ class ClaimSubmissionService
         }
         app(ClaimDailyEvidencePacketService::class)->assertArchiveAccess($contract, $submission->manifest['dailyEvidence'] ?? []);
         $this->verifyArchive($submission->disk, $submission->file_path, $submission->sha256);
+
         return $submission;
     }
 
@@ -386,6 +402,7 @@ class ClaimSubmissionService
             $this->source($contract, $proof, false);
         }
         $this->readVerified($proof['disk'], $proof['path'], $proof['sha256']);
+
         return ['disk' => $proof['disk'], 'path' => $proof['path'], 'name' => $proof['name'] ?? 'gc-response'];
     }
 
@@ -399,6 +416,7 @@ class ClaimSubmissionService
         if (! $application || ! $contract || $contract->direction !== 'receivable') {
             throw new InvalidArgumentException('접근 가능한 기성 회차를 찾을 수 없습니다.');
         }
+
         return [$application, $contract];
     }
 
@@ -415,6 +433,7 @@ class ClaimSubmissionService
             || ClaimSubmission::where('pay_application_id', $application->id)->whereNotNull('sent_at')->exists()) {
             return null;
         }
+
         return $application->submitted_on->toDateString();
     }
 
@@ -445,6 +464,7 @@ class ClaimSubmissionService
                 $evidence[$requirement['key']] = $previous->evidence[$requirement['key']];
             }
         }
+
         return $evidence;
     }
 
@@ -498,6 +518,7 @@ class ClaimSubmissionService
             throw new InvalidArgumentException('선택한 문서의 원본 파일이 없습니다.');
         }
         $name = $document->original_file_name ?: ('document-'.$id);
+
         return [
             'display' => [
                 'type' => $type, 'id' => $document->id, 'value' => $type.':'.$document->id,
@@ -529,6 +550,7 @@ class ClaimSubmissionService
                 continue;
             }
         }
+
         return $options;
     }
 
@@ -550,6 +572,7 @@ class ClaimSubmissionService
         foreach ($computed as $key => $amount) {
             $snapshot[$key] = number_format((float) $amount, 2, '.', '');
         }
+
         return $snapshot;
     }
 
@@ -578,8 +601,7 @@ class ClaimSubmissionService
             return;
         }
         $storedAllocation = PayApplicationAllocation::where('pay_application_id', $application->id)
-            ->with('record:id,stage')->get()->contains(fn ($allocation) =>
-                ((float) $allocation->amount > 0 || (float) $allocation->quantity > 0)
+            ->with('record:id,stage')->get()->contains(fn ($allocation) => ((float) $allocation->amount > 0 || (float) $allocation->quantity > 0)
                 && (data_get($allocation->snapshot, 'record.stage') === 'stored' || $allocation->record?->stage === 'stored'));
         if ((float) $application->stored_materials_amount > 0 || $storedAllocation) {
             throw new InvalidArgumentException('계약 제출 조건과 BOQ 반입·보관 기성이 충돌합니다. 보관 자재 청구 허용 근거를 먼저 확인하세요.');
@@ -629,6 +651,7 @@ class ClaimSubmissionService
         if (filled($expected) && ! hash_equals(strtolower($expected), hash('sha256', $bytes))) {
             throw new InvalidArgumentException('등록 원본과 파일 내용이 다릅니다. 새 원본으로 다시 확인하세요.');
         }
+
         return $bytes;
     }
 
@@ -666,7 +689,13 @@ class ClaimSubmissionService
             'line' => data_get($allocation->snapshot, 'line.lineNo'),
             'description' => data_get($allocation->snapshot, 'line.description'),
             'quantity' => (string) $allocation->quantity,
+            'unit' => data_get($allocation->snapshot, 'line.unit'),
             'amount' => (string) $allocation->amount,
+            'workDate' => data_get($allocation->snapshot, 'record.workDate'),
+            'location' => data_get($allocation->snapshot, 'record.location'),
+            'stage' => data_get($allocation->snapshot, 'record.stage'),
+            'calculation' => data_get($allocation->snapshot, 'record.notes'),
+            'evidence' => data_get($allocation->snapshot, 'evidence', []),
         ])->all();
     }
 
@@ -682,7 +711,8 @@ class ClaimSubmissionService
                 throw new InvalidArgumentException('제출본 ZIP을 만들 수 없습니다.');
             }
             if (! $zip->addFromString('manifest.json', json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))
-                || ! $zip->addFromString('claim-summary.html', $this->summary($package))) {
+                || ! $zip->addFromString('claim-summary.html', $this->summary($package))
+                || ! $zip->addFromString('quantity-and-evidence.html', $this->quantityReport($package, $files))) {
                 throw new InvalidArgumentException('제출 요약과 파일 목록을 ZIP에 넣을 수 없습니다.');
             }
             foreach ($files as $file) {
@@ -693,11 +723,38 @@ class ClaimSubmissionService
             if (! $zip->close()) {
                 throw new InvalidArgumentException('제출본 ZIP을 마무리하지 못했습니다.');
             }
+
             return $path;
         } catch (Throwable $e) {
             @unlink($path);
             throw $e;
         }
+    }
+
+    private function quantityReport(array $package, array $files): string
+    {
+        $esc = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $html = '<!doctype html><html lang="ko"><meta charset="utf-8"><title>수량 산출·증빙 목차</title><style>body{font:14px/1.6 sans-serif;padding:30px;color:#172333}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbc7d1;padding:9px;text-align:left}@page{size:A4;margin:16mm}article{margin:25px 0}h2,table{break-inside:avoid}thead{display:table-header-group}li{overflow-wrap:anywhere}.photo{height:440px;display:flex;align-items:center;justify-content:center;break-inside:avoid;list-style:none;margin:12px 0;border:1px solid #ddd}.photo img{max-width:95%;max-height:420px;object-fit:contain}@media print{body{padding:0}a{color:#172333}}pre{white-space:pre-wrap}h2{border-bottom:2px solid #234}</style><h1>수량 산출·증빙 목차</h1><p>'.$esc($package['contract']['title']).' · 제출본 v'.$esc($package['revision']).'</p>';
+        foreach ($package['lines'] as $index => $line) {
+            $no = 'E-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT);
+            $html .= '<article><h2>'.$no.' · BOQ '.$esc($line['line']).' '.$esc($line['description']).'</h2><table><tr><th>작업일</th><th>위치</th><th>단계</th><th>금회 수량</th><th>금액</th></tr><tr><td>'.$esc($line['workDate']).'</td><td>'.$esc($line['location']).'</td><td>'.$esc($line['stage']).'</td><td>'.$esc($line['quantity'].' '.($line['unit'] ?? '')).'</td><td>'.$esc($package['contract']['currency'].' '.number_format((float) $line['amount'], 2)).'</td></tr></table><pre>'.$esc($line['calculation']).'</pre><ul>';
+            foreach ($line['evidence'] as $proof) {
+                $key = ($proof['type'] ?? '').':'.($proof['id'] ?? '');
+                $file = $files[$key] ?? null;
+                $html .= '<li>'.$esc($proof['title'] ?? $key).' · '.$esc($proof['locator'] ?? '');
+                if ($file) {
+                    $html .= ' · <a href="'.$esc($file['name']).'">원본 보기</a>';
+                }
+                $html .= '</li>';
+                if ($file && preg_match('/\.(jpg|jpeg|png|webp)$/i', $file['name'])) {
+                    preg_match('/presentationRotation:(90|180|270)\b/', (string) ($proof['note'] ?? ''), $rotation);
+                    $html .= '<li class="photo"><img style="'.(in_array($rotation[1] ?? '', ['90', '270'], true) ? 'max-width:420px;' : '').'transform:rotate('.($rotation[1] ?? '0').'deg)" src="'.$esc($file['name']).'" alt="'.$esc($proof['title'] ?? $no).'"></li>';
+                }
+            }
+            $html .= '</ul></article>';
+        }
+
+        return $html.'</html>';
     }
 
     private function summary(array $package): string
@@ -727,6 +784,7 @@ class ClaimSubmissionService
             $date = (string) ($proof['date'] ?? '').(($proof['dateBasis'] ?? '') === 'reviewed_work_date' ? ' (작업일 기준 / Work date; document date unknown)' : '');
             $html .= '<tr><td>'.$escape($labels ?: '현장 공통 / Site common').'</td><td>'.$escape($locators).'</td><td>'.$escape($proof['title']).'</td><td>'.$escape($date).'</td><td>'.$escape($proof['file']).'</td></tr>';
         }
+
         return $html.'</table><p>Prepared package. Submission, acceptance and payment are recorded separately. Purchase and delivery evidence does not certify installation or an approved claim. This summary supplements any prescribed contract form.</p></html>';
     }
 
@@ -737,8 +795,10 @@ class ClaimSubmissionService
                 unset($event['responseDocument']['disk'], $event['responseDocument']['path']);
                 $event['responseDownloadUrl'] = '/billing-export/submissions/'.$submission->id.'/responses/'.$index.'/file';
             }
+
             return $event;
         }, $submission->history ?? [], array_keys($submission->history ?? []));
+
         return [
             'id' => $submission->id, 'revision' => $submission->revision, 'status' => $submission->status,
             'profileVersion' => $submission->profile_version, 'preparedAt' => $submission->prepared_at?->toIso8601String(),
@@ -752,6 +812,7 @@ class ClaimSubmissionService
     private function safeName(string $name): string
     {
         $name = preg_replace('/[^\\pL\\pN._ -]+/u', '-', basename(str_replace('\\', '/', $name))) ?: 'document';
+
         return mb_substr($name, 0, 140);
     }
 
@@ -761,6 +822,7 @@ class ClaimSubmissionService
             || ! checkdate((int) substr($value, 5, 2), (int) substr($value, 8, 2), (int) substr($value, 0, 4))) {
             throw new InvalidArgumentException('처리일은 YYYY-MM-DD 형식의 실제 날짜여야 합니다.');
         }
+
         return $value;
     }
 

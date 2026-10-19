@@ -60,6 +60,7 @@ use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
 use App\Services\Drawings\DrawingMarkService;
 use App\Services\Drawings\SectionDrawingService;
+use App\Services\Finance\ClaimEditingService;
 use App\Services\Finance\ClaimEvidenceAutomation;
 use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Services\Finance\ClaimEvidenceService;
@@ -354,10 +355,19 @@ class SmartCompanyData
             'api_getClaimWorklist' => app(ClaimWorklistService::class)->get((array) ($args[0] ?? [])),
             'api_getClaimSubmissionWorkspace' => app(ClaimSubmissionService::class)->workspace((int) ($args[0] ?? 0)),
             'api_saveClaimSubmissionEvidence' => app(ClaimSubmissionService::class)->saveEvidence((array) ($args[0] ?? [])),
-            'api_prepareClaimSubmission' => app(ClaimSubmissionService::class)->prepare((int) ($args[0] ?? 0)),
+            'api_prepareClaimSubmission' => app(ClaimSubmissionService::class)->prepare((int) ($args[0] ?? 0), (bool) ($args[1] ?? false)),
             'api_transitionClaimSubmission' => app(ClaimSubmissionService::class)->transition((array) ($args[0] ?? [])),
             'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
             'api_getClaimEvidence' => app(ClaimEvidenceService::class)->getLedger((int) ($args[0] ?? 0)),
+            'api_getClaimEvidenceSources' => app(ClaimEvidenceService::class)->searchSources((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
+            'api_saveClaimEvidenceRequirements' => app(ClaimEvidenceService::class)->saveRequirements((array) ($args[0] ?? [])),
+            'api_getClaimEditor' => app(ClaimEditingService::class)->workspace((int) ($args[0] ?? 0)),
+            'api_saveClaimEditDraft' => app(ClaimEditingService::class)->save((array) ($args[0] ?? [])),
+            'api_commitClaimEditDraft' => app(ClaimEditingService::class)->commit((array) ($args[0] ?? [])),
+            'api_askClaimDrawing' => app(ClaimEditingService::class)->ask((array) ($args[0] ?? [])),
+            'api_prepareClaimEditor' => app(ClaimEditingService::class)->prepare((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
+            'api_bulkClaimEdit' => app(ClaimEditingService::class)->bulk((array) ($args[0] ?? [])),
+            'api_saveClaimDrawingImage' => app(ClaimEditingService::class)->saveDrawingImage((array) ($args[0] ?? [])),
             'api_getClaimEvidenceInbox' => app(ClaimEvidenceAutomation::class)->workspace((int) ($args[0] ?? 0), (array) ($args[1] ?? [])),
             'api_matchClaimEvidence' => app(ClaimEvidenceAutomation::class)->enqueue((int) ($args[0] ?? 0)),
             'api_reviewClaimEvidence' => app(ClaimEvidenceInboxService::class)->review((array) ($args[0] ?? [])),

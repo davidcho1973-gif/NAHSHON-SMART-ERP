@@ -80,6 +80,16 @@ class JobAccessTest extends TestCase
         $this->assertArrayNotHasKey('system', JobAccess::defaults('president'));
     }
 
+    public function test_claim_editor_endpoints_require_contract_permissions(): void
+    {
+        [$company, $site] = $this->fixtures();
+        $user = $this->profile('office', $company, [$site], ['jobDuties' => ['hr']]);
+        $this->actingAsPurchaseUser($user);
+        foreach (['api_getClaimEditor', 'api_getClaimEvidenceSources', 'api_saveClaimEvidenceRequirements', 'api_saveClaimEditDraft', 'api_commitClaimEditDraft', 'api_askClaimDrawing', 'api_prepareClaimEditor', 'api_bulkClaimEdit', 'api_saveClaimDrawingImage'] as $method) {
+            $this->postJson('/smart-company-api/'.$method, ['args' => []])->assertForbidden();
+        }
+    }
+
     public function test_scoped_site_manager_cannot_call_payroll_finance_hr_or_unknown_api(): void
     {
         [$company, $site] = $this->fixtures();

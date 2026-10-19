@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** 도면 번호 위의 표시 하나 — 점·선·영역·메모. 좌표는 쪽 크기 대비 0~1. 색은 연결된 기록에서 나온다. */
 class DrawingMark extends Model
 {
-    public const SHAPES = ['point', 'line', 'area', 'note'];
+    public const SHAPES = ['point', 'line', 'area', 'note', 'arrow'];
 
     protected $guarded = ['id'];
 
