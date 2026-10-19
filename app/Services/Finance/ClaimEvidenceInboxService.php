@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Models\ClaimEvidenceInboxItem;
 use App\Models\ContractBoqLine;
+use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
 use App\Models\MaterialReceipt;
 use App\Models\MobileExpense;
@@ -11,6 +12,7 @@ use App\Models\PayApplication;
 use App\Models\PayApplicationAllocation;
 use App\Models\ProjectContract;
 use App\Models\WbsPhoto;
+use App\Models\WorkSection;
 use App\Services\Admin\BillingAdminService;
 use App\Services\Ocr\OcrEngine;
 use App\Support\AccessPolicy;
@@ -51,6 +53,26 @@ class ClaimEvidenceInboxService
             if (filled($filters['lineId'] ?? null)) {
                 $ids = $this->validLineIds($contract, [$filters['lineId']]);
                 $query->whereJsonContains('line_ids', $ids[0]);
+            }
+            // A drawing is a view of the same associations, not another evidence ledger.
+            // Derive its lines from this contract's sections; never trust browser line lists.
+            if (filled($filters['sectionId'] ?? null) || filled($filters['sheetNo'] ?? null)) {
+                $sections = WorkSection::where('project_contract_id', $contract->id)->where('site_id', $contract->site_id);
+                if (filled($filters['sectionId'] ?? null)) {
+                    $sections->whereKey((int) $filters['sectionId']);
+                }
+                if (filled($filters['sheetNo'] ?? null)) {
+                    $no = DrawingSheet::normalizeNo((string) $filters['sheetNo']);
+                    $sections->whereHas('sheets', fn ($q) => $q->whereRaw('upper(sheet_no) = ?', [$no ?? '']));
+                }
+                $scopedLines = ContractBoqLine::where('project_contract_id', $contract->id)->where('status', 'accepted')
+                    ->whereIn('work_section_id', $sections->select('id'))->pluck('id')->all();
+                $query->where(function (Builder $scope) use ($scopedLines): void {
+                    $scope->whereRaw('1 = 0');
+                    foreach ($scopedLines as $id) {
+                        $scope->orWhereJsonContains('line_ids', (int) $id);
+                    }
+                });
             }
             foreach (['from' => '>=', 'to' => '<='] as $key => $operator) {
                 if (filled($filters[$key] ?? null)) {

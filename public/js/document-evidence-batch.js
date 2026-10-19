@@ -137,11 +137,13 @@
             loading = true; render();
             try {
                 const data = await request(''); projects = data.projects || []; history = data.batches || [];
-                const prior = workflow.batch?.projectId || $('project').value || config.projectId;
+                const contractProject = projects.find(p => p.contracts.some(c => Number(c.id) === Number(config.contractId)));
+                const prior = workflow.batch?.projectId || $('project').value || contractProject?.id || config.projectId;
                 $('project').innerHTML = '<option value="">현장 · 프로젝트 선택</option>' + projects.map(p=>`<option value="${Number(p.id)}">${esc([p.siteName,p.name].filter(Boolean).join(' · '))}</option>`).join('');
                 if (projects.some(p=>String(p.id)===String(prior))) $('project').value = String(prior);
                 else if (projects.length===1) $('project').value=String(projects[0].id);
                 updateContract();
+                if (!workflow.batch && contractProject && String(contractProject.id) === $('project').value) $('contract').value = String(config.contractId);
                 if (workflow.batch?.contractId) $('contract').value = String(workflow.batch.contractId);
                 $('batches').innerHTML = history.map(b=>`<button type="button" class="evidence-history-row" data-batch="${Number(b.id)}"><span>접수 #${Number(b.id)} · ${esc(projects.find(p=>Number(p.id)===Number(b.projectId))?.name || '프로젝트')}<small>${esc(String(b.createdAt || '').slice(0,16).replace('T',' '))} · ${Number(b.total)}개</small></span><span class="badge">${esc(states[b.status] || b.status)}</span></button>`).join('') || '<p class="doc-sub">지난 접수가 없습니다.</p>';
             } finally {loading=false; render();}
