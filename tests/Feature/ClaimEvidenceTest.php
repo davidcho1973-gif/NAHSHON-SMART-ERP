@@ -109,10 +109,11 @@ class ClaimEvidenceTest extends TestCase
     public function test_record_report_recalculates_excel_and_rejects_changed_evidence(): void
     {
         $line = $this->line();
-        app(ClaimEditingService::class)->save(['lineId' => $line->id, 'content' => [
+        $saved = app(ClaimEditingService::class)->save(['lineId' => $line->id, 'content' => [
             'calculations' => [['label' => 'Wall', 'length' => 2, 'height' => 3, 'count' => 1, 'deduction' => 1]],
-            'evidence' => [['type' => 'document', 'id' => $this->document->id]],
+            'evidence' => [['type' => 'document', 'id' => $this->document->id, 'locator' => 'p1']],
         ]]);
+        $this->assertTrue($saved['success'], $saved['error'] ?? '');
         $reports = app(ClaimRecordReport::class);
         $file = $reports->file($reports->snapshot($line->id, 1), 'xlsx');
         $path = tempnam(sys_get_temp_dir(), 'report-formulas');
