@@ -10,6 +10,7 @@ use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Ocr\OcrEngine;
 use App\Services\Push\ChatPushNotifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -55,7 +56,7 @@ class DrawingStudioTest extends TestCase
 
     public function test_save_reload_history_and_conflict_do_not_lose_other_edits(): void
     {
-        $this->getJson($this->url)->assertOk()->assertJsonPath('revision', 0);
+        $this->getJson($this->url)->assertOk()->assertJsonPath('revision', 0)->assertJsonPath('document.unit', 'ft');
         $this->putJson($this->url, ['revision' => 0, 'document' => $this->drawing()])->assertOk()->assertJsonPath('revision', 1);
         $this->getJson($this->url)->assertOk()->assertJsonPath('document.entities.0.type', 'dimension')->assertJsonPath('document.entities.0.text', '');
         $this->putJson($this->url, ['revision' => 0, 'document' => $this->drawing()])->assertStatus(409);
@@ -91,6 +92,45 @@ class DrawingStudioTest extends TestCase
         $d['layers'] = 'invalid';
         $this->putJson($this->url, ['revision' => 0, 'document' => $d])->assertUnprocessable();
         $this->assertDatabaseCount('drawing_studios', 0);
+    }
+
+    public function test_dimension_ocr_reads_the_selected_crop_without_applying_scale(): void
+    {
+        $image = UploadedFile::fake()->image('dimension.png', 180, 40);
+        $bytes = $image->get();
+        $this->mock(OcrEngine::class)->shouldReceive('analyze')->once()->andReturnUsing(function ($images, $prompt, $schema) use ($bytes) {
+            $this->assertSame($bytes, base64_decode($images[0]['data']));
+            $this->assertSame('image/png', $images[0]['mime_type']);
+            $this->assertStringContainsString('Do not estimate distances', $prompt);
+
+            return ['data' => ['dimensions' => ['12\'-6 1/2"', '8\'-0"', null, str_repeat('x', 101)]], 'model' => 'fixture'];
+        });
+        $this->post($this->url.'/read-dimension', ['image' => $image], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('dimensions.0', '12\'-6 1/2"')->assertJsonCount(2, 'dimensions');
+        $this->assertNull($this->sheet->fresh()->feet_per_point);
+        $this->assertDatabaseCount('drawing_studios', 0);
+    }
+
+    public function test_dimension_reading_checks_scope_edit_permission_and_image_before_using_ocr(): void
+    {
+        $this->mock(OcrEngine::class)->shouldNotReceive('analyze');
+        $this->post($this->url.'/read-dimension', ['image' => UploadedFile::fake()->create('text.png', 1, 'text/plain')], ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->post($this->url.'/read-dimension', ['image' => UploadedFile::fake()->image('huge.png', 3100, 20)], ['Accept' => 'application/json'])->assertUnprocessable();
+        $viewer = User::factory()->create(['account_status' => 'active', 'access_role' => 'payroll', 'access_scope' => 'all_sites']);
+        $this->actingAs($viewer)->postJson($this->url.'/read-dimension', [])->assertForbidden();
+        $otherSite = Site::create(['company_id' => $this->sheet->site->company_id, 'code' => 'CROP-OTHER', 'name' => 'Other', 'status' => 'active']);
+        $other = User::factory()->create(['account_status' => 'active', 'access_role' => 'site_manager', 'access_scope' => 'site', 'allowed_site_id' => $otherSite->id]);
+        $this->actingAs($other)->postJson($this->url.'/read-dimension', [])->assertNotFound();
+    }
+
+    public function test_unreadable_dimension_and_engine_failure_never_invent_a_scale(): void
+    {
+        $this->mock(OcrEngine::class)->shouldReceive('analyze')->once()->andReturn(['data' => ['dimensions' => []], 'model' => 'fixture']);
+        $this->post($this->url.'/read-dimension', ['image' => UploadedFile::fake()->image('blank.png', 50, 20)], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonCount(0, 'dimensions');
+        $this->mock(OcrEngine::class)->shouldReceive('analyze')->once()->andThrow(new \RuntimeException('OCR fixture unavailable'));
+        $this->post($this->url.'/read-dimension', ['image' => UploadedFile::fake()->image('blank.png', 50, 20)], ['Accept' => 'application/json'])->assertStatus(502);
+        $this->assertNull($this->sheet->fresh()->feet_per_point);
     }
 
     public function test_mail_needs_real_configuration_and_duplicate_dispatch_is_not_sent_again(): void
@@ -157,5 +197,16 @@ class DrawingStudioTest extends TestCase
         $this->getJson($this->url)->assertOk()->assertJsonPath('canManage', false);
         $this->putJson($this->url, ['revision' => 0, 'document' => $this->drawing()])->assertForbidden();
         $this->postJson($this->url.'/share', [])->assertForbidden();
+        $this->postJson($this->url.'/read-dimension', [])->assertForbidden();
+        $this->postJson('/smart-company-api/api_setSheetScale', ['args' => [$this->sheet->site_id, 'A1', .05, '12.5 ft']])->assertForbidden();
+    }
+
+    public function test_progress_edit_permission_is_sufficient_to_calibrate_without_system_edit(): void
+    {
+        $this->admin->forceFill(['job_role' => 'office', 'access_scope' => 'company', 'allowed_company_id' => $this->sheet->site->company_id,
+            'job_permissions' => ['progress' => ['view', 'edit'], 'documents' => ['view', 'export']]])->save();
+        $this->actingAsPersonalAppUser($this->admin);
+        $this->postJson('/smart-company-api/api_setSheetScale', ['args' => [$this->sheet->site_id, 'A1', .05, '12.5 ft']])
+            ->assertOk()->assertJsonPath('success', true)->assertJsonPath('feetPerPoint', .05);
     }
 }

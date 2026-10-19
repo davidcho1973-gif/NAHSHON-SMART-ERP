@@ -171,21 +171,47 @@
 
   /** 12.5 → 12'-6" */
   function fmtFeet(ft) {
-    var total = Math.round(ft * 12);
-    return Math.floor(total / 12) + "'-" + (total % 12) + '"';
+    var total = Math.round(ft * 192), rest = total % 192, numerator = rest % 16, denominator = 16;
+    while (numerator && numerator % 2 === 0) { numerator /= 2; denominator /= 2; }
+    return Math.floor(total / 192) + "'-" + Math.floor(rest / 16) + (numerator ? ' ' + numerator + '/' + denominator : '') + '"';
   }
 
-  /** 사람이 적은 길이 → 피트. 12'-6" · 12' 6 · 12.5 · 3.8m */
+  function lengthText(text) {
+    var fractions = {'¼':'1/4','½':'1/2','¾':'3/4','⅛':'1/8','⅜':'3/8','⅝':'5/8','⅞':'7/8'};
+    return String(text || '').trim().toLowerCase().replace(/[‘’′]/g, "'").replace(/[“”″]/g, '"')
+      .replace(/[–—−]/g, '-').replace(/[¼½¾⅛⅜⅝⅞]/g, function (c) { return ' ' + fractions[c]; })
+      .replace(/\b(?:feet|foot|ft)\b\.?/g, "'").replace(/\b(?:inches|inch|in)\b\.?/g, '"')
+      .replace(/(\d)-(\d+\s*\/\s*\d+)(?=\s*")/g, '$1 $2').replace(/\s+/g, ' ');
+  }
+  /** Printed dimensions and typed lengths share one parser. Bare numbers are feet. */
   function parseLength(text) {
-    var t = String(text || '').trim().toLowerCase().replace(/[’′]/g, "'").replace(/[”″]/g, '"');
+    var t = lengthText(text);
     var m = t.match(/^(\d+(?:\.\d+)?)\s*m$/);
     if (m) return Number(m[1]) / 0.3048;
-    m = t.match(/^(\d+(?:\.\d+)?)\s*'\s*-?\s*(\d+(?:\.\d+)?)?\s*"?$/);
-    if (m) return Number(m[1]) + (m[2] ? Number(m[2]) / 12 : 0);
-    m = t.match(/^(\d+(?:\.\d+)?)\s*"$/);
-    if (m) return Number(m[1]) / 12;
+    var amount = '(\\d+\\s+\\d+\\s*\\/\\s*\\d+|\\d+\\s*\\/\\s*\\d+|\\d+(?:\\.\\d+)?)';
+    m = t.match(new RegExp('^(\\d+(?:\\.\\d+)?)\\s*\'\\s*-?\\s*(?:' + amount + '\\s*"?)?$'));
+    if (m) { var inch = m[2] ? inches(m[2].replace(/\s*\/\s*/g, '/')) : 0; return Number.isFinite(inch) && inch < 12 ? Number(m[1]) + inch / 12 : null; }
+    m = t.match(new RegExp('^' + amount + '\\s*"$'));
+    if (m) { var value = inches(m[1].replace(/\s*\/\s*/g, '/')) / 12; return Number.isFinite(value) ? value : null; }
     m = t.match(/^(\d+(?:\.\d+)?)$/);
     return m ? Number(m[1]) : null;
+  }
+
+  function dimensionCandidates(labels) {
+    var out = [], add = function (label) {
+      var feet = parseLength(label);
+      if (!(feet > 0) || out.some(function (x) { return Math.abs(x.feet - feet) < 1e-8; })) return;
+      out.push({label: label.trim(), feet: feet});
+    };
+    (labels || []).forEach(function (label) {
+      if (typeof label !== 'string' || label.indexOf('=') !== -1) return;
+      var t = lengthText(label);
+      if (parseLength(t) !== null) { add(t); return; }
+      var amount = '(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:\\.\\d+)?)';
+      var re = new RegExp('(?:\\d+(?:\\.\\d+)?\\s*\'(?:\\s*-?\\s*' + amount + '\\s*")?|' + amount + '\\s*")', 'g'), match;
+      while ((match = re.exec(t))) add(match[0]);
+    });
+    return out.slice(0, 12);
   }
 
   /** 거의 가로·세로면 가로·세로로 — 벽은 대개 반듯하다. 좌표는 화면 비율 맞춘 픽셀. */
@@ -256,6 +282,8 @@
     '.dm-pop img{width:84px;height:64px;object-fit:cover;border-radius:8px;border:1px solid rgba(148,163,184,.3)}' +
     '.dm-form{position:absolute;z-index:4;left:50%;top:50%;transform:translate(-50%,-50%);width:380px;max-width:calc(100% - 24px);background:#0f172a;border:1px solid rgba(148,163,184,.25);border-radius:16px;padding:16px;box-shadow:0 24px 70px rgba(0,0,0,.6)}' +
     '.dm-form select,.dm-form textarea,.dm-form input{width:100%;box-sizing:border-box;margin-top:5px;padding:9px 10px;border-radius:10px;border:1px solid rgba(148,163,184,.3);background:#1e293b;color:#f1f5f9;font-size:13px;font-family:inherit}' +
+    '.dm-calibration-tip{position:absolute;z-index:5;top:12px;left:50%;transform:translateX(-50%);max-width:calc(100% - 150px);display:flex;align-items:center;gap:12px;padding:10px 14px;background:#0f172a;border:1px solid #38bdf8;border-radius:12px;color:#e0f2fe;font-size:13px;box-shadow:0 6px 24px #0005}' +
+    '.dm-dimension-preview{display:block;max-width:100%;max-height:180px;object-fit:contain;background:white;margin:12px auto;border-radius:6px}.dm-dimension-options{display:grid;gap:8px;max-height:220px;overflow:auto}.dm-form small{display:block;color:#94a3b8;line-height:1.6;margin-top:8px}' +
     '.dm-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#94a3b8;text-align:center;padding:30px}' +
     '.dm-spin{width:34px;height:34px;border-radius:50%;border:3px solid rgba(148,163,184,.25);border-top-color:#38bdf8;animation:dmSpin .8s linear infinite}' +
     '@keyframes dmSpin{to{transform:rotate(360deg)}}' +
@@ -282,6 +310,7 @@
       W: 0, H: 0, k: 1, x: 0, y: 0, pointers: {}, gesture: null, suggestAt: null, labels: true,
       colorMode: 'status', picked: JSON.parse(JSON.stringify(opts.initialShapes || [])), pickedUndo: [], pickedRedo: [],
       wPt: 0, hPt: 0, fpp: null, scaleLabel: null, scales: [], period: 'all', pendingLine: null, calibrating: false,
+      calibrationMode: null, calibrationReference: null, calibrationHover: null, calibrationRun: 0, baseViewport: null,
     };
     var wrap = document.createElement('div');
     wrap.className = 'dm-wrap';
@@ -326,7 +355,9 @@
       return true;
     }
     function onKey(e) {
-      if (opts.host && (!wrap.contains(e.target) || e.target.matches('input,textarea,select,[contenteditable]'))) return;
+      if (opts.host && !wrap.contains(e.target)) return;
+      if (st.calibrating && e.key === 'Escape') { e.preventDefault(); cancelCalibration(); return; }
+      if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
       if (opts.host && e.key === 'Escape') return;
       if (e.key === 'Escape') { if (st.draft.length) { st.draft = []; draw(); } else if (st.sel) { select(null); } else close(); }
       if (e.key === 'Enter' && st.draft.length) finishDraft();
@@ -388,6 +419,7 @@
       }).then(function (pdf) { return pdf.getPage(s.pageNo); }).then(function (page) {
         if (disposed) throw new Error('closed');
         var base = page.getViewport({ scale: 1 });
+        st.baseViewport = base;
         st.wPt = base.width; st.hPt = base.height;
         st.text = page.getTextContent().catch(function () { return { items: [] }; });
         var longSide = global.innerWidth < 820 ? 3000 : 4200;
@@ -492,12 +524,13 @@
 
     // ── 손 동작: 끌면 이동, 두 손가락이면 확대, 제자리 누름이면 점 찍기 ──
     stage.addEventListener('wheel', function (e) {
+      if (e.target.closest && e.target.closest('.dm-form,.dm-calibration-tip')) return;
       e.preventDefault();
       var r = stage.getBoundingClientRect();
       zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
     }, { passive: false });
     stage.addEventListener('pointerdown', function (e) {
-      if (e.target.closest && (e.target.closest('.dm-tools') || e.target.closest('.ds-toolbar') || e.target.closest('.dm-zoom') || e.target.closest('.dm-pop') || e.target.closest('.dm-form'))) return;
+      if (e.target.closest && e.target.closest('.dm-tools,.ds-toolbar,.dm-zoom,.dm-pop,.dm-form,.dm-calibration-tip')) return;
       stage.setPointerCapture(e.pointerId);
       st.pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
       var ids = Object.keys(st.pointers);
@@ -509,6 +542,9 @@
       }
     });
     stage.addEventListener('pointermove', function (e) {
+      if (st.calibrating && st.calibrationMode === 'read' && st.draft.length === 1 && !st.pointers[e.pointerId]) {
+        st.calibrationHover = toWorld(e.clientX, e.clientY); draw();
+      }
       if (!st.pointers[e.pointerId]) return;
       st.pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
       var g = st.gesture;
@@ -554,6 +590,12 @@
       }
       var p = toWorld(e.clientX, e.clientY);
       if (p[0] < 0 || p[0] > 1 || p[1] < 0 || p[1] > 1) return;
+      if (st.calibrating) {
+        if (st.calibrationMode === 'busy' || st.calibrationMode === 'review') return;
+        st.draft.push([p[0], p[1]]); st.calibrationHover = null; draw(); renderTools();
+        if (st.draft.length === 2) finishDraft();
+        return;
+      }
       var last = st.draft[st.draft.length - 1];
       if (st.tool === 'area' && st.draft.length >= 3) {
         // 첫 점 가까이를 누르면 영역을 닫는다.
@@ -584,25 +626,28 @@
     }
     function saveScale(fpp, label, quiet) {
       return call('api_setSheetScale', [opts.siteId, st.data.sheetNo, fpp, label]).then(function (r) {
-        if (r.success === false) { toast(r.error || '축척을 적지 못했습니다.', 'error'); return; }
+        if (r.success === false) { toast(r.error || '축척을 적지 못했습니다.', 'error'); return false; }
         st.fpp = r.feetPerPoint; st.scaleLabel = r.scaleLabel;
         renderScale(); renderTools(); draw();
-        if (!quiet) toast('축척을 적었습니다. 이제 그은 선과 영역이 수량이 됩니다.');
+        if (!quiet) toast('축척을 저장했습니다. 이제 실제 거리와 면적을 측정할 수 있습니다.');
         else showHint('도면에서 축척 ' + label.replace('도면에서 읽음: ', '') + ' 을 읽었습니다. 선을 그으면 길이가 나옵니다.');
+        return true;
       });
     }
     function scalePanel() {
       if (!st.data || !st.data.sheet) return;
+      if (st.calibrating) cancelCalibration();
       var old = stage.querySelector('.dm-form'); if (old) old.remove();
       var form = document.createElement('div');
       form.className = 'dm-form';
       var can = st.data.canManage;
       form.innerHTML = '<div style="font-weight:800;font-size:15px">도면 축척</div>' +
-        '<div style="font-size:12px;color:#94a3b8;margin:4px 0 10px">축척이 있으면 선은 길이, 영역은 면적이 되어 기록 수량에 들어갑니다.</div>' +
+        '<div style="font-size:12px;color:#94a3b8;margin:4px 0 10px">도면에 적힌 실제 치수를 기준으로 거리와 면적을 측정합니다. 기본 단위는 피트(ft)입니다.</div>' +
         '<div style="font-size:13px;margin-bottom:10px">지금: <b>' + esc(st.fpp ? st.scaleLabel || '있음' : '없음') + '</b></div>' +
         (can && st.scales.length ? '<div style="font-size:12px;color:#94a3b8">도면에서 읽은 축척</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px">' +
           st.scales.map(function (x, i) { return '<button class="dm-btn" data-pick-scale="' + i + '">' + esc(x.label) + '</button>'; }).join('') + '</div>' : '') +
-        (can ? '<button class="dm-btn primary" data-calibrate style="width:100%">📏 아는 치수로 맞추기 — 두 점을 찍고 실제 길이를 적기</button>' : '<div style="font-size:12px;color:#94a3b8">축척은 관리자가 맞춥니다.</div>') +
+        (can ? '<button class="dm-btn primary" data-read-dimension style="width:100%">📐 도면에 적힌 치수로 맞추기 (ft)</button><small>치수 숫자 선택 → 읽은 값 확인 → 치수선 양 끝 지정. 스캔 도면도 선택한 부분을 읽습니다.</small>' +
+          '<button class="dm-btn" data-calibrate style="width:100%;margin-top:10px">직접 입력해서 맞추기 (ft)</button>' : '<div style="font-size:12px;color:#94a3b8">축척은 관리자가 맞춥니다.</div>') +
         '<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="dm-btn" data-cancel>닫기</button></div>';
       stage.appendChild(form);
       form.querySelector('[data-cancel]').onclick = function () { form.remove(); };
@@ -610,33 +655,105 @@
         b.onclick = function () { var x = st.scales[Number(b.getAttribute('data-pick-scale'))]; form.remove(); saveScale(x.feetPerPoint, '도면에서 읽음: ' + x.label); };
       });
       var cal = form.querySelector('[data-calibrate]');
-      if (cal) cal.onclick = function () {
-        form.remove();
-        if (studio) studio.pauseForCalibration();
-        st.calibrating = true; st.tool = 'line'; st.draft = [];
-        renderTools(); draw();
-        showHint('치수를 아는 두 곳(예: 치수선 양 끝)을 차례로 누르세요.');
-      };
+      if (cal) cal.onclick = function () { form.remove(); beginCalibration(null); };
+      var read = form.querySelector('[data-read-dimension]');
+      if (read) read.onclick = function () { form.remove(); beginDimensionRead(); };
+    }
+    function calibrationTip(text) {
+      var old = stage.querySelector('.dm-calibration-tip'); if (old) old.remove();
+      var tip = document.createElement('div'); tip.className = 'dm-calibration-tip';
+      tip.innerHTML = '<span>' + esc(text) + '</span><button class="dm-btn" data-cancel-calibration>취소</button>';
+      tip.querySelector('button').onclick = cancelCalibration; stage.appendChild(tip);
+    }
+    function cancelCalibration() {
+      st.calibrationRun++; st.calibrating = false; st.calibrationMode = null; st.calibrationReference = null; st.calibrationHover = null;
+      stage.querySelectorAll('[data-calibration-form],.dm-calibration-tip').forEach(function (el) { el.remove(); });
+      st.draft = []; st.tool = 'hand'; renderTools(); draw();
+    }
+    function beginDimensionRead() {
+      cancelCalibration(); if (studio) studio.pauseForCalibration();
+      st.calibrating = true; st.calibrationMode = 'read'; st.tool = 'line';
+      calibrationTip('1/3 · 치수 숫자만 감싸는 사각형의 두 모서리를 찍으세요. 예: 12′-6″'); renderTools(); draw();
+    }
+    function beginCalibration(reference) {
+      cancelCalibration(); if (studio) studio.pauseForCalibration();
+      st.calibrating = true; st.calibrationMode = 'ends'; st.calibrationReference = reference; st.tool = 'line';
+      calibrationTip((reference ? '3/3 · ' + reference.label + ' 치수선의 ' : '') + '양 끝을 차례로 찍으세요. 숫자 글자의 양 끝이 아닌 치수선 양 끝입니다.');
+      renderTools(); draw();
+    }
+    function calibrationForm() {
+      var old = stage.querySelector('[data-calibration-form]'); if (old) old.remove();
+      var form = document.createElement('div'); form.className = 'dm-form'; form.setAttribute('data-calibration-form', ''); stage.appendChild(form); return form;
+    }
+    async function readPrintedDimension() {
+      var a = st.draft[0], b = st.draft[1], x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]), w = Math.abs(a[0]-b[0]), h = Math.abs(a[1]-b[1]);
+      if (w*st.W < 8 || h*st.H < 8) { st.draft = []; draw(); showHint('숫자 전체가 들어가도록 폭과 높이가 있는 영역을 선택하세요.'); return; }
+      st.calibrationMode = 'busy'; var run = ++st.calibrationRun;
+      var crop = document.createElement('canvas'), ratio = Math.min(4, 1800 / Math.max(w*st.W, h*st.H));
+      crop.width = Math.max(8, Math.round(w*st.W*ratio)); crop.height = Math.max(8, Math.round(h*st.H*ratio));
+      crop.getContext('2d').drawImage(canvas, x*st.W, y*st.H, w*st.W, h*st.H, 0, 0, crop.width, crop.height);
+      var preview = crop.toDataURL('image/png'), form = calibrationForm();
+      form.innerHTML = '<b>도면의 치수 읽는 중…</b><img class="dm-dimension-preview" src="' + preview + '" alt="선택한 치수 글자"><small>피트·인치와 분수를 읽습니다. 아직 축척은 바뀌지 않습니다.</small><button class="dm-btn" data-cancel>취소</button>';
+      form.querySelector('[data-cancel]').onclick = cancelCalibration;
+      var candidates = [], source = 'pdf', error = '';
+      try {
+        var tc = await st.text, fragments = [];
+        (tc.items || []).forEach(function (it) {
+          if (!it.transform || !st.baseViewport.convertToViewportPoint) return;
+          var t = it.transform, angle = Math.atan2(t[1], t[0]), height = Math.abs(it.height || Math.hypot(t[2], t[3]));
+          var mid = st.baseViewport.convertToViewportPoint(t[4]+Math.cos(angle)*(it.width||0)/2-Math.sin(angle)*height*.35, t[5]+Math.sin(angle)*(it.width||0)/2+Math.cos(angle)*height*.35);
+          var nx = mid[0]/st.wPt, ny = mid[1]/st.hPt;
+          if (nx >= x && nx <= x+w && ny >= y && ny <= y+h) fragments.push(it.str);
+        });
+        candidates = dimensionCandidates([fragments.join(' ')]);
+        if (run !== st.calibrationRun || !wrap.isConnected) return;
+        if (!candidates.length) {
+          source = 'ocr'; var body = new FormData(), blob = await new Promise(function (resolve) { crop.toBlob(resolve, 'image/png'); });
+          if (!blob) throw new Error('선택한 치수 이미지를 만들지 못했습니다.');
+          if (run !== st.calibrationRun || !wrap.isConnected) return;
+          body.append('image', blob, 'dimension.png');
+          var response = await fetch('/admin-api/drawing-sheets/' + st.data.sheet.id + '/studio/read-dimension', {method:'POST', credentials:'same-origin',
+            headers:{Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''}, body:body});
+          var result = await response.json();
+          if (!response.ok) throw new Error(result.message || '치수를 읽지 못했습니다.');
+          candidates = dimensionCandidates(result.dimensions);
+        }
+      } catch (e) { error = e.message || '치수를 읽지 못했습니다.'; }
+      if (run !== st.calibrationRun || !wrap.isConnected) return;
+      st.calibrationMode = 'review';
+      calibrationTip('2/3 · 선택한 그림과 읽힌 치수를 비교한 뒤 값을 선택하세요.');
+      form.innerHTML = '<b>2/3 · 도면에서 읽은 치수 확인</b><img class="dm-dimension-preview" src="' + preview + '" alt="선택한 치수 글자">' +
+        '<small>' + (source === 'ocr' ? '스캔 치수 판독' : 'PDF 글자에서 읽음') + ' · 그림의 숫자와 같은 값을 선택하세요. 단위 없는 숫자는 ft입니다.</small>' +
+        '<div class="dm-dimension-options">' + candidates.map(function (c, i) { return '<button class="dm-btn primary" data-dimension-choice="' + i + '">' + esc(c.label) + ' · ' + Number(c.feet.toFixed(6)) + ' ft → 양 끝 지정</button>'; }).join('') + '</div>' +
+        (!candidates.length ? '<p>' + esc(error || '읽을 수 있는 치수가 없습니다. 숫자만 더 크게 선택해 주세요.') + '</p>' : '') +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="dm-btn" data-retry>다시 선택</button><button class="dm-btn" data-manual>직접 입력 (ft)</button><button class="dm-btn" data-cancel>취소</button></div>';
+      form.querySelectorAll('[data-dimension-choice]').forEach(function (button) { button.onclick = function () { beginCalibration(candidates[Number(button.dataset.dimensionChoice)]); }; });
+      form.querySelector('[data-retry]').onclick = beginDimensionRead;
+      form.querySelector('[data-manual]').onclick = function () { beginCalibration(null); };
+      form.querySelector('[data-cancel]').onclick = cancelCalibration;
     }
     function finishCalibration() {
+      if (st.calibrationMode === 'read') { readPrintedDimension(); return; }
+      if (st.calibrationMode !== 'ends') return;
+      st.calibrationMode = 'review';
       var a = st.draft[0], b = st.draft[1];
       var pts = Math.hypot((b[0] - a[0]) * st.wPt, (b[1] - a[1]) * st.hPt);
-      var form = document.createElement('div');
-      form.className = 'dm-form';
-      form.innerHTML = '<div style="font-weight:800;font-size:15px">실제 길이</div>' +
-        '<label style="display:block;font-size:12px;color:#94a3b8;margin-top:8px">두 점 사이의 실제 길이<input data-len placeholder="예) 12\'-6&quot; · 12.5 · 3.8m"></label>' +
+      var form = calibrationForm(), reference = st.calibrationReference;
+      form.innerHTML = '<div style="font-weight:800;font-size:15px">' + (reference ? '도면 치수로 축척 적용' : '실제 길이 (ft)') + '</div>' +
+        '<label style="display:block;font-size:12px;color:#94a3b8;margin-top:8px">두 점 사이의 실제 길이<input data-len value="' + esc(reference ? reference.label : '') + '" placeholder="예) 12.5 또는 12\'-6&quot;"></label>' +
+        '<small>숫자만 입력하면 피트(ft)입니다. 12\'-6&quot; = 12.5 ft. 읽은 값이 다르면 여기서 고칠 수 있습니다.</small>' +
         '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="dm-btn" data-cancel>취소</button><button class="dm-btn primary" data-save>맞추기</button></div>';
-      stage.appendChild(form);
-      var done = function () { form.remove(); st.calibrating = false; st.draft = []; st.tool = 'hand'; renderTools(); draw(); };
-      form.querySelector('[data-cancel]').onclick = done;
+      form.querySelector('[data-cancel]').onclick = cancelCalibration;
       form.querySelector('[data-save]').onclick = function () {
         var ft = parseLength(form.querySelector('[data-len]').value);
         if (!ft || !(pts > 0)) { toast('길이를 12\'-6" 처럼 적으세요.', 'error'); return; }
-        var label = fmtFeet(ft) + ' 치수로 맞춤';
-        done();
-        saveScale(ft / pts, label);
+        var label = (reference ? '도면 치수 ' + form.querySelector('[data-len]').value.trim() : fmtFeet(ft)) + ' 기준';
+        form.querySelector('[data-save]').disabled = true;
+        saveScale(ft / pts, label).then(function (ok) { if (!form.isConnected) return; if (ok) { cancelCalibration(); if (studio) { studio.useFeet(); studio.activate('edit'); } } else form.querySelector('[data-save]').disabled = false; })
+          .catch(function (e) { if (form.isConnected) form.querySelector('[data-save]').disabled = false; toast(e.message || '축척 저장에 실패했습니다.', 'error'); });
       };
       form.querySelector('[data-len]').focus();
+      form.querySelector('[data-len]').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); form.querySelector('[data-save]').click(); } };
     }
 
     // ── 기간 ──
@@ -960,7 +1077,10 @@
       if (st.draft.length && !exporting) {
         var dp = st.draft.map(function (p) { return [p[0] * W, p[1] * H]; });
         var ds = dp.map(function (p) { return p[0] + ',' + p[1]; }).join(' ');
-        out.push(st.tool === 'area' && dp.length > 2
+        if (st.calibrating && ['read','busy','review'].includes(st.calibrationMode) && !st.calibrationReference && (dp.length === 2 || st.calibrationHover)) {
+          var rb = dp[1] || [st.calibrationHover[0]*W, st.calibrationHover[1]*H];
+          out.push('<rect x="' + Math.min(dp[0][0],rb[0]) + '" y="' + Math.min(dp[0][1],rb[1]) + '" width="' + Math.abs(rb[0]-dp[0][0]) + '" height="' + Math.abs(rb[1]-dp[0][1]) + '" fill="#38bdf8" fill-opacity=".12" stroke="#0ea5e9" stroke-width="' + px(2) + '"/>');
+        } else out.push(st.tool === 'area' && dp.length > 2
           ? '<polygon points="' + ds + '" fill="#0ea5e9" fill-opacity=".18" stroke="#0ea5e9" stroke-width="' + px(2.5) + '" stroke-dasharray="' + px(7) + ' ' + px(5) + '"/>'
           : '<polyline points="' + ds + '" fill="none" stroke="#0ea5e9" stroke-width="' + px(4) + '" stroke-linecap="round" stroke-dasharray="' + px(7) + ' ' + px(5) + '"/>');
         dp.forEach(function (p) { out.push('<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + px(5) + '" fill="#fff" stroke="#0ea5e9" stroke-width="' + px(2.5) + '"/>'); });
@@ -1194,6 +1314,7 @@
     _qtyFor: qtyFor,
     _fmtFeet: fmtFeet,
     _parseLength: parseLength,
+    _dimensionCandidates: dimensionCandidates,
     _snapPoint: snapPoint,
   };
 })(window);

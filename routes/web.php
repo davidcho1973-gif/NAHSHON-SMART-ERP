@@ -74,6 +74,7 @@ Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController
 use App\Http\Controllers\AssistantWorkspaceController;
 use App\Http\Controllers\ClaimEvidenceFileController;
 use App\Http\Controllers\ClaimRecordReportController;
+
 use App\Http\Controllers\DrawingStudioController;
 use App\Http\Controllers\JobApprovalController;
 use App\Http\Controllers\JobWorkspaceController;
@@ -328,6 +329,7 @@ Route::middleware('auth')->group(function (): void {
     Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(DrawingStudioController::class)->group(function (): void {
         Route::get('/', 'show');
         Route::put('/', 'save');
+        Route::post('/read-dimension', 'readDimension')->middleware('throttle:6,1');
         Route::get('/history', 'history');
         Route::get('/share-options', 'options');
         Route::get('/messages', 'messages');

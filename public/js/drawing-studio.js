@@ -65,7 +65,7 @@
       panel.innerHTML=`<div class="ds-row"><h3 style="flex:1">도면 스튜디오</h3><button class="dm-btn" data-exit title="편집 패널 접기">✕</button></div>
         <div class="ds-row"><button class="dm-btn primary" data-save ${!dirty||saving||!canManage||conflict?'disabled':''}>${saving?'저장 중…':'저장'}</button><button class="dm-btn" data-undo title="실행 취소 (Ctrl+Z)" ${!undo.length?'disabled':''}>↶</button><button class="dm-btn" data-redo title="다시 실행 (Ctrl+Shift+Z)" ${!redo.length?'disabled':''}>↷</button><button class="dm-btn" data-share>공유 ↗</button></div>
         <div class="ds-status ${conflict?'error':''}" data-status>${conflict?'저장 충돌: 작업 JSON을 보관하고 다시 여세요.':dirty?'저장하지 않은 변경 있음':`저장됨 · 버전 ${revision}`}</div>
-        <div class="ds-grid"><label>측정 단위<select data-unit>${['mm','m','ft','ft-in'].map(u=>`<option ${doc.unit===u?'selected':''}>${u}</option>`).join('')}</select></label><label>소수 자릿수<select data-precision>${[0,1,2,3,4].map(n=>`<option ${doc.precision===n?'selected':''}>${n}</option>`).join('')}</select></label></div>
+        <div class="ds-grid"><label>측정 단위<select data-unit>${['ft','ft-in','m','mm'].map(u=>`<option ${doc.unit===u?'selected':''}>${u}</option>`).join('')}</select></label><label>소수 자릿수<select data-precision>${[0,1,2,3,4].map(n=>`<option ${doc.precision===n?'selected':''}>${n}</option>`).join('')}</select></label></div>
         <div class="ds-row"><button class="dm-btn ${snap?'on':''}" data-snap>스냅</button><button class="dm-btn ${ortho?'on':''}" data-ortho>직교</button><button class="dm-btn ${grid?'on':''}" data-grid>격자</button></div>
         <div class="ds-muted">스냅은 작도한 도형의 끝점·중점·선 위에 맞춥니다.</div>
         <h4>${picked.length?picked.length+'개 선택':'새 도형 스타일'}</h4>
@@ -110,7 +110,7 @@
       try{const r=await api(base,'PUT',{revision,document:snapshot});revision=r.revision;dirty=JSON.stringify(doc)!==token;saving=false;if(mode==='edit')renderPanel();if(mode==='edit')status(dirty?'새 변경이 남아 있습니다.':'저장됨 · 버전 '+revision);}
       catch(e){saving=false;conflict=e.status===409;if(mode==='edit'){renderPanel();status(e.message,true);}} }
     function point(ev){const p=host.toWorld(ev.clientX,ev.clientY),view=v();p[0]=Math.max(0,Math.min(1,p[0]));p[1]=Math.max(0,Math.min(1,p[1]));snapLabel='';
-      let q=p;const prev=draft.at(-1);if(prev&&(ortho||ev.shiftKey))q=C.constrain(prev,q,view.W,view.H,ortho?Math.PI/2:Math.PI/12);
+      let q=C.drawingPoint(tool,draft.at(-1),p,view.W,view.H,ortho,ev.shiftKey);
       if(snap&&!ev.altKey&&!['pen','highlight'].includes(tool)){const hit=C.snap(q,shown().filter(e=>!selected.includes(e.id)),view.W,view.H,view.k);if(hit){q=hit.point;snapLabel=hit.label;}}
       return q.map(n=>Math.max(0,Math.min(1,n)));}
     function intercept(ev){return active&&mode==='edit'&&tool!=='hand'&&!ev.target.closest('.ds-toolbar,.dm-zoom,.dm-form,.dm-pop,.dm-tools');}
@@ -140,6 +140,7 @@
       render();
     }
     function finish(){const min=tool==='text'?1:['polygon','angle'].includes(tool)?3:2;if(draft.length<min)return;const l=layers().find(l=>l.id===layer);if(!l||l.locked||!l.visible){host.hint('보이고 잠기지 않은 레이어를 선택하세요.');return;}
+      if(['rect','ellipse','cloud'].includes(tool)){const b=C.bounds(draft);if((b.right-b.x)*v().wPt<.5||(b.bottom-b.y)*v().hPt<.5){draft=draft.slice(0,1);hover=null;host.hint('폭과 높이가 있도록 반대쪽 모서리를 찍으세요.');render();return;}}
       let text=$('[data-text]')?.value||newText||'';if(tool==='text'&&!text.trim()){host.hint('오른쪽 문자 칸에 내용을 입력하고 Enter를 누르세요.');$('[data-text]')?.focus();return;}
       const item={...style,id:id(),type:tool,points:C.clone(draft),text,layer};if(tool==='highlight'){item.width=Math.max(item.width,12);item.opacity=.35;}
       mutate(()=>{doc.entities.push(item);selected=[item.id];draft=[];hover=null;});
@@ -184,7 +185,7 @@
     stage.addEventListener('pointerdown',down,true);stage.addEventListener('pointermove',move,true);stage.addEventListener('pointerup',up,true);stage.addEventListener('pointercancel',up,true);document.addEventListener('keydown',key,true);
     const unload=ev=>{if(dirty||sending){ev.preventDefault();ev.returnValue='';}};global.addEventListener('beforeunload',unload);
     api(base).then(r=>{if(dead)return;doc=r.document;revision=r.revision;canManage=r.canManage;layer=doc.layers[0].id;render();}).catch(e=>host.hint('편집 자료 로드 실패: '+e.message));
-    return {activate,render,pauseForCalibration:deactivate,beforeClose:()=>!sending&&(!dirty||global.confirm('저장하지 않은 편집 내용이 있습니다. 닫을까요?')),
+    return {activate,render,useFeet:()=>mutate(()=>doc.unit='ft'),pauseForCalibration:deactivate,beforeClose:()=>!sending&&(!dirty||global.confirm('저장하지 않은 편집 내용이 있습니다. 닫을까요?')),
       exportSvg:()=>doc?shown().map(e=>C.render(e,v(),doc)).join(''):'',destroy(){dead=true;if(previewUrl)URL.revokeObjectURL(previewUrl);stage.removeEventListener('pointerdown',down,true);stage.removeEventListener('pointermove',move,true);stage.removeEventListener('pointerup',up,true);stage.removeEventListener('pointercancel',up,true);document.removeEventListener('keydown',key,true);global.removeEventListener('beforeunload',unload);}};
   }
   global.DrawingStudio={mount,pdfBlob};
