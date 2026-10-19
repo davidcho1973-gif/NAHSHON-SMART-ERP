@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ClaimWorkRecord;
 use App\Models\Company;
 use App\Models\ContractBoqLine;
+use App\Models\IntelligentDocument;
 use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\Team;
@@ -16,6 +17,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class FieldClaimAccessTest extends TestCase
@@ -175,5 +177,24 @@ class FieldClaimAccessTest extends TestCase
         $normal->forceFill(['job_role' => 'trade_manager', 'job_permissions' => JobAccess::defaults('trade_manager')]);
         $this->assertTrue(JobAccess::can($normal, 'attendance', 'approve'));
         $this->assertFalse(JobAccess::can($this->manager, 'contracts'));
+    }
+
+    public function test_uploaded_original_is_protected_even_before_review_submission(): void
+    {
+        $attachment = $this->post('/field-claims/lines/'.$this->line->id.'/attachments',
+            ['file' => UploadedFile::fake()->createWithContent('pending.pdf', "%PDF-1.4\npending evidence")],
+            ['Accept' => 'application/json'])->assertOk()->json('attachment.id');
+        $documentId = DB::table('field_claim_attachments')->where('id', $attachment)->value('intelligent_document_id');
+        $this->actingAsPurchaseUser($this->admin);
+        $document = IntelligentDocument::findOrFail($documentId);
+        $this->assertSame(0, ClaimWorkRecord::count());
+        try {
+            $document->delete();
+            $this->fail('Uploaded evidence must be protected before deleting its original bytes');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('document', $e->errors());
+        }
+        Storage::disk($document->disk)->assertExists($document->file_path);
+        $this->assertDatabaseHas('intelligent_documents', ['id' => $documentId]);
     }
 }

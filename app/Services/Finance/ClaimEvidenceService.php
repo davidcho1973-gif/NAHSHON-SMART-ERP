@@ -578,6 +578,10 @@ class ClaimEvidenceService
     /** Guard before existing model hooks delete the actual file. */
     public static function sourceIsProtected(string $type, int $id): bool
     {
+        if ($type === 'document' && Schema::hasTable('field_claim_attachments')
+            && DB::table('field_claim_attachments')->where('intelligent_document_id', $id)->exists()) {
+            return true;
+        }
         if (ClaimEvidenceInboxService::sourceIsProtected($type, $id)) {
             return true;
         }

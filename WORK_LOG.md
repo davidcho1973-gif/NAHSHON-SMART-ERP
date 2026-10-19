@@ -1,3 +1,7 @@
+## CODEX — 2026-10-19 Protect unsubmitted field originals
+
+The existing document deletion hook removes bytes before the database delete. Field upload receipt foreign keys therefore need an early canonical source-protection guard, even before a work record has been submitted. Added field receipt references to ClaimEvidenceService::sourceIsProtected, with a regression test asserting that administrator deletion is rejected and both original bytes and metadata survive. This is a release prerequisite for the quantity-only workspace; no production records were modified.
+
 ## CODEX — 2026-10-19 Quantity-only trade claim workspace
 
 Added the explicit “공정팀장 · 기성 작성 전용” job profile, distinct from the existing trade manager's attendance/report responsibilities. Strongly authenticated users in this profile enter `/field-claims`; a closed endpoint policy and MCP denial prevent financial APIs, raw documents, exports, AI, approval and legacy carrier-role bypasses even with stale/custom grants. Server-derived company/site/trade assignments fail closed when missing or revoked. Superadmins assign existing site trades to WorkSections in the drawing board; changes are audited. Account/profile assignment remains the existing superadmin flow; no production people or trades are guessed or auto-assigned.
