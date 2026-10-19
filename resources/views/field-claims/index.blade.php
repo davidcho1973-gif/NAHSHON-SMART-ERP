@@ -4,14 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>담당 공정 작업 · NAHSHON</title>
+    <title>담당 공정 작업 · {{ \App\Support\Org::name() }}</title>
     <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
     <link rel="stylesheet" href="{{ asset('css/field-claims.css') }}?v={{ filemtime(public_path('css/field-claims.css')) }}">
     <script defer src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}"></script>
     <script defer src="{{ asset('js/field-claims.js') }}?v={{ filemtime(public_path('js/field-claims.js')) }}"></script>
 </head>
 <body class="field-claims">
-    <header><div><small>NAHSHON · 공정팀장</small><h1>담당 공정 작업</h1></div>
+    <header><div><small>{{ \App\Support\Org::name() }} · 공정팀장</small><h1>담당 공정 작업</h1></div>
         <form method="post" action="{{ route('logout') }}">@csrf<button type="submit">로그아웃</button></form>
     </header>
     <main>
