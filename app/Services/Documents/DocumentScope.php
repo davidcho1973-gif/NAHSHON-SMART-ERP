@@ -4,6 +4,7 @@ namespace App\Services\Documents;
 
 use App\Models\IntelligentDocument;
 use App\Models\Project;
+use App\Models\Scopes\JobDataScope;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -110,9 +111,11 @@ class DocumentScope
         }
     }
 
-    public function findDuplicate(string $sha256, array $scope, ?int $exceptId = null, ?int $ownerUserId = null, string $accessLevel = 'scope'): ?IntelligentDocument
+    public function findDuplicate(string $sha256, array $scope, ?int $exceptId = null, ?int $ownerUserId = null, string $accessLevel = 'scope', bool $fieldUpload = false): ?IntelligentDocument
     {
-        $query = IntelligentDocument::query()->where('sha256', $sha256)
+        $query = IntelligentDocument::query()
+            ->when($fieldUpload, fn (Builder $q) => $q->withoutGlobalScope(JobDataScope::class))
+            ->where('sha256', $sha256)
             ->when($exceptId, fn (Builder $q) => $q->whereKeyNot($exceptId));
         foreach (['company_id', 'site_id', 'project_id'] as $column) {
             $value = $scope[$column] ?? null;

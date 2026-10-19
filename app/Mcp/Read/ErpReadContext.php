@@ -6,6 +6,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
+use App\Support\FieldClaimAccess;
 
 /** Request-local authority. Never trust a client-supplied user, role or company scope. */
 final class ErpReadContext
@@ -17,6 +18,7 @@ final class ErpReadContext
         public readonly int $companyId,
         public readonly ?int $siteId = null,
     ) {
+        abort_if(FieldClaimAccess::restricted($actor), 403, 'Use the assigned field claim workspace.');
         abort_unless($actor->exists && $actor->account_status === 'active', 403);
         abort_unless($actor->canAccessCompany($companyId), 403, 'Company access denied.');
         abort_unless(AccessPolicy::canSeeCompany($actor, $companyId), 403, 'Company access denied.');
