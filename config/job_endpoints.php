@@ -356,6 +356,7 @@ return [
         'WbsPhotoController' => ['_module' => 'progress'],
         'WbsScheduleController' => ['_module' => 'progress'],
         'DrawingSheetController' => ['_module' => 'progress'],
+        'DrawingStudioController' => ['_module' => 'progress', 'save' => ['progress', 'edit'], 'share' => ['progress', 'export']],
         'WeekBoardDraftController' => ['_module' => 'progress'],
         'OpsVoiceController' => ['_module' => 'reports'],
         'OpsPhotoController' => ['_module' => 'reports'],

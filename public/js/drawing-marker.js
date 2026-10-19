@@ -276,6 +276,7 @@
    */
   function open(opts) {
     injectCss();
+    var studio = null;
     var st = {
       opts: opts, pick: opts.mode === 'pick', data: null, marks: [], filter: {}, tool: 'hand', draft: [], sel: null,
       W: 0, H: 0, k: 1, x: 0, y: 0, pointers: {}, gesture: null, suggestAt: null, labels: true,
@@ -291,6 +292,8 @@
         '<div class="dm-chips" data-period style="margin-left:0"></div>' +
         '<button class="dm-btn" data-color title="색 기준 바꾸기">🎨 <span data-color-text>상태별</span></button>' +
         '<button class="dm-btn" data-scale title="도면 축척 — 그은 선·영역을 수량으로 바꾼다">📐 <span data-scale-text>축척</span></button>' +
+        '<button class="dm-btn" data-studio style="display:none">✎ CAD 편집</button>' +
+        '<button class="dm-btn" data-share-studio style="display:none">↗ 보내기</button>' +
         '<button class="dm-btn" data-export title="표시가 얹힌 도면을 그림 파일로">⬇ 내보내기</button>' +
         '<button class="dm-btn" data-list title="표시 목록">☰</button>' +
         '<button class="dm-btn" data-close title="닫기 (Esc)" style="font-size:16px">✕</button>' +
@@ -311,6 +314,8 @@
     var stage = $('[data-stage]'), world = $('[data-world]'), svg = $('[data-svg]'), canvas = $('[data-canvas]');
 
     function close() {
+      if (studio && !studio.beforeClose()) return;
+      if (studio) studio.destroy();
       document.removeEventListener('keydown', onKey);
       global.removeEventListener('resize', onResize);
       wrap.remove();
@@ -340,6 +345,8 @@
       renderChips(); renderSide(); draw();
     };
     $('[data-export]').onclick = function () { exportPng(); };
+    $('[data-studio]').onclick = function () { if (studio) studio.activate('edit'); };
+    $('[data-share-studio]').onclick = function () { if (studio) studio.activate('share'); };
 
     // ── 불러오기 ──
     var sheetArgs = [opts.siteId, opts.sheetNo];
@@ -385,6 +392,16 @@
         svg.setAttribute('viewBox', '0 0 ' + st.W + ' ' + st.H);
         return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, background: '#ffffff' }).promise.then(function () {
           $('[data-empty]').style.display = 'none';
+          if (!st.pick && global.DrawingStudio && s.id) {
+            studio = global.DrawingStudio.mount({ wrap: wrap, stage: stage, world: world, sheetId: s.id, sheetNo: st.data.sheetNo,
+              side: $('[data-side]'), tools: $('[data-tools]'), canManage: r.canManage,
+              view: function () { return { W: st.W, H: st.H, wPt: st.wPt, hPt: st.hPt, k: st.k, fpp: st.fpp }; },
+              toWorld: toWorld, refit: fit, hint: showHint, scaleLabel: function () { return st.scaleLabel; },
+              setHand: function () { st.tool = 'hand'; st.draft = []; select(null); }, snapshot: studioSnapshot,
+            });
+            $('[data-studio]').style.display = '';
+            if (r.canManage) $('[data-share-studio]').style.display = '';
+          }
           fit();
           if (st.pick && st.picked.length) renderPickPanel();
           if (opts.focusMarkId) focusMark(opts.focusMarkId);
@@ -469,7 +486,7 @@
       zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
     }, { passive: false });
     stage.addEventListener('pointerdown', function (e) {
-      if (e.target.closest && (e.target.closest('.dm-tools') || e.target.closest('.dm-zoom') || e.target.closest('.dm-pop') || e.target.closest('.dm-form'))) return;
+      if (e.target.closest && (e.target.closest('.dm-tools') || e.target.closest('.ds-toolbar') || e.target.closest('.dm-zoom') || e.target.closest('.dm-pop') || e.target.closest('.dm-form'))) return;
       stage.setPointerCapture(e.pointerId);
       st.pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
       var ids = Object.keys(st.pointers);
@@ -558,7 +575,7 @@
       return call('api_setSheetScale', [opts.siteId, st.data.sheetNo, fpp, label]).then(function (r) {
         if (r.success === false) { toast(r.error || '축척을 적지 못했습니다.', 'error'); return; }
         st.fpp = r.feetPerPoint; st.scaleLabel = r.scaleLabel;
-        renderScale(); renderTools();
+        renderScale(); renderTools(); draw();
         if (!quiet) toast('축척을 적었습니다. 이제 그은 선과 영역이 수량이 됩니다.');
         else showHint('도면에서 축척 ' + label.replace('도면에서 읽음: ', '') + ' 을 읽었습니다. 선을 그으면 길이가 나옵니다.');
       });
@@ -584,6 +601,7 @@
       var cal = form.querySelector('[data-calibrate]');
       if (cal) cal.onclick = function () {
         form.remove();
+        if (studio) studio.pauseForCalibration();
         st.calibrating = true; st.tool = 'line'; st.draft = [];
         renderTools(); draw();
         showHint('치수를 아는 두 곳(예: 치수선 양 끝)을 차례로 누르세요.');
@@ -878,6 +896,7 @@
       return m.record.workDate >= r[0] && m.record.workDate <= r[1];
     }
     function draw() {
+      if (studio) studio.render();
       if (!st.W) return;
       svg.innerHTML = build(st.k, false);
     }
@@ -1078,6 +1097,19 @@
         };
       });
     }
+    function studioSnapshot() {
+      return new Promise(function (resolve, reject) {
+        var result = document.createElement('canvas'); result.width = st.W; result.height = st.H;
+        var context = result.getContext('2d'); context.drawImage(canvas, 0, 0);
+        var markup = '<svg xmlns="http://www.w3.org/2000/svg" width="' + st.W + '" height="' + st.H + '">' +
+          build(st.k, true) + (studio ? studio.exportSvg() : '') + '</svg>';
+        var url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' })), image = new Image();
+        image.onload = function () { context.drawImage(image, 0, 0); URL.revokeObjectURL(url); resolve(result); };
+        image.onerror = function () { URL.revokeObjectURL(url); reject(new Error('도면 이미지를 만들지 못했습니다.')); };
+        image.src = url;
+      });
+    }
+
     /** 표시가 얹힌 도면을 그림 파일로 — 청구서에 붙이는 증거. 지금 고른 기간·상태만 담는다. */
     function exportPng() {
       if (!st.W) return;
@@ -1088,7 +1120,7 @@
       var ctx = out.getContext('2d');
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, out.width, out.height);
       ctx.drawImage(canvas, 0, band);
-      var svgDoc = '<svg xmlns="http://www.w3.org/2000/svg" width="' + st.W + '" height="' + st.H + '" viewBox="0 0 ' + st.W + ' ' + st.H + '">' + build(k, true) + '</svg>';
+      var svgDoc = '<svg xmlns="http://www.w3.org/2000/svg" width="' + st.W + '" height="' + st.H + '" viewBox="0 0 ' + st.W + ' ' + st.H + '">' + build(k, true) + (studio ? studio.exportSvg() : '') + '</svg>';
       var img = new Image();
       var url = URL.createObjectURL(new Blob([svgDoc], { type: 'image/svg+xml' }));
       img.onload = function () {

@@ -323,6 +323,15 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
+    Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(\App\Http\Controllers\DrawingStudioController::class)->group(function (): void {
+        Route::get('/', 'show');
+        Route::put('/', 'save');
+        Route::get('/history', 'history');
+        Route::get('/share-options', 'options');
+        Route::get('/messages', 'messages');
+        Route::post('/share', 'share')->middleware('throttle:10,1');
+    });
+
     // 관리자 화면의 파일 업로드(multipart) — SPA 의 JSON API 로는 파일을 실을 수 없다.
     Route::post('/admin-api/contracts/{contract}/documents', [AdminUploadController::class, 'contractDocument'])
         ->name('admin.contract-document.upload');
