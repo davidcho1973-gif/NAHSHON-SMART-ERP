@@ -390,7 +390,7 @@
     var u = ui();
     var isNew = res.kind === 'new_employee';
     var message = isNew ? '관리자 입사 등록 초대입니다. 아래 링크에서 이름·전화번호를 입력하고 Google 또는 이메일·새 ERP 비밀번호로 등록해 주세요. 직원 등록과 관리자 설정이 함께 완료됩니다.\n' + res.url
-      : res.name + ' 님, 관리자 등록을 완료해 주세요. 기존 등록 전화번호를 확인한 뒤 Google 또는 이메일·비밀번호를 설정하면 됩니다.\n' + res.url;
+      : res.name + ' 님, 초대 등록을 완료해 주세요. 기존 등록 전화번호를 확인한 뒤 이메일 없이 직원번호·새 비밀번호로 등록할 수 있습니다. Google 또는 이메일 등록도 가능합니다.\n' + res.url;
     u.modal({
       title: '카톡 · QR로 초대', width: 460,
       subtitle: isNew ? '한 명에게만 전달하세요. 등록 완료 전에는 직원·계정이 생성되지 않습니다.'

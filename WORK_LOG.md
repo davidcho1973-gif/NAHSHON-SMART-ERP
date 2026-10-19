@@ -1,6 +1,14 @@
+
 ## CODEX — 2026-10-19 BOQ child process cards
 
 Parent sections used drawing cards while BOQ children rendered compact record rows. Child rows now expose drawing/evidence/progress/claim cards and open the existing full-screen studio at the exact line. Drawings inherit from the parent until explicitly selected per BOQ line; selections use existing contract metadata and cannot change parent/sibling choices. Empty selection stays empty. Ledger quantities, trade assignments, approval rules and originals are unchanged. Writes require drawing and billing management rights and accessible section/contract scope. Targeted PHP and Chromium integration checks cover isolation and correct line entry; full CI/staging/main gates remain required.
+
+## CODEX — 2026-10-19 Email-less employee invitation login
+
+Root cause: manager invitation enrollment and password sign-in treated email as mandatory identity, excluding existing employees without email. Existing verified invitations can now bind a chosen password to the canonical employee number while keeping email null and retaining employee history. New-employee enrollment still requires email; employee-number login requires an enrolled password, rejects ambiguous accounts, observes existing active/lockout rules and never accepts phone digits. Fixed invitation grants, one-use expiry, strong sessions and field-claim authorization remain enforced. Shared login and invitation forms explain the email-less path. No passwords or fabricated emails are provisioned by administrators.
+
+Validation: focused PostgreSQL invitation/auth/field-access tests (69 passed before final regression additions), then full Linux CI and staging/main/NAHSHON deployment gates. Actual Kim Chang-don onboarding remains a separate production invitation; the employee must choose their own password.
+
 
 ## CODEX — 2026-10-19 Protect unsubmitted field originals
 
@@ -850,3 +858,4 @@ Sharing generates a reviewed PNG or raster PDF from the current visible work. Ma
 Validation: dedicated PostgreSQL studio tests (7 / 47 assertions), scale/geometry/security unit tests, real-code synthetic Chrome drawing, exact length, layers, lock/drag, undo, save/reload, zoom preservation, PNG/PDF sharing and conflict retention. No real recipients or production business data are used in tests. Full regression and exact deployment evidence are release gates. User instructions: docs/DRAWING_STUDIO_USER_GUIDE.md.
 
 Drawing studio follow-up: saving from the share panel could rebuild the form and erase an unsent message. Save now refreshes the edit panel only; the real-code browser regression writes a share message, saves with Ctrl+S and verifies that the message survives and can be sent.
+

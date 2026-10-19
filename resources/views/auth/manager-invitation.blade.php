@@ -15,11 +15,22 @@
 <p><strong>{{ $newEmployee ? $enrollmentName : $user->name }}</strong> 님, {{ $newEmployee ? '직원 정보가 입력되었습니다.' : '전화번호가 확인되었습니다.' }} 로그인 방법을 선택하세요.</p>
 <p>전화번호 확인 후 15분 안에 등록을 완료해 주세요. 시간이 지나면 전화번호를 다시 확인할 수 있습니다.</p>
 @if($googleConfigured)<a class="button" href="{{ route('auth.google.redirect') }}">Google 계정으로 등록</a>@endif
+@if(!$newEmployee)
+<form method="post" action="{{ route('manager-invitation.complete', ['token'=>$token]) }}">@csrf
+<input type="hidden" name="employee_login" value="1">
+<h2>이메일 없이 등록</h2>
+<p>로그인 직원번호: <strong>{{ $user->employee->employee_number }}</strong><br>기존 직원 기록을 그대로 사용합니다. 다음 로그인에도 이 직원번호를 입력하세요.</p>
+<label for="employee-password">새 비밀번호</label><input id="employee-password" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128">
+<p>문자와 숫자를 포함해 10자 이상 입력하세요.</p>
+<label for="employee-password-confirmation">새 비밀번호 확인</label><input id="employee-password-confirmation" name="password_confirmation" type="password" autocomplete="new-password" required minlength="10" maxlength="128">
+<button>직원번호로 등록하고 입장</button></form>
+@endif
+<details><summary>이메일과 비밀번호로 등록</summary>
 <form method="post" action="{{ route('manager-invitation.complete', ['token'=>$token]) }}">@csrf
 <label for="email">로그인에 사용할 이메일</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="255" value="{{ old('email') }}">
 <label for="password">새 ERP 비밀번호</label><input id="password" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128">
 <p>문자와 숫자를 포함해 10자 이상 입력하세요. 이메일 서비스 비밀번호와 별개입니다.</p>
 <label for="password_confirmation">비밀번호 다시 입력</label><input id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" required minlength="10" maxlength="128">
-<button>등록 완료하고 입장</button></form>
+<button>등록 완료하고 입장</button></form></details>
 @endif
 </main></body></html>
