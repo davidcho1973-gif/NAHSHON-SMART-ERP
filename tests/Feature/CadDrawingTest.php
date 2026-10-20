@@ -83,6 +83,8 @@ class CadDrawingTest extends TestCase
         $this->get('/admin-api/cad/'.$id.'/download?format=original')->assertStreamedContent($dwg);
         $response = $this->get('/admin-api/cad/'.$id.'/download?format=dwg')->assertOk()->assertContent($dwg);
         $this->assertSame(['Check dimensions after conversion.'], json_decode(base64_decode($response->headers->get('X-CAD-Warnings')), true));
+        $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF])->assertOk()
+            ->assertJsonPath('warnings.0', 'Proxy object is not editable.');
     }
 
     public function test_site_scope_and_read_only_permissions_apply_to_all_endpoints(): void

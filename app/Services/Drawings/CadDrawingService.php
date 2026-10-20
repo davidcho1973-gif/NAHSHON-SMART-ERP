@@ -149,10 +149,11 @@ class CadDrawingService
             $current = CadDrawing::whereKey($drawing->id)->lockForUpdate()->firstOrFail();
             abort_if((int) $current->revision !== $revision, 409, '다른 사용자가 수정했습니다. 최신 도면을 다시 열어 주세요.');
             $next = $revision + 1;
+            $warnings = $current->revisions()->where('revision', $revision)->firstOrFail()->warnings ?? [];
             $path = dirname($current->original_path).'/revisions/'.$next.'-'.Str::uuid().'.dxf';
             $this->put($current->disk, $path, $dxf);
             try {
-                $current->revisions()->create(['revision' => $next, 'dxf_path' => $path, 'sha256' => hash('sha256', $dxf), 'warnings' => [], 'created_by' => $user->id]);
+                $current->revisions()->create(['revision' => $next, 'dxf_path' => $path, 'sha256' => hash('sha256', $dxf), 'warnings' => $warnings, 'created_by' => $user->id]);
                 $current->update(['revision' => $next]);
             } catch (\Throwable $e) {
                 Storage::disk($current->disk)->delete($path);

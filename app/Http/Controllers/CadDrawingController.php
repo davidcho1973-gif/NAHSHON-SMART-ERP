@@ -96,9 +96,15 @@ class CadDrawingController extends Controller
             $warnings = $result['warnings'];
         }
 
+        // Keep response headers below proxy limits; complete import warnings remain on the revision.
+        $headerWarnings = array_map(fn (string $warning) => mb_strcut($warning, 0, 300, 'UTF-8'), array_slice($warnings, 0, 6));
+        if (count($warnings) > 6) {
+            $headerWarnings[] = '추가 변환 경고가 있습니다. 원래 CAD에서 도면을 검증하세요.';
+        }
+
         return response($bytes)->withHeaders(['Content-Type' => 'application/octet-stream',
             'Content-Disposition' => 'attachment; filename="drawing-'.$drawing->id.'-r'.$revision.'.'.$format.'"',
             'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store',
-            'X-CAD-Warnings' => base64_encode(json_encode($warnings, JSON_UNESCAPED_UNICODE))]);
+            'X-CAD-Warnings' => base64_encode(json_encode($headerWarnings, JSON_UNESCAPED_UNICODE))]);
     }
 }
