@@ -8,6 +8,7 @@ on:
       - 'app/**/Cad*.php'
       - 'tests/Feature/CadDrawingTest.php'
       - 'tests/Fixtures/cad-line.dxf'
+      - 'tests/Fixtures/cad-presentation.*'
       - 'tests/cad-converter/**'
       - 'tests/js/cad-core.test.mjs'
       - 'scripts/test-cad-roundtrip.mjs'
