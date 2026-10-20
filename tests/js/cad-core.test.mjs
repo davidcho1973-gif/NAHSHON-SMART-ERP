@@ -408,3 +408,19 @@ test("array bounds total additions before allocation", () => {
     const e = C.newEntity("LINE", { p: { x: 0, y: 0 }, q: { x: 1, y: 0 } });
     assert.throws(() => C.array(Array(200).fill(e), 20, 20, 1, 1));
 });
+
+test("layer rename preserves handle and current-layer header and refuses opaque references", () => {
+    const source =
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n9\n$CLAYER\n8\nWALL\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n1\n0\nLAYER\n5\nAE\n2\nWALL\n70\n0\n62\n42\n0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nLINE\n8\nWALL\n10\n0\n20\n0\n11\n10\n21\n10\n0\nENDSEC\n0\nEOF\n";
+    const original = C.parse(source);
+    const changed = C.renameLayer(original, "WALL", "PIPE");
+    const output = C.exportDXF(changed);
+    assert.ok(output.includes("$CLAYER\r\n8\r\nPIPE"));
+    assert.ok(output.includes("LAYER\r\n5\r\nAE\r\n2\r\nPIPE"));
+    assert.equal(C.parse(output).entities[0].layer, "PIPE");
+    assert.equal(original.entities[0].layer, "WALL");
+    const opaque = C.parse(
+        source.replace("0\nEOF", "0\nSECTION\n2\nOBJECTS\n0\nENDSEC\n0\nEOF"),
+    );
+    assert.throws(() => C.renameLayer(opaque, "WALL", "PIPE"));
+});

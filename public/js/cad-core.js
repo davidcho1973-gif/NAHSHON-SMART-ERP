@@ -789,7 +789,64 @@
                     }
         return out;
     }
+    function renameLayer(source, old, name) {
+        if (old === "0" || !Object.hasOwn(source.layers, old))
+            throw Error("기본 또는 없는 레이어는 이름을 바꿀 수 없습니다.");
+        if (
+            !name ||
+            ["__proto__", "constructor", "prototype"].includes(name) ||
+            /[<>/\\":;?*|=\r\n]/.test(name) ||
+            Object.hasOwn(source.layers, name)
+        )
+            throw Error("사용할 수 없는 레이어 이름입니다.");
+        const opaque =
+            source.prefix.some(
+                (p, i) =>
+                    p[0] === 0 &&
+                    p[1] === "SECTION" &&
+                    !["HEADER", "TABLES", "ENTITIES"].includes(
+                        source.prefix[i + 1]?.[1],
+                    ),
+            ) ||
+            source.suffix.some((p) => p[0] === 0 && p[1] === "SECTION") ||
+            source.entities.some((e) => !e.editable);
+        if (opaque)
+            throw Error(
+                "블록 또는 미지원 데이터가 있는 도면의 레이어 이름은 원래 CAD에서 바꾸세요.",
+            );
+        const doc = clone(source);
+        doc.layers[name] = doc.layers[old];
+        delete doc.layers[old];
+        doc.layersDirty = true;
+        for (const entity of doc.entities)
+            if (entity.layer === old) {
+                entity.layer = name;
+                const pair = entity.raw?.find((p) => p[0] === 8);
+                if (pair) pair[1] = name;
+            }
+        for (let i = 0; i < doc.prefix.length; i++) {
+            const pair = doc.prefix[i];
+            if (
+                pair[0] === 9 &&
+                pair[1] === "$CLAYER" &&
+                doc.prefix[i + 1]?.[0] === 8 &&
+                doc.prefix[i + 1][1] === old
+            )
+                doc.prefix[i + 1][1] = name;
+            if (pair[0] === 0 && pair[1] === "LAYER") {
+                for (
+                    let j = i + 1;
+                    j < doc.prefix.length && doc.prefix[j][0] !== 0;
+                    j++
+                )
+                    if (doc.prefix[j][0] === 2 && doc.prefix[j][1] === old)
+                        doc.prefix[j][1] = name;
+            }
+        }
+        return doc;
+    }
     g.CADCore = {
+        renameLayer,
         offset,
         trim,
         array,

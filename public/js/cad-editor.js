@@ -937,61 +937,18 @@
     $("rename-layer").onclick = () => {
         if (!doc || !canManage) return;
         const old = $("layer").value;
-        if (
-            doc.prefix.some(
-                (p, i) =>
-                    p[0] === 0 &&
-                    p[1] === "SECTION" &&
-                    !["HEADER", "TABLES", "ENTITIES"].includes(
-                        doc.prefix[i + 1]?.[1],
-                    ),
-            ) ||
-            doc.suffix.some((p) => p[0] === 0 && p[1] === "SECTION") ||
-            doc.entities.some((e) => !e.editable)
-        ) {
-            status(
-                "블록 또는 미지원 객체가 있는 도면의 레이어 이름 변경은 원래 CAD에서 하세요.",
-            );
-            return;
-        }
-        if (old === "0") {
-            status("기본 레이어 0은 이름을 바꿀 수 없습니다.");
-            return;
-        }
         const name = prompt("새 레이어 이름", old);
-        if (
-            !name ||
-            ["__proto__", "constructor", "prototype"].includes(name) ||
-            /[<>/\\":;?*|=\r\n]/.test(name) ||
-            doc.layers[name]
-        )
-            return;
-        snapshot();
-        doc.layers[name] = doc.layers[old];
-        delete doc.layers[old];
-        doc.layersDirty = true;
-        for (const e of doc.entities)
-            if (e.layer === old) {
-                e.layer = name;
-                if (e.raw) {
-                    const pair = e.raw.find((p) => p[0] === 8);
-                    if (pair) pair[1] = name;
-                }
-                if (e.dirty) e.dirty = true;
-            }
-        for (let i = 0; i < doc.prefix.length; i++)
-            if (doc.prefix[i][0] === 0 && doc.prefix[i][1] === "LAYER") {
-                for (
-                    let j = i + 1;
-                    j < doc.prefix.length && doc.prefix[j][0] !== 0;
-                    j++
-                )
-                    if (doc.prefix[j][0] === 2 && doc.prefix[j][1] === old)
-                        doc.prefix[j][1] = name;
-            }
-        layers();
-        $("layer").value = name;
-        render();
+        if (!name) return;
+        try {
+            const renamed = C.renameLayer(doc, old, name);
+            snapshot();
+            doc = renamed;
+            layers();
+            $("layer").value = name;
+            render();
+        } catch (error) {
+            fail(error);
+        }
     };
     window.addEventListener("beforeunload", (e) => {
         if (dirty) {
