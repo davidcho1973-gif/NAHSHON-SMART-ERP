@@ -130,9 +130,8 @@ footer {
     main {
         grid-template-columns: 140px minmax(200px, 1fr);
     }
-    main > aside:last-child {
-        display: none;
-    }
+    main {grid-template-rows:minmax(300px,1fr) 230px;min-height:560px;}
+    main > aside:last-child {display:block;grid-column:1/-1;max-height:230px;}
     header {
         font-size: 12px;
     }
@@ -145,3 +144,9 @@ footer {
 #claim-result {color:#80e5ba;}
 
 body.claim-linked main {height:calc(100dvh - 205px);}
+
+#selection-properties {font-size:12px;color:#9fd8ee;}
+#text-properties {border:1px solid #40516c;border-radius:6px;margin:10px 0;padding:8px;}
+#tools details {margin:10px 0;border:1px solid #40516c;padding:7px;border-radius:6px;}
+#tools summary {cursor:pointer;color:#83d7ff;}
+#canvas {cursor:crosshair;}
