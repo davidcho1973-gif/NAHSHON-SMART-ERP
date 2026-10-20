@@ -56,12 +56,38 @@ try
     var stdout=process.StandardOutput.ReadToEnd();var stderr=process.StandardError.ReadToEnd();process.WaitForExit();
     Assert(process.ExitCode==0,"Working-copy conversion failed: "+stderr);
     var meta=JsonDocument.Parse(stdout).RootElement;
-    Assert(meta.GetProperty("warnings").EnumerateArray().Any(x=>x.GetString()!.Contains("3D 표시")),"Omitted presentation metadata must be disclosed.");
     var reopened=DxfReader.Read(output,Strict);
     var line=reopened.Entities.OfType<Line>().Single();
     Assert(line.StartPoint==new XYZ(10,20,0)&&line.EndPoint==new XYZ(110,70,0),"Coordinates must survive.");
     Assert(line.Color.Equals(new Color(206,0,88)),"RGB must survive.");
     Assert(reopened.RootDictionary.GetEntry<XRecord>("RequiredDrawingData").Entries.Single(entry=>entry.Code==1).Value.ToString()=="Preserve this drawing information","Unrelated XRecords must survive.");
+    // ACadSharp's DWG fixture writer itself omits VisualStyle, so a raw DXF
+    // fixture is needed to exercise this resource and its owned XRecord.
+    var presentationInput=Path.Combine(directory,"presentation.dxf");
+    File.WriteAllText(presentationInput,string.Join("\n",new object[]{
+        0,"SECTION",2,"HEADER",9,"$ACADVER",1,"AC1032",0,"ENDSEC",
+        0,"SECTION",2,"ENTITIES",0,"LINE",5,"10",100,"AcDbEntity",8,"0",420,13500504,100,"AcDbLine",10,10,20,20,30,0,11,110,21,70,31,0,0,"ENDSEC",
+        0,"SECTION",2,"OBJECTS",
+        0,"DICTIONARY",5,"C",330,"0",100,"AcDbDictionary",280,0,281,1,3,"Synthetic3DStyle",350,"100",3,"RequiredDrawingData",350,"200",
+        0,"VISUALSTYLE",5,"100",102,"{ACAD_XDICTIONARY",360,"101",102,"}",330,"C",100,"AcDbVisualStyle",2,"Synthetic 3D style",
+        0,"DICTIONARY",5,"101",330,"100",100,"AcDbDictionary",280,0,281,1,3,"Presentation",350,"102",
+        0,"XRECORD",5,"102",330,"101",100,"AcDbXrecord",280,1,1,"3D-only settings",
+        0,"XRECORD",5,"200",330,"C",100,"AcDbXrecord",280,1,1,"Preserve this drawing information",
+        0,"ENDSEC",0,"EOF",""
+    }));
+    var presentationOutput=Path.Combine(directory,"presentation.dwg");
+    var presentationStart=new ProcessStartInfo(args[0]) {RedirectStandardOutput=true,RedirectStandardError=true};
+    if(args.Length>1)presentationStart.ArgumentList.Add(args[1]);
+    foreach(var arg in new[]{"convert","--input",presentationInput,"--output",presentationOutput})presentationStart.ArgumentList.Add(arg);
+    using var presentationProcess=Process.Start(presentationStart)!;
+    var presentationStdout=presentationProcess.StandardOutput.ReadToEnd();
+    var presentationStderr=presentationProcess.StandardError.ReadToEnd();presentationProcess.WaitForExit();
+    Assert(presentationProcess.ExitCode==0,"Presentation fixture failed: "+presentationStderr);
+    var presentationMeta=JsonDocument.Parse(presentationStdout).RootElement;
+    Assert(presentationMeta.GetProperty("warnings").EnumerateArray().Any(x=>x.GetString()!.Contains("3D 표시")),"Omitted presentation metadata must be disclosed.");
+    var presentationCheck=DwgReader.Read(presentationOutput,Strict);
+    Assert(presentationCheck.Entities.OfType<Line>().Single().Color.Equals(new Color(206,0,88)),"Presentation omission must preserve geometry RGB.");
+    Assert(presentationCheck.RootDictionary.GetEntry<XRecord>("RequiredDrawingData").Entries.Single(entry=>entry.Code==1).Value.ToString()=="Preserve this drawing information","Omitting a style-owned XRecord must preserve ordinary drawing data.");
     Console.WriteLine("PASS: real DWG duplicate book colors, conflicting RGB rejection, presentation warning, geometry and RGB preservation.");
 }
 finally {Directory.Delete(directory,true);}
