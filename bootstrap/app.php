@@ -42,6 +42,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // 언어 쿠키는 클라이언트(JS)가 평문으로 설정하므로 암호화에서 제외.
         $middleware->encryptCookies(except: ['app_locale']);
 
+        // DXF is a file payload: preserve its group-code/value whitespace and final newline.
+        $middleware->trimStrings(except: ['dxf']);
+
         // Restore a trusted app cookie after StartSession and before an auth-protected
         // route can reject it. Web-group placement alone does not override auth priority.
         $middleware->prependToPriorityList(

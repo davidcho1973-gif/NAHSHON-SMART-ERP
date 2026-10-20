@@ -2,6 +2,7 @@
 
 namespace App\Services\Finance;
 
+use App\Models\CadDrawingRevision;
 use App\Models\IntelligentDocument;
 use App\Models\MaterialReceipt;
 use App\Models\MobileExpense;
@@ -11,6 +12,7 @@ use App\Models\PayApplicationAllocation;
 use App\Models\ProjectContract;
 use App\Models\WbsPhoto;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 /** Collect retained claim proofs without turning purchases or deliveries into earned work. */
@@ -73,9 +75,32 @@ class ClaimDailyEvidencePacketService
 
     public function read(array $source): string
     {
-        $bytes = ($source['sourceType'] ?? '') === 'intake'
-            ? (string) ($source['rawText'] ?? '')
-            : $this->inbox->readSource($source);
+        if (($source['sourceType'] ?? '') === 'cad_revision') {
+            $contract = ProjectContract::findOrFail((int) ($source['contractId'] ?? 0));
+            // Descriptors are not file capabilities: resolve current permissions and the pinned revision again.
+            $canonical = $this->resolve($contract, 'cad_revision', (int) ($source['sourceId'] ?? 0));
+            try {
+                $disk = Storage::disk($canonical['disk']);
+                $stream = $disk->readStream($canonical['path']);
+                if (! is_resource($stream)) {
+                    throw new InvalidArgumentException('CAD 개정 원본을 읽을 수 없습니다.');
+                }
+                try {
+                    $bytes = stream_get_contents($stream, 26214401);
+                } finally {
+                    fclose($stream);
+                }
+            } catch (\Throwable $e) {
+                throw new InvalidArgumentException('CAD 개정 원본을 저장소에서 읽을 수 없습니다.', previous: $e);
+            }
+            if (! is_string($bytes) || ! hash_equals(strtolower($canonical['sha256']), hash('sha256', $bytes))) {
+                throw new InvalidArgumentException('등록된 CAD 개정 원본 해시와 파일이 다릅니다.');
+            }
+        } else {
+            $bytes = ($source['sourceType'] ?? '') === 'intake'
+                ? (string) ($source['rawText'] ?? '')
+                : $this->inbox->readSource($source);
+        }
         if ($bytes === '' || strlen($bytes) > 26214400) {
             throw new InvalidArgumentException('기성 증빙 원본은 비어 있지 않아야 하며 25MB 이하여야 합니다.');
         }
@@ -86,6 +111,13 @@ class ClaimDailyEvidencePacketService
         }
 
         return $bytes;
+    }
+
+    public function cadPreview(ProjectContract $contract, int $revisionId): array
+    {
+        $source = $this->resolve($contract, 'cad_revision', $revisionId);
+
+        return ['bytes' => $this->read($source), 'mime' => $source['mime'], 'name' => $source['name']];
     }
 
     public function manifest(array $source, array $file): array
@@ -130,6 +162,7 @@ class ClaimDailyEvidencePacketService
             $model = match ($type) {
                 'document' => IntelligentDocument::class, 'expense' => MobileExpense::class,
                 'receipt' => MaterialReceipt::class, 'photo' => WbsPhoto::class, 'intake' => OpsIntakeItem::class,
+                'cad_revision' => CadDrawingRevision::class,
                 default => throw new InvalidArgumentException('알 수 없는 보존 증빙 형식입니다.'),
             };
             if ($model::withoutGlobalScopes()->whereKey($id)->exists()) {
@@ -141,6 +174,18 @@ class ClaimDailyEvidencePacketService
 
     private function resolve(ProjectContract $contract, string $type, int $id, bool $archived = false): array
     {
+        if ($type === 'cad_revision') {
+            // The ledger rechecks contract scope and CAD export access; revision ID never follows the mutable head.
+            $ledger = app(ClaimEvidenceService::class);
+            $proof = $ledger->editableReferences($contract->id, [['type' => $type, 'id' => $id, 'locator' => 'CAD 개정 원본']])[0];
+            $revision = $ledger->cadRevision($contract, $id);
+
+            return ['contractId' => $contract->id, 'sourceType' => $type, 'sourceId' => $id,
+                'title' => $proof['title'], 'name' => 'cad-'.$proof['drawingId'].'-r'.$proof['drawingRevision'].'.dxf',
+                'mime' => 'application/dxf', 'disk' => $proof['disk'], 'path' => $proof['filePath'],
+                'sha256' => $proof['sha256'], 'url' => $proof['downloadUrl'],
+                'date' => $revision->created_at?->toDateString(), 'dateBasis' => 'cad_revision_created_at'];
+        }
         if ($type === 'intake') {
             $proof = app(ClaimEvidenceService::class)->submissionIntakeProof($contract, $id, $archived);
             return $proof + ['contractId' => $contract->id, 'sourceType' => 'intake', 'sourceId' => $id];

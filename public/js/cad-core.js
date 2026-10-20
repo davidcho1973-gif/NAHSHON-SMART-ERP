@@ -1,0 +1,864 @@
+/* DXF editing uses lossless raw records for unchanged entities. Unsupported records are never regenerated. */
+(function (g) {
+    "use strict";
+    const clone = (x) => JSON.parse(JSON.stringify(x)),
+        num = (r, c, d = 0) => Number((r.find((p) => p[0] === c) || [0, d])[1]),
+        val = (r, c, d = "") => (r.find((p) => p[0] === c) || [0, d])[1],
+        pt = (r, c = 10) => ({ x: num(r, c), y: num(r, c + 10) });
+    const numericCodes = new Set([
+        10, 20, 30, 11, 21, 31, 38, 39, 40, 41, 42, 43, 44, 45, 50, 51, 210,
+        220, 230, 370, 420,
+    ]);
+    const supported = new Set([
+        "LINE",
+        "CIRCLE",
+        "ARC",
+        "LWPOLYLINE",
+        "TEXT",
+        "MTEXT",
+        "POINT",
+    ]);
+    function parse(text) {
+        if (/^AutoCAD Binary DXF/.test(text))
+            throw Error("바이너리 DXF는 서버에서 ASCII DXF로 변환해야 합니다.");
+        const lines = text.replace(/\r/g, "").split("\n"),
+            pairs = [];
+        for (let i = 0; i + 1 < lines.length; i += 2) {
+            const c = Number(lines[i].trim());
+            if (!Number.isInteger(c))
+                throw Error("DXF 그룹 코드가 잘못되었습니다.");
+            pairs.push([c, lines[i + 1]]);
+        }
+        const start = pairs.findIndex(
+            (p, i) =>
+                p[0] === 0 &&
+                p[1] === "SECTION" &&
+                pairs[i + 1]?.[1] === "ENTITIES",
+        );
+        if (start < 0) throw Error("DXF ENTITIES 섹션이 없습니다.");
+        let end = start + 2;
+        while (
+            end < pairs.length &&
+            !(pairs[end][0] === 0 && pairs[end][1] === "ENDSEC")
+        )
+            end++;
+        if (end === pairs.length) throw Error("DXF ENDSEC가 없습니다.");
+        const doc = {
+            prefix: pairs.slice(0, start + 2),
+            suffix: pairs.slice(end),
+            entities: [],
+            lineTypes: Object.assign(Object.create(null), {
+                BYLAYER: [],
+                CONTINUOUS: [],
+            }),
+            layers: Object.assign(Object.create(null), {
+                0: { color: "#e2e8f0", visible: true, locked: false },
+            }),
+        };
+        let i = start + 2;
+        while (i < end) {
+            let j = i + 1;
+            while (j < end && pairs[j][0] !== 0) j++;
+            const r = pairs.slice(i, j),
+                type = r[0][1],
+                e = {
+                    id: "e" + doc.entities.length,
+                    type,
+                    layer: val(r, 8, "0"),
+                    raw: r,
+                    dirty: false,
+                    editable: supported.has(type) && num(r, 67) === 0,
+                };
+            e.p = pt(r);
+            e.color = r.some((p) => p[0] === 420) ? num(r, 420) : null;
+            e.aci = num(r, 62, 256);
+            e.hidden = !!num(r, 60) || e.aci < 0;
+            e.paper = !!num(r, 67) || (val(r, 410) && val(r, 410) !== "Model");
+            e.lineType = val(r, 6, "BYLAYER");
+            e.lineWeight = num(r, 370, -1);
+            for (const pair of r) {
+                if (
+                    numericCodes.has(pair[0]) &&
+                    !Number.isFinite(Number(pair[1]))
+                )
+                    throw Error("DXF에 유효하지 않은 수치가 있습니다.");
+            }
+            if (type === "LINE") e.q = pt(r, 11);
+            if (["CIRCLE", "ARC"].includes(type)) e.radius = num(r, 40);
+            if (type === "ARC") {
+                e.start = num(r, 50);
+                e.end = num(r, 51);
+            }
+            if (["TEXT", "MTEXT"].includes(type)) {
+                e.text = r
+                    .filter((p) => p[0] === 3 || p[0] === 1)
+                    .map((p) => p[1])
+                    .join("")
+                    .replace(/\\U\+([0-9a-f]{4})/gi, (_, h) =>
+                        String.fromCharCode(parseInt(h, 16)),
+                    );
+                e.height = num(r, 40, 2.5);
+                e.angle =
+                    type === "MTEXT" && r.some((p) => p[0] === 11)
+                        ? (Math.atan2(num(r, 21), num(r, 11)) * 180) / Math.PI
+                        : type === "MTEXT"
+                          ? (num(r, 50) * 180) / Math.PI
+                          : num(r, 50);
+            }
+            if (type === "LWPOLYLINE") {
+                e.points = [];
+                for (let k = 0; k < r.length; k++)
+                    if (r[k][0] === 10)
+                        e.points.push({
+                            x: Number(r[k][1]),
+                            y: num(r.slice(k + 1), 20),
+                            bulge: num(
+                                r.slice(
+                                    k + 1,
+                                    (r.findIndex(
+                                        (p, z) => z > k && p[0] === 10,
+                                    ) + 1 || r.length + 1) - 1,
+                                ),
+                                42,
+                            ),
+                        });
+                e.closed = !!(num(r, 70) & 1);
+                if (
+                    e.points.some((p) => p.bulge) ||
+                    r.some((p) => [40, 41, 91].includes(p[0])) ||
+                    num(r, 43) !== 0 ||
+                    (num(r, 70) & ~1) !== 0
+                )
+                    e.editable = false;
+            }
+            // Non-planar/extruded entities require a 3D engine. Keep them intact and read-only.
+            if (
+                type === "MTEXT" ||
+                (type === "TEXT" &&
+                    (num(r, 72) !== 0 || num(r, 73) !== 0 || num(r, 71) !== 0))
+            )
+                e.editable = false;
+            if (
+                num(r, 39) !== 0 ||
+                num(r, 30) !== 0 ||
+                num(r, 31) !== 0 ||
+                num(r, 38) !== 0 ||
+                num(r, 210) !== 0 ||
+                num(r, 220) !== 0 ||
+                num(r, 230, 1) !== 1
+            )
+                e.editable = false;
+            doc.entities.push(e);
+            if (!doc.layers[e.layer])
+                doc.layers[e.layer] = {
+                    color: "#e2e8f0",
+                    visible: true,
+                    locked: false,
+                };
+            i = j;
+        }
+        for (let k = 0; k < pairs.length; k++) {
+            if (pairs[k][0] === 0 && pairs[k][1] === "LTYPE") {
+                let j = k + 1;
+                while (j < pairs.length && pairs[j][0] !== 0) j++;
+                const r = pairs.slice(k, j);
+                doc.lineTypes[val(r, 2)] = r
+                    .filter((p) => p[0] === 49)
+                    .map((p) => Number(p[1]));
+            }
+            if (pairs[k][0] === 0 && pairs[k][1] === "LAYER") {
+                let j = k + 1;
+                while (j < pairs.length && pairs[j][0] !== 0) j++;
+                const r = pairs.slice(k, j),
+                    name = val(r, 2),
+                    color = num(r, 62, 7);
+                if (name)
+                    doc.layers[name] = {
+                        color: r.some((p) => p[0] === 420)
+                            ? "#" + num(r, 420).toString(16).padStart(6, "0")
+                            : aci(Math.abs(color)),
+                        visible: color >= 0,
+                        locked: !!(num(r, 70) & 4),
+                        lineType: val(r, 6, "CONTINUOUS"),
+                        lineWeight: num(r, 370, -1),
+                        originalColor: r.some((p) => p[0] === 420)
+                            ? "#" + num(r, 420).toString(16).padStart(6, "0")
+                            : aci(Math.abs(color)),
+                        originalVisible: color >= 0,
+                        originalLocked: !!(num(r, 70) & 4),
+                    };
+            }
+        }
+        for (let i = 0; i < doc.entities.length; i++) {
+            const e = doc.entities[i];
+            if (e.type === "POLYLINE") {
+                e.points = [];
+                for (
+                    let j = i + 1;
+                    j < doc.entities.length &&
+                    doc.entities[j].type === "VERTEX";
+                    j++
+                )
+                    e.points.push(doc.entities[j].p);
+                e.closed = !!(num(e.raw, 70) & 1);
+            }
+            if (e.type === "ELLIPSE") {
+                e.major = pt(e.raw, 11);
+                e.ratio = num(e.raw, 40, 1);
+                e.startParam = num(e.raw, 41, 0);
+                e.endParam = num(e.raw, 42, Math.PI * 2);
+            }
+        }
+        const blocks = Object.create(null);
+        for (let k = 0; k < pairs.length; k++) {
+            if (pairs[k][0] === 0 && pairs[k][1] === "BLOCK") {
+                let h = k + 1;
+                while (h < pairs.length && pairs[h][0] !== 0) h++;
+                const name = val(pairs.slice(k, h), 2),
+                    base = pt(pairs.slice(k, h)),
+                    es = [];
+                let j = h;
+                while (
+                    j < pairs.length &&
+                    !(pairs[j][0] === 0 && pairs[j][1] === "ENDBLK")
+                ) {
+                    let z = j + 1;
+                    while (z < pairs.length && pairs[z][0] !== 0) z++;
+                    const r = pairs.slice(j, z),
+                        e = { type: r[0][1], p: pt(r) };
+                    if (e.type === "LINE") e.q = pt(r, 11);
+                    if (["CIRCLE", "ARC"].includes(e.type)) {
+                        e.radius = num(r, 40);
+                        e.start = num(r, 50);
+                        e.end = num(r, 51);
+                    }
+                    if (["LINE", "CIRCLE", "ARC"].includes(e.type)) es.push(e);
+                    j = z;
+                }
+                blocks[name] = { base, es };
+                k = j;
+            }
+        }
+        for (const e of doc.entities)
+            if (e.type === "INSERT") {
+                const block = blocks[val(e.raw, 2)];
+                if (!block) continue;
+                const a = (num(e.raw, 50) * Math.PI) / 180,
+                    sx = num(e.raw, 41, 1),
+                    sy = num(e.raw, 42, 1);
+                e.preview = block.es.map((item) =>
+                    geometry(item).map((p) => {
+                        const x = (p.x - block.base.x) * sx,
+                            y = (p.y - block.base.y) * sy;
+                        return {
+                            x: e.p.x + x * Math.cos(a) - y * Math.sin(a),
+                            y: e.p.y + x * Math.sin(a) + y * Math.cos(a),
+                        };
+                    }),
+                );
+            }
+        const versionIndex = pairs.findIndex(
+            (p) => p[0] === 9 && p[1] === "$ACADVER",
+        );
+        doc.acadVersion =
+            versionIndex >= 0
+                ? Number(String(pairs[versionIndex + 1]?.[1]).replace("AC", ""))
+                : 1032;
+        if (doc.acadVersion < 1015)
+            doc.entities.forEach((e) => (e.editable = false));
+        return doc;
+    }
+    function aci(n) {
+        return (
+            [
+                "#e2e8f0",
+                "#ff5252",
+                "#ffe66d",
+                "#58df8a",
+                "#62dbed",
+                "#629cff",
+                "#e082ed",
+                "#e2e8f0",
+            ][n] || "#aab8cc"
+        );
+    }
+    function geometry(e) {
+        let p = [];
+        if (e.type === "INSERT") return (e.preview || []).flat();
+        if (e.type === "POLYLINE")
+            return (e.points || []).concat(
+                e.closed && e.points?.length ? [e.points[0]] : [],
+            );
+        if (e.type === "ELLIPSE") {
+            const v = e.major,
+                a = Math.atan2(v.y, v.x),
+                rx = Math.hypot(v.x, v.y),
+                ry = rx * e.ratio;
+            for (let i = 0; i <= 96; i++) {
+                const t = e.startParam + ((e.endParam - e.startParam) * i) / 96;
+                p.push({
+                    x:
+                        e.p.x +
+                        rx * Math.cos(t) * Math.cos(a) -
+                        ry * Math.sin(t) * Math.sin(a),
+                    y:
+                        e.p.y +
+                        rx * Math.cos(t) * Math.sin(a) +
+                        ry * Math.sin(t) * Math.cos(a),
+                });
+            }
+            return p;
+        }
+        if (!supported.has(e.type)) return p;
+        if (e.type === "LINE") p = [e.p, e.q];
+        else if (e.type === "LWPOLYLINE")
+            p = e.points.concat(e.closed ? [e.points[0]] : []);
+        else if (["CIRCLE", "ARC"].includes(e.type)) {
+            let a = e.type === "CIRCLE" ? 0 : e.start,
+                b = e.type === "CIRCLE" ? 360 : e.end;
+            while (b <= a) b += 360;
+            for (let i = 0; i <= 72; i++) {
+                let t = ((a + ((b - a) * i) / 72) * Math.PI) / 180;
+                p.push({
+                    x: e.p.x + Math.cos(t) * e.radius,
+                    y: e.p.y + Math.sin(t) * e.radius,
+                });
+            }
+        } else p = [e.p];
+        return p.filter(Boolean);
+    }
+    function bounds(es) {
+        const ps = es.flatMap(geometry);
+        if (!ps.length) return { minX: -100, minY: -100, maxX: 100, maxY: 100 };
+        return ps.reduce(
+            (b, p) => ({
+                minX: Math.min(b.minX, p.x),
+                minY: Math.min(b.minY, p.y),
+                maxX: Math.max(b.maxX, p.x),
+                maxY: Math.max(b.maxY, p.y),
+            }),
+            {
+                minX: Infinity,
+                minY: Infinity,
+                maxX: -Infinity,
+                maxY: -Infinity,
+            },
+        );
+    }
+    function transform(e, o) {
+        if (!e.editable)
+            throw Error(
+                "지원하지 않는 객체는 원본 보존을 위해 편집할 수 없습니다.",
+            );
+        const n = clone(e),
+            a = ((o.angle || 0) * Math.PI) / 180,
+            s = o.scale ?? 1,
+            c = o.center || { x: 0, y: 0 };
+        if (
+            ![s, o.angle ?? 0, o.dx ?? 0, o.dy ?? 0, c.x, c.y].every(
+                Number.isFinite,
+            ) ||
+            s <= 0
+        )
+            throw Error("배율은 양수여야 합니다.");
+        function f(p) {
+            let x = (p.x - c.x) * s,
+                y = (p.y - c.y) * s;
+            if (o.mirror === "x") y = -y;
+            if (o.mirror === "y") x = -x;
+            return {
+                ...p,
+                x: c.x + x * Math.cos(a) - y * Math.sin(a) + (o.dx || 0),
+                y: c.y + x * Math.sin(a) + y * Math.cos(a) + (o.dy || 0),
+            };
+        }
+        n.p = f(n.p);
+        if (n.q) n.q = f(n.q);
+        if (n.points) n.points = n.points.map(f);
+        if (n.radius) n.radius *= s;
+        if (n.height) n.height *= s;
+        if (n.angle !== undefined) {
+            if (o.mirror) n.angle = o.mirror === "x" ? -n.angle : 180 - n.angle;
+            n.angle = (n.angle + (o.angle || 0)) % 360;
+        }
+        if (n.type === "ARC") {
+            if (o.mirror) {
+                let st = n.start,
+                    en = n.end;
+                n.start = o.mirror === "x" ? -en : 180 - en;
+                n.end = o.mirror === "x" ? -st : 180 - st;
+            }
+            n.start += o.angle || 0;
+            n.end += o.angle || 0;
+        }
+        n.dirty = true;
+        return n;
+    }
+    function exportDXF(d) {
+        if (d.acadVersion < 1015 && d.entities.some((e) => e.dirty))
+            throw Error(
+                "R12 도면은 원래 CAD에서 최신 DXF로 저장한 뒤 편집하세요.",
+            );
+        const encode = (v) =>
+            d.acadVersion < 1021
+                ? String(v).replace(
+                      /[^\x00-\x7f]/g,
+                      (c) =>
+                          "\\U+" +
+                          c
+                              .charCodeAt(0)
+                              .toString(16)
+                              .toUpperCase()
+                              .padStart(4, "0"),
+                  )
+                : v;
+        if (!d.layersDirty && !d.entities.some((e) => e.dirty)) {
+            return (
+                [
+                    ...d.prefix,
+                    ...d.entities.flatMap((e) => e.raw || []),
+                    ...d.suffix,
+                ]
+                    .map((p) => p[0] + "\r\n" + encode(p[1]))
+                    .join("\r\n") + "\r\n"
+            );
+        }
+        let prefix = clone(d.prefix),
+            suffix = clone(d.suffix),
+            max = 0;
+        [
+            ...prefix,
+            ...suffix,
+            ...d.entities.flatMap((e) => e.raw || []),
+        ].forEach((p) => {
+            if (p[0] === 5 || p[0] === 105) {
+                const n = parseInt(p[1], 16);
+                if (Number.isFinite(n)) max = Math.max(max, n);
+            }
+        });
+        const next = () => (++max).toString(16).toUpperCase();
+        let table = -1,
+            end = -1;
+        for (let i = 0; i < prefix.length - 1; i++)
+            if (
+                prefix[i][0] === 0 &&
+                prefix[i][1] === "TABLE" &&
+                prefix[i + 1][0] === 2 &&
+                prefix[i + 1][1] === "LAYER"
+            ) {
+                table = i;
+                end = i + 1;
+                while (
+                    end < prefix.length &&
+                    !(prefix[end][0] === 0 && prefix[end][1] === "ENDTAB")
+                )
+                    end++;
+                break;
+            }
+        const layerRecords = [];
+        for (const [name, l] of Object.entries(d.layers)) {
+            let r = [];
+            if (table >= 0) {
+                for (let i = table + 2; i < end; i++)
+                    if (prefix[i][0] === 0 && prefix[i][1] === "LAYER") {
+                        let j = i + 1;
+                        while (j < end && prefix[j][0] !== 0) j++;
+                        if (val(prefix.slice(i, j), 2) === name) {
+                            r = clone(prefix.slice(i, j));
+                            break;
+                        }
+                    }
+            }
+            const isNew = !r.length;
+            if (isNew)
+                r = [
+                    [0, "LAYER"],
+                    [5, next()],
+                    [100, "AcDbSymbolTableRecord"],
+                    [100, "AcDbLayerTableRecord"],
+                    [2, name],
+                    [70, "0"],
+                    [62, "7"],
+                    [6, "CONTINUOUS"],
+                ];
+            const set = (c, v) => {
+                const p = r.find((p) => p[0] === c);
+                if (p) p[1] = String(v);
+                else r.push([c, String(v)]);
+            };
+            if (isNew || l.locked !== l.originalLocked)
+                set(70, (num(r, 70) & ~4) | (l.locked ? 4 : 0));
+            if (isNew || l.visible !== l.originalVisible)
+                set(
+                    62,
+                    (l.visible ? 1 : -1) * Math.max(1, Math.abs(num(r, 62, 7))),
+                );
+            if (isNew || l.color !== l.originalColor)
+                set(420, parseInt(l.color.slice(1), 16));
+            layerRecords.push(...r);
+        }
+        if (table >= 0) {
+            let headerEnd = table + 2;
+            while (headerEnd < end && prefix[headerEnd][0] !== 0) headerEnd++;
+            let head = prefix.slice(table, headerEnd);
+            const count = head.find((p) => p[0] === 70);
+            if (count) count[1] = String(Object.keys(d.layers).length);
+            else head.push([70, String(Object.keys(d.layers).length)]);
+            prefix.splice(table, end - table + 1, ...head, ...layerRecords, [
+                0,
+                "ENDTAB",
+            ]);
+        } else {
+            const chunk = [
+                [0, "TABLE"],
+                [2, "LAYER"],
+                [70, String(Object.keys(d.layers).length)],
+                ...layerRecords,
+                [0, "ENDTAB"],
+            ];
+            let tablesEnd = -1;
+            for (let i = 0; i < prefix.length - 1; i++)
+                if (
+                    prefix[i][0] === 0 &&
+                    prefix[i][1] === "SECTION" &&
+                    prefix[i + 1][1] === "TABLES"
+                ) {
+                    tablesEnd = i + 2;
+                    while (
+                        tablesEnd < prefix.length &&
+                        !(
+                            prefix[tablesEnd][0] === 0 &&
+                            prefix[tablesEnd][1] === "ENDSEC"
+                        )
+                    )
+                        tablesEnd++;
+                    break;
+                }
+            if (tablesEnd >= 0) prefix.splice(tablesEnd, 0, ...chunk);
+            else
+                prefix.splice(
+                    prefix.length - 2,
+                    0,
+                    [0, "SECTION"],
+                    [2, "TABLES"],
+                    ...chunk,
+                    [0, "ENDSEC"],
+                );
+        }
+        let styleName = "Standard",
+            styleFound = false;
+        for (let i = 0; i < prefix.length; i++)
+            if (prefix[i][0] === 0 && prefix[i][1] === "STYLE") {
+                let j = i + 1;
+                while (j < prefix.length && prefix[j][0] !== 0) j++;
+                styleName = val(prefix.slice(i, j), 2, "Standard");
+                styleFound = true;
+                break;
+            }
+        if (!styleFound) {
+            const records = [
+                [0, "TABLE"],
+                [2, "STYLE"],
+                [70, "1"],
+                [0, "STYLE"],
+                [5, next()],
+                [100, "AcDbSymbolTableRecord"],
+                [100, "AcDbTextStyleTableRecord"],
+                [2, styleName],
+                [70, "0"],
+                [40, "0"],
+                [41, "1"],
+                [50, "0"],
+                [71, "0"],
+                [42, "2.5"],
+                [3, "txt"],
+                [4, ""],
+                [0, "ENDTAB"],
+            ];
+            let at = prefix.findIndex(
+                (p, i) =>
+                    p[0] === 0 &&
+                    p[1] === "SECTION" &&
+                    prefix[i + 1]?.[1] === "TABLES",
+            );
+            while (
+                at < prefix.length &&
+                !(prefix[at][0] === 0 && prefix[at][1] === "ENDSEC")
+            )
+                at++;
+            prefix.splice(at, 0, ...records);
+        }
+        let out = [...prefix];
+        for (const e of d.entities) {
+            if (!e.dirty && e.raw) {
+                out.push(...e.raw);
+                continue;
+            }
+            let r = e.raw
+                ? clone(e.raw)
+                : [
+                      [0, e.type],
+                      [5, next()],
+                      [100, "AcDbEntity"],
+                      [8, e.layer],
+                      [
+                          100,
+                          {
+                              LINE: "AcDbLine",
+                              CIRCLE: "AcDbCircle",
+                              ARC: "AcDbCircle",
+                              LWPOLYLINE: "AcDbPolyline",
+                              TEXT: "AcDbText",
+                              MTEXT: "AcDbMText",
+                              POINT: "AcDbPoint",
+                          }[e.type] || "AcDbEntity",
+                      ],
+                  ];
+            if (!r.some((p) => p[0] === 5)) r.splice(1, 0, [5, next()]);
+            const set = (c, v) => {
+                let end = r.findIndex((p) => p[0] === 1001);
+                let p = r
+                    .slice(0, end < 0 ? r.length : end)
+                    .find((p) => p[0] === c);
+                if (p) p[1] = String(v);
+                else {
+                    const at = r.findIndex((p) => p[0] >= 1000);
+                    r.splice(at < 0 ? r.length : at, 0, [c, String(v)]);
+                }
+            };
+            set(8, e.layer);
+            if (e.color !== undefined && e.color !== null) set(420, e.color);
+            if (e.lineType) set(6, e.lineType);
+            if (e.lineWeight !== undefined) set(370, e.lineWeight);
+            set(10, e.p.x);
+            set(20, e.p.y);
+            if (e.type === "LINE") {
+                set(11, e.q.x);
+                set(21, e.q.y);
+            }
+            if (e.radius !== undefined) set(40, e.radius);
+            if (e.type === "ARC") {
+                set(50, e.start);
+                set(51, e.end);
+            }
+            if (e.text !== undefined) {
+                r = r.filter((p) => p[0] !== 3);
+                if (e.type === "MTEXT")
+                    r = r.filter((p) => ![11, 21, 31].includes(p[0]));
+                set(1, e.text);
+                if (!r.some((p) => p[0] === 7)) set(7, styleName);
+                set(40, e.height);
+                set(50, e.angle || 0);
+            }
+            if (e.type === "LWPOLYLINE") {
+                r = r.filter((p) => ![10, 20, 40, 41, 42, 91].includes(p[0]));
+                set(90, e.points.length);
+                set(70, e.closed ? 1 : 0);
+                e.points.forEach((p) => {
+                    const at = r.findIndex((p) => p[0] >= 1000);
+                    r.splice(
+                        at < 0 ? r.length : at,
+                        0,
+                        [10, String(p.x)],
+                        [20, String(p.y)],
+                    );
+                });
+            }
+            if (
+                e.type === "ARC" &&
+                !r.some((p) => p[0] === 100 && p[1] === "AcDbArc")
+            )
+                r.splice(
+                    r.findIndex((p) => p[0] === 50),
+                    0,
+                    [100, "AcDbArc"],
+                );
+            out.push(...r);
+        }
+        out.push(...suffix);
+        const seed = out.findIndex((p) => p[0] === 9 && p[1] === "$HANDSEED");
+        if (seed >= 0 && out[seed + 1]?.[0] === 5) out[seed + 1][1] = next();
+        return (
+            out.map((p) => p[0] + "\r\n" + encode(p[1])).join("\r\n") + "\r\n"
+        );
+    }
+    function distance(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+    function segmentDistance(p, a, b) {
+        const l = distance(a, b) ** 2,
+            t = l
+                ? Math.max(
+                      0,
+                      Math.min(
+                          1,
+                          ((p.x - a.x) * (b.x - a.x) +
+                              (p.y - a.y) * (b.y - a.y)) /
+                              l,
+                      ),
+                  )
+                : 0;
+        return distance(p, {
+            x: a.x + t * (b.x - a.x),
+            y: a.y + t * (b.y - a.y),
+        });
+    }
+    function newEntity(type, data, layer = "0") {
+        return {
+            id: "n" + Date.now() + Math.random(),
+            type,
+            layer,
+            p: { x: 0, y: 0 },
+            editable: true,
+            dirty: true,
+            ...data,
+        };
+    }
+
+    function offset(e, d) {
+        if (!Number.isFinite(d)) throw Error("오프셋 거리가 잘못되었습니다.");
+        const n = clone(e);
+        if (e.type === "LINE") {
+            const len = distance(e.p, e.q);
+            if (!len) throw Error("길이 0인 선은 오프셋할 수 없습니다.");
+            const dx = (-(e.q.y - e.p.y) * d) / len,
+                dy = ((e.q.x - e.p.x) * d) / len;
+            n.p = { x: e.p.x + dx, y: e.p.y + dy };
+            n.q = { x: e.q.x + dx, y: e.q.y + dy };
+        } else if (e.type === "CIRCLE") {
+            n.radius += d;
+            if (n.radius <= 0) throw Error("원 반지름이 0 이하입니다.");
+        } else throw Error("오프셋은 선 또는 원만 지원합니다.");
+        n.id = "offset" + Math.random();
+        n.dirty = true;
+        if (n.raw) n.raw = n.raw.filter((p) => ![5, 330, 360].includes(p[0]));
+        return n;
+    }
+    function trim(e, boundary, pick, extend = false) {
+        if (e.type !== "LINE" || boundary.type !== "LINE")
+            throw Error("두 개의 직선을 선택하세요.");
+        const a = e.p,
+            b = e.q,
+            c = boundary.p,
+            d = boundary.q,
+            den = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);
+        if (Math.abs(den) < 1e-12)
+            throw Error("평행하거나 겹치는 선은 처리할 수 없습니다.");
+        const t = ((a.x - c.x) * (c.y - d.y) - (a.y - c.y) * (c.x - d.x)) / den,
+            hit = { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+        if (extend ? t >= 0 && t <= 1 : t < 0 || t > 1)
+            throw Error(
+                extend
+                    ? "교점이 이미 선 안에 있습니다."
+                    : "교점이 선 밖에 있습니다.",
+            );
+        const n = clone(e);
+        if (extend) {
+            if (t < 0) n.p = hit;
+            else n.q = hit;
+        } else if (distance(pick, a) < distance(pick, b)) n.p = hit;
+        else n.q = hit;
+        n.dirty = true;
+        return n;
+    }
+    function array(es, rows, cols, dx, dy) {
+        if (
+            !Number.isInteger(rows) ||
+            !Number.isInteger(cols) ||
+            rows < 1 ||
+            cols < 1 ||
+            rows * cols > 500 ||
+            es.length * (rows * cols - 1) > 50000 ||
+            ![dx, dy].every(Number.isFinite)
+        )
+            throw Error(
+                "배열은 양의 정수 행·열, 최대 500칸·추가 객체 50,000개입니다.",
+            );
+        const out = [];
+        for (let y = 0; y < rows; y++)
+            for (let x = 0; x < cols; x++)
+                if (x || y)
+                    for (const e of es) {
+                        const n = transform(e, { dx: x * dx, dy: y * dy });
+                        n.id = "array" + Math.random();
+                        if (n.raw)
+                            n.raw = n.raw.filter(
+                                (p) => ![5, 330, 360].includes(p[0]),
+                            );
+                        out.push(n);
+                    }
+        return out;
+    }
+    function renameLayer(source, old, name) {
+        if (old === "0" || !Object.hasOwn(source.layers, old))
+            throw Error("기본 또는 없는 레이어는 이름을 바꿀 수 없습니다.");
+        if (
+            !name ||
+            ["__proto__", "constructor", "prototype"].includes(name) ||
+            /[<>/\\":;?*|=\r\n]/.test(name) ||
+            Object.hasOwn(source.layers, name)
+        )
+            throw Error("사용할 수 없는 레이어 이름입니다.");
+        const opaque =
+            source.prefix.some(
+                (p, i) =>
+                    p[0] === 0 &&
+                    p[1] === "SECTION" &&
+                    !["HEADER", "TABLES", "ENTITIES"].includes(
+                        source.prefix[i + 1]?.[1],
+                    ),
+            ) ||
+            source.suffix.some((p) => p[0] === 0 && p[1] === "SECTION") ||
+            source.entities.some((e) => !e.editable);
+        if (opaque)
+            throw Error(
+                "블록 또는 미지원 데이터가 있는 도면의 레이어 이름은 원래 CAD에서 바꾸세요.",
+            );
+        const doc = clone(source);
+        doc.layers[name] = doc.layers[old];
+        delete doc.layers[old];
+        doc.layersDirty = true;
+        for (const entity of doc.entities)
+            if (entity.layer === old) {
+                entity.layer = name;
+                const pair = entity.raw?.find((p) => p[0] === 8);
+                if (pair) pair[1] = name;
+            }
+        for (let i = 0; i < doc.prefix.length; i++) {
+            const pair = doc.prefix[i];
+            if (
+                pair[0] === 9 &&
+                pair[1] === "$CLAYER" &&
+                doc.prefix[i + 1]?.[0] === 8 &&
+                doc.prefix[i + 1][1] === old
+            )
+                doc.prefix[i + 1][1] = name;
+            if (pair[0] === 0 && pair[1] === "LAYER") {
+                for (
+                    let j = i + 1;
+                    j < doc.prefix.length && doc.prefix[j][0] !== 0;
+                    j++
+                )
+                    if (doc.prefix[j][0] === 2 && doc.prefix[j][1] === old)
+                        doc.prefix[j][1] = name;
+            }
+        }
+        return doc;
+    }
+    g.CADCore = {
+        renameLayer,
+        offset,
+        trim,
+        array,
+        parse,
+        exportDXF,
+        geometry,
+        bounds,
+        transform,
+        distance,
+        segmentDistance,
+        newEntity,
+        clone,
+        aci,
+    };
+})(typeof window === "undefined" ? globalThis : window);

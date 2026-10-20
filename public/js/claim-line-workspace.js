@@ -40,7 +40,7 @@
     }).join('');
     el.innerHTML = '<section style="border:1px solid var(--border-default);border-radius:12px;padding:16px;margin:16px 0">' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><h3 style="margin-right:auto">공정 도면 · 증빙서류</h3>' +
-      (c.canManage ? button('이 공정에 서류 올리기', 'upload()') : '') + button('증빙 확인 대기 / 기존 자료 연결', 'inbox()') + button('새로고침', 'reloadAll()') + '</div>' +
+      (c.canManage ? button('CAD 편집 · 기성 증빙 연결', 'cad()') + button('이 공정에 서류 올리기', 'upload()') : '') + button('증빙 확인 대기 / 기존 자료 연결', 'inbox()') + button('새로고침', 'reloadAll()') + '</div>' +
       '<div style="margin:12px 0">' + (missing.length ? ui().notice('보완할 자료: ' + missing.join(' / '), 'warn') : ui().badge('기본 자료 연결됨', 'ok')) +
       '<p style="font-size:12px;color:var(--text-secondary)">현재 연결 상태 기준입니다. 계약에서 요구하는 납품서·검측서 등은 계약 조건과 아래 확인할 사항을 함께 검토하세요.</p></div>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">' + (drawings || '<p>연결된 도면이 없습니다. 공정별 도면에서 도면을 선택하세요.</p>') + '</div>' +
@@ -110,7 +110,7 @@
     });
     return m;
   }
-  w.AdminClaimLineWorkspace={mount:mount,row:row,preview:preview,drawing:drawing,editDocument:editDocument,upload:upload,reload:load,
+  w.AdminClaimLineWorkspace={cad:function(){var c=context;if(!c||!c.canManage)return;w.AdminClaimEditor.open(c.contractId,c.siteId||data.siteId,data.drawings||[],{lineId:c.line.id,openCAD:true,onClose:function(){if(sameLine(c))context.reload();}});},mount:mount,row:row,preview:preview,drawing:drawing,editDocument:editDocument,upload:upload,reload:load,
     reloadAll:function(){w.apiCache={};return context.reload();},
     inbox:function(){w.AdminClaimEvidence.openInbox();},
     page:function(n){page=n;return load();},_gaps:gaps};

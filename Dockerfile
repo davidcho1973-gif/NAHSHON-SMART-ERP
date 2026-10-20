@@ -10,11 +10,16 @@ WORKDIR /app
 COPY . .
 RUN composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-scripts
 
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS cad
+WORKDIR /source
+COPY services/cad-converter ./
+RUN dotnet publish CadConverter.csproj -c Release -r linux-x64 --self-contained true -o /out
+
 FROM php:8.3-apache AS runtime
 WORKDIR /var/www/html
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev libzip-dev unzip \
+    && apt-get install -y --no-install-recommends libpq-dev libzip-dev libicu-dev unzip \
     && docker-php-ext-install pdo_pgsql zip \
     && a2enmod rewrite \
     && sed -ri -e 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/*.conf \
@@ -23,6 +28,8 @@ RUN apt-get update \
 
 COPY --from=vendor /app /var/www/html
 COPY --from=assets /app/public/build /var/www/html/public/build
+COPY --from=cad /out /opt/cad
+ENV CAD_CONVERTER_BINARY=/opt/cad/Nahshon.CadConverter
 
 RUN chown -R www-data:www-data storage bootstrap/cache
 

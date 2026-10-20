@@ -344,6 +344,18 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/share', 'share')->middleware('throttle:10,1');
     });
 
+    Route::get('/cad', [\App\Http\Controllers\CadDrawingController::class, 'index'])->name('cad.index');
+    Route::prefix('admin-api/cad')->controller(\App\Http\Controllers\CadDrawingController::class)->group(function (): void {
+        Route::get('/', 'drawings');
+        Route::get('/capabilities', 'capabilities');
+        Route::get('/claim-context', 'claimContext');
+        Route::post('/', 'store')->middleware('throttle:20,1');
+        Route::get('/{drawing}', 'show');
+        Route::put('/{drawing}', 'update')->middleware('throttle:30,1');
+        Route::post('/{drawing}/claim-draft', 'claimDraft')->middleware('throttle:30,1');
+        Route::get('/{drawing}/history', 'history');
+        Route::get('/{drawing}/download', 'download')->middleware('throttle:20,1');
+    });
     // 관리자 화면의 파일 업로드(multipart) — SPA 의 JSON API 로는 파일을 실을 수 없다.
     Route::post('/admin-api/contracts/{contract}/documents', [AdminUploadController::class, 'contractDocument'])
         ->name('admin.contract-document.upload');
@@ -426,7 +438,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/billing-export/submissions/{submission}/responses/{event}/file', [ClaimSubmissionController::class, 'response'])->whereNumber(['submission', 'event'])->name('billing-export.submission-response');
     Route::get('/billing-export/submissions/{submission}/packet.zip', [ClaimSubmissionController::class, 'download'])->whereNumber('submission')->name('billing-export.submission');
     Route::get('/billing-export/contracts/{contract}/daily-evidence/{type}/{id}', [ClaimEvidenceFileController::class, 'show'])
-        ->whereNumber(['contract', 'id'])->whereIn('type', ['document', 'expense', 'receipt', 'photo'])->name('billing-export.daily-evidence');
+        ->whereNumber(['contract', 'id'])->whereIn('type', ['document', 'expense', 'receipt', 'photo', 'cad_revision'])->name('billing-export.daily-evidence');
     Route::get('/billing-export/applications/{application}/gc-claim.xlsx', [GcClaimExportController::class, 'download'])->whereNumber('application')->name('billing-export.gc-claim');
     Route::get('/claim-editor/lines/{line}/export/{format}', [ClaimRecordReportController::class, 'export'])->whereNumber('line')->whereIn('format', ['html', 'docx', 'xlsx'])->name('claim-record.export');
     Route::post('/claim-editor/lines/{line}/send', [ClaimRecordReportController::class, 'send'])->whereNumber('line')->middleware('throttle:10,1')->name('claim-record.send');
