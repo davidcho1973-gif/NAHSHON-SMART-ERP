@@ -186,8 +186,8 @@
   /** Printed dimensions and typed lengths share one parser. Bare numbers are feet. */
   function parseLength(text) {
     var t = lengthText(text);
-    var m = t.match(/^(\d+(?:\.\d+)?)\s*m$/);
-    if (m) return Number(m[1]) / 0.3048;
+    var m = t.match(/^(\d+(?:\.\d+)?)\s*(mm|cm|m)$/);
+    if (m) return Number(m[1]) / (m[2] === 'mm' ? 304.8 : m[2] === 'cm' ? 30.48 : 0.3048);
     var amount = '(\\d+\\s+\\d+\\s*\\/\\s*\\d+|\\d+\\s*\\/\\s*\\d+|\\d+(?:\\.\\d+)?)';
     m = t.match(new RegExp('^(\\d+(?:\\.\\d+)?)\\s*\'\\s*-?\\s*(?:' + amount + '\\s*"?)?$'));
     if (m) { var inch = m[2] ? inches(m[2].replace(/\s*\/\s*/g, '/')) : 0; return Number.isFinite(inch) && inch < 12 ? Number(m[1]) + inch / 12 : null; }
@@ -439,6 +439,20 @@
               side: $('[data-side]'), tools: $('[data-tools]'), canManage: r.canManage, scopedKeys: !!opts.host,
               view: function () { return { W: st.W, H: st.H, wPt: st.wPt, hPt: st.hPt, k: st.k, fpp: st.fpp }; },
               toWorld: toWorld, refit: fit, hint: showHint, scaleLabel: function () { return st.scaleLabel; },
+              calibrate: function (points) {
+                if (!st.data.canManage) return;
+                beginCalibration(null);
+                if (points && points.length === 2) {
+                  st.draft = points.map(function (p) { return p.slice(); });
+                  draw(); finishCalibration();
+                }
+              },
+              readDimension: beginDimensionRead,
+              parseDistance: function (text, unit) {
+                var value = String(text || '').trim();
+                if (/^\d+(?:\.\d+)?$/.test(value) && (unit === 'm' || unit === 'mm')) value += unit;
+                return parseLength(value);
+              },
               setHand: function () { st.tool = 'hand'; st.draft = []; select(null); }, snapshot: studioSnapshot,
             });
             $('[data-studio]').style.display = '';
@@ -741,7 +755,9 @@
       var form = calibrationForm(), reference = st.calibrationReference;
       form.innerHTML = '<div style="font-weight:800;font-size:15px">' + (reference ? '도면 치수로 축척 적용' : '실제 길이 (ft)') + '</div>' +
         '<label style="display:block;font-size:12px;color:#94a3b8;margin-top:8px">두 점 사이의 실제 길이<input data-len value="' + esc(reference ? reference.label : '') + '" placeholder="예) 12.5 또는 12\'-6&quot;"></label>' +
-        '<small>숫자만 입력하면 피트(ft)입니다. 12\'-6&quot; = 12.5 ft. 읽은 값이 다르면 여기서 고칠 수 있습니다.</small>' +
+        '<small>숫자만 입력하면 피트(ft)입니다. 12\'-6&quot; = 12.5 ft. 선은 그대로 두고 이 길이를 측정 기준으로 저장합니다.</small>' +
+        '<div data-scale-preview style="margin-top:10px;font-size:13px;color:#7dd3fc"></div>' +
+        '<small>이 페이지의 길이·면적 표시가 새 기준으로 계산됩니다. 서로 다른 축척의 상세도에는 같은 기준을 사용하지 마세요.</small>' +
         '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="dm-btn" data-cancel>취소</button><button class="dm-btn primary" data-save>맞추기</button></div>';
       form.querySelector('[data-cancel]').onclick = cancelCalibration;
       form.querySelector('[data-save]').onclick = function () {
@@ -753,6 +769,13 @@
           .catch(function (e) { if (form.isConnected) form.querySelector('[data-save]').disabled = false; toast(e.message || '축척 저장에 실패했습니다.', 'error'); });
       };
       form.querySelector('[data-len]').focus();
+      form.querySelector('[data-len]').oninput = function () {
+        var ft = parseLength(this.value);
+        form.querySelector('[data-scale-preview]').textContent = ft > 0 && pts > 0
+          ? '선택 구간 = ' + fmtFeet(ft) + ' (' + Number(ft.toFixed(6)) + ' ft)'
+          : '도면에 적힌 실제 길이를 입력하세요.';
+      };
+      form.querySelector('[data-len]').oninput();
       form.querySelector('[data-len]').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); form.querySelector('[data-save]').click(); } };
     }
 
