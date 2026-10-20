@@ -198,12 +198,19 @@
   }
 
   /** 줄 서서 하나씩 — 도면 여러 개를 한꺼번에 그리면 브라우저 메모리가 모자란다. */
+  var pendingReads = [];
   function readQueue(docs, force) {
-    if (state.reading || !docs.length) return Promise.resolve();
+    docs.forEach(function (doc) {
+      if (!pendingReads.some(function (item) { return item.doc.id === doc.id; })) pendingReads.push({ doc: doc, force: force });
+    });
+    if (state.reading || !pendingReads.length) return Promise.resolve();
     state.reading = true;
-    return docs.reduce(function (p, d) {
-      return p.then(function () { return readDocument(d, force); });
-    }, Promise.resolve()).finally(function () {
+    function next() {
+      var item = pendingReads.shift();
+      if (!item) return Promise.resolve();
+      return readDocument(item.doc, item.force).then(next);
+    }
+    return next().finally(function () {
       state.reading = false;
       if (active()) reload();
     });
@@ -522,17 +529,19 @@
     var files = Array.prototype.slice.call(input.files || []);
     input.value = '';
     if (!files.length) return;
-    var ids = [];
+    var uploaded = [];
+    var uploadSite = state.data.siteId;
     files.reduce(function (p, f) {
       return p.then(function () {
         u.toast(f.name + ' 올리는 중…');
         var fd = new FormData();
         fd.append('files[]', f);
-        fd.append('site_id', String(state.data.siteId));
+        fd.append('site_id', String(uploadSite));
+        fd.append('purpose', 'drawing');
         return request('/document-hub/api/upload', 'POST', fd).then(function (res) {
           if (!res || res.success === false) { u.toast(f.name + ': ' + ((res && (res.error || res.message)) || '올리지 못했습니다.'), 'error'); return; }
-          (res.documents || []).forEach(function (x) { ids.push(x.id); });
-          (res.duplicates || []).forEach(function (x) { if (x.documentId) ids.push(x.documentId); });
+          (res.documents || []).forEach(function (x) { uploaded.push(x); });
+          (res.duplicates || []).forEach(function (x) { if (x.drawing) uploaded.push(x.drawing); });
           (res.failed || []).forEach(function (x) { u.toast(x.file + ': ' + x.reason, 'error'); });
         });
       });
@@ -541,7 +550,7 @@
     }).then(function (res) {
       state.data = res;
       if (active()) paint(render());
-      var docs = ids.map(function (id) { return findDoc(id); }).filter(Boolean);
+      var docs = uploaded.filter(function (doc) { return doc.pdfUrl; });
       if (docs.length) { u.toast(docs.length + '개 파일을 올렸습니다. 쪽을 읽기 시작합니다.'); readQueue(docs, false); }
     }).catch(function (e) { u.toast(e.message || '올리지 못했습니다.', 'error'); });
   }
@@ -570,6 +579,14 @@
 
   /** 공정 하나의 도면 고르기 — 읽힌 도면을 번호별로 보여 주고, 아직 없는 번호는 직접 적는다. */
   function pick(sectionId, lineId) {
+    return call('api_getSectionDrawings', []).then(function (res) {
+      if (res.success === false) throw new Error(res.error || '도면 목록을 불러오지 못했습니다.');
+      state.data = res;
+      showPicker(sectionId, lineId);
+    }).catch(function (e) { ui().toast(e.message, 'error'); });
+  }
+
+  function showPicker(sectionId, lineId) {
     var u = ui();
     var d = state.data;
     var section = d.sections.filter(function (s) { return s.id === sectionId; })[0];
@@ -582,6 +599,9 @@
     var nos = Object.keys(byNo).sort();
     var missing = chosen.filter(function (n) { return !byNo[n]; });
     var noNumber = (d.catalog || []).filter(function (s) { return !s.sheetNo && s.status === 'done'; });
+    var processing = (d.documents || []).some(function (doc) {
+      return !doc.pages || (doc.sheets || []).some(function (s) { return s.status === 'pending' || s.status === 'reading'; });
+    });
 
     var grid = nos.map(function (no) {
       var s = byNo[no];
@@ -596,6 +616,7 @@
     }).join('');
 
     var body =
+      (processing ? '<div style="margin-bottom:10px;font-size:12px;color:var(--text-secondary)">새 도면을 읽고 있습니다. 읽기가 끝난 뒤 도면 고르기를 다시 열면 표시됩니다.</div>' : '') +
       (nos.length ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px">' + grid + '</div>'
         : '<div style="padding:16px;color:var(--text-tertiary);font-size:13px">아직 읽힌 도면이 없습니다. 도면 번호를 아래에 직접 적어 두면 파일이 읽힐 때 자동으로 붙습니다.</div>') +
       (noNumber.length ? '<div style="margin-top:10px;font-size:12px;color:var(--status-warning)">번호를 못 읽은 쪽이 ' + noNumber.length + '장 있습니다. 도면을 눌러 번호를 적으면 여기 나옵니다.</div>' : '') +

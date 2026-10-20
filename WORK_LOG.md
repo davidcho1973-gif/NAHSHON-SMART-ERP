@@ -1,3 +1,8 @@
+## 2026-10-19 — Drawing upload picker integration
+- Root cause: drawing uploads used generic intake, depended on the latest 50 unclassified PDFs, dropped reads when busy, and opened a cached picker.
+- Preserve explicit drawing source in the shared document library; use intake response references for new/duplicate PDFs without altering duplicate evidence ownership. Queue reads sequentially and fetch the latest catalog when opening the picker.
+- Targeted PHP upload/library/duplicate and synthetic browser fresh-picker/concurrent-upload checks pass. Browser regression added to existing CI; full staging/main release gates remain required.
+
 ## 2026-10-19 — Simplify drawing workspace to attachments and description
 - Cause: fullscreen drawing workspace reused the full financial editor and exposed unrelated report/export/calculation actions. User requested only uploads and work description beside drawings.
 - Render an actual minimal fullscreen form (not CSS hiding): upload, saved attachment list, notes, save/close. Remove report preview/Word/Excel/email, tabs, quantity/date/location/stage, templates, source search and history from this surface. Keep drawing navigation/tools and the separate financial editor.
