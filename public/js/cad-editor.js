@@ -44,6 +44,7 @@
         $('claim-attach').onclick=attachClaim;
     }
     async function attachClaim(){
+        if(gesture){status('드래그를 끝내거나 Esc로 취소한 뒤 연결하세요.');return;}
         if(!inClaim||!claimValid||!record||busy)return;
         if(dirty){status('CAD 도면을 먼저 저장한 뒤 저장한 개정을 연결하세요.');return;}
         if(Number(record.site_id)!==claimContext.siteId){status('이 기성 공정의 현장과 같은 현장 도면을 선택하세요.');return;}
@@ -58,6 +59,8 @@
         }catch(e){fail(e);}finally{busy=false;$('claim-attach').disabled=false;}
     }
     if(proofMode){$('sites').disabled=true;$('drawings').disabled=true;$('history').disabled=true;}
+    let gesture = null, inspectorKey = "";
+    const styleEdits=new Set(),textEdits=new Set();
     const labels = {
         select: "선택",
         line: "선",
@@ -105,6 +108,7 @@
         return j.data || j;
     }
     function guard() {
+        if(gesture){status("드래그를 끝내거나 Esc로 취소하세요.");return false;}
         if (busy) {
             status("저장이 끝날 때까지 기다려 주세요.");
             return false;
@@ -131,7 +135,7 @@
     }
     function entities() {
         return doc
-            ? doc.entities.filter(
+            ? doc.entities.map(e=>gesture?.preview?.get(e.id)||e).filter(
                   (e) =>
                       !e.hidden &&
                       !e.paper &&
@@ -149,11 +153,12 @@
     function screen(p) {
         return { x: origin.x + p.x * scale, y: origin.y - p.y * scale };
     }
-    function snap(p) {
+    function snap(p, exclude = new Set()) {
         if ($("snap").checked) {
             let best = 12 / scale,
                 out = p;
             for (const e of entities()) {
+                if(exclude.has(e.id))continue;
                 const ps =
                     e.type === "LINE"
                         ? [
@@ -177,13 +182,45 @@
             }
             p = { ...out };
         }
-        if ($("ortho").checked && points.length) {
-            const a = points.at(-1);
-            if (Math.abs(p.x - a.x) > Math.abs(p.y - a.y)) p.y = a.y;
-            else p.x = a.x;
-        }
+        const orthoAnchor=points.length&&['line','polyline','move','copy'].includes(tool)?points.at(-1):gesture?.kind==='draw'&&gesture.tool==='line'?gesture.start:gesture?.kind==='move'?gesture.start:null;
+        if($('ortho').checked&&orthoAnchor){if(Math.abs(p.x-orthoAnchor.x)>Math.abs(p.y-orthoAnchor.y))p.y=orthoAnchor.y;else p.x=orthoAnchor.x;}
         return p;
     }
+
+    function entityColor(e){return e.color!==undefined&&e.color!==null?'#'+e.color.toString(16).padStart(6,'0'):e.aci>0&&e.aci<256?C.aci(e.aci):doc.layers[e.layer]?.color||'#e2e8f0';}
+    function inspector(){
+        const es=doc?doc.entities.filter(e=>selected.has(e.id)):[],first=es[0];
+        const key=JSON.stringify([canManage,busy,...es.map(e=>[e.id,e.color,e.aci,e.lineWeight,e.lineType,e.text,e.height,e.angle,doc.layers[e.layer]?.locked,doc.layers[e.layer]?.color,doc.layers[e.layer]?.lineWeight])]);
+        if(key===inspectorKey)return;inspectorKey=key;styleEdits.clear();textEdits.clear();
+        $('selection-properties').textContent=first?(es.length===1?first.type+' · '+(editable(first)?'드래그 이동 / 손잡이 크기조절':'읽기 전용 또는 레이어 잠금'):es.length+'개 선택 · 첫 객체의 속성 표시'):'객체를 선택하면 속성이 표시됩니다. 새 객체 기본값은 왼쪽에서 설정하세요.';
+        if(first){$('entity-color').value=entityColor(first);$('entity-width').value=first.lineWeight>=0?first.lineWeight/100:(first.lineWeight??-1);$('entity-linetype').value=first.lineType||'BYLAYER';}
+        const text=es.find(e=>e.type==='TEXT'||e.type==='MTEXT');
+        if(text){$('text').value=text.text;$('height').value=text.height;$('text-color').value=entityColor(text);}
+        $('text-properties').disabled=!text||!canManage||busy||!es.some(e=>e.type==='TEXT'&&editable(e));
+        const shapeEnabled=canManage&&!busy&&es.some(e=>!['TEXT','MTEXT'].includes(e.type)&&editable(e));
+        $('apply-style').disabled=!shapeEnabled;
+        for(const id of ['entity-color','entity-width','entity-linetype'])$(id).disabled=!shapeEnabled;
+    }
+    function hitEntity(p){
+        for(const e of entities().slice().reverse()){
+            if(['TEXT','MTEXT'].includes(e.type)){
+                const a=-(e.angle||0)*Math.PI/180,dx=p.x-e.p.x,dy=p.y-e.p.y,x=dx*Math.cos(a)-dy*Math.sin(a),y=dx*Math.sin(a)+dy*Math.cos(a);
+                ctx.save();ctx.font=Math.max(1,e.height*scale)+'px sans-serif';const width=ctx.measureText(e.text.replace(/\\P/g,' ')).width/scale;ctx.restore();
+                if(x>=-5/scale&&x<=width+5/scale&&y>=-e.height*.3-5/scale&&y<=e.height+5/scale)return e;
+            }
+            if(C.contains(e,p))return e;
+            const ps=C.geometry(e);if(ps.length===1&&C.distance(p,ps[0])<=10/scale)return e;
+            for(let i=1;i<ps.length;i++)if(C.segmentDistance(p,ps[i-1],ps[i])<=10/scale)return e;
+        }return null;
+    }
+    function gripAt(p){
+        if(!doc||!canManage||busy)return null;
+        for(const e of doc.entities.filter(e=>selected.has(e.id)&&editable(e)))for(const grip of C.grips(e))if(C.distance(p,grip.point)<=8/scale)return {entity:e,key:grip.key};
+        return null;
+    }
+    function cancelGesture(){if(!gesture)return;const id=gesture.pointerId;gesture=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);render();}
+    function standardWeight(value){const weights=[0,5,9,13,15,18,20,25,30,35,40,50,53,60,70,80,90,100,106,120,140,158,200,211];return weights.reduce((best,n)=>Math.abs(n-value*100)<Math.abs(best-value*100)?n:best,25);}
+
     function render() {
         const r = canvas.getBoundingClientRect(),
             dpr = window.devicePixelRatio || 1;
@@ -218,9 +255,7 @@
         for (const e of entities()) {
             const ps = C.geometry(e);
             if (!ps.length) continue;
-            ctx.strokeStyle = selected.has(e.id)
-                ? "#facc15"
-                : e.color !== undefined && e.color !== null
+            ctx.strokeStyle = e.color !== undefined && e.color !== null
                   ? "#" + e.color.toString(16).padStart(6, "0")
                   : e.aci > 0 && e.aci < 256
                     ? C.aci(e.aci)
@@ -236,7 +271,7 @@
                 ).map((n) => Math.max(1, Math.abs(n) * scale)),
             );
             ctx.lineWidth = selected.has(e.id)
-                ? 2
+                ? Math.max(2,(e.lineWeight>0?e.lineWeight/100:0)*3.78)
                 : Math.max(
                       1,
                       (e.lineWeight > 0 ? e.lineWeight / 100 : 0) * 3.78,
@@ -270,6 +305,13 @@
                 ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
             }
         }
+        ctx.setLineDash([]);
+        if(gesture?.kind==='draw'&&gesture.moved){
+            ctx.strokeStyle=$('default-color').value;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
+            const a=screen(gesture.start),b=screen(gesture.end);if(gesture.tool==='rectangle')ctx.rect(a.x,a.y,b.x-a.x,b.y-a.y);else {ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}ctx.stroke();ctx.setLineDash([]);
+        }
+        if(tool==='select'&&canManage&&!busy)for(const e of entities().filter(e=>selected.has(e.id)&&editable(e))){for(const grip of C.grips(e)){const p=screen(grip.point);ctx.fillStyle='#101827';ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.fillRect(p.x-4,p.y-4,8,8);ctx.strokeRect(p.x-4,p.y-4,8,8);}}
+        inspector();
         ctx.fillStyle = "#5eead4";
         points.forEach((p) => {
             const s = screen(p);
@@ -280,7 +322,9 @@
             labels[tool] +
             ": " +
             ({
-                select: "클릭 선택 · Shift 추가 · 휠 확대 · 가운데 버튼 이동",
+                select: "객체 드래그 이동 · 손잡이 드래그 크기조절 · Shift 추가 선택",
+                line: "드래그하여 선 그리기 · 클릭 두 번 / 좌표 입력 가능",
+                rectangle: "드래그하여 사각형 그리기 · 클릭 두 번 / 좌표 입력 가능",
                 polyline: "점을 차례로 지정 · Enter 완료",
                 arc: "중심 → 시작점 → 끝점",
                 rotate: "각도 입력 후 기준점 지정",
@@ -291,6 +335,7 @@
             }[tool] || "점을 순서대로 지정 · Esc 취소");
     }
     function fit() {
+        if(gesture||pan){status('드래그 또는 화면 이동을 끝낸 뒤 전체 보기를 사용하세요.');return;}
         if (!doc) return;
         const b = C.bounds(entities()),
             r = canvas.getBoundingClientRect();
@@ -306,7 +351,8 @@
         render();
     }
     function setTool(t) {
-        if (!doc) return;
+        if (!doc || busy) return;
+        cancelGesture();
         tool = t;
         points = [];
         document
@@ -334,9 +380,12 @@
         $("tool-buttons").append(b);
     });
     function add(type, data) {
-        doc.entities.push(C.newEntity(type, data, $("layer").value || "0"));
+        const text=type==='TEXT'||type==='MTEXT';
+        const color=parseInt($(text?'default-text-color':'default-color').value.slice(1),16),width=Number($('default-width').value);
+        const e=C.newEntity(type,{...data,color,lineWeight:standardWeight(Number.isFinite(width)?width:.25)},$('layer').value||'0');doc.entities.push(e);return e;
     }
     function finishPolyline() {
+        if(!doc||!canManage||busy||gesture||doc.layers[$("layer").value]?.locked)return;
         if (tool === "polyline" && points.length > 1) {
             snapshot();
             add("LWPOLYLINE", {
@@ -349,25 +398,11 @@
         }
     }
     function point(p, shift = false) {
-        if (!doc) return;
+        if (!doc || busy || gesture) return;
         if (tool === "select") {
-            let hit = null,
-                best = 10 / scale;
-            for (const e of entities()) {
-                const ps = C.geometry(e);
-                let d = ps.length === 1 ? C.distance(p, ps[0]) : Infinity;
-                for (let i = 1; i < ps.length; i++)
-                    d = Math.min(d, C.segmentDistance(p, ps[i - 1], ps[i]));
-                if (d < best) {
-                    hit = e;
-                    best = d;
-                }
-            }
-            if (!shift) selected.clear();
-            if (hit) {
-                if (selected.has(hit.id)) selected.delete(hit.id);
-                else selected.add(hit.id);
-            }
+            const hit=hitEntity(p);
+            if(!shift)selected.clear();
+            if(hit){if(shift&&selected.has(hit.id))selected.delete(hit.id);else selected.add(hit.id);}
             render();
             return;
         }
@@ -419,20 +454,11 @@
             render();
             return;
         }
-        const h = Number($("height").value),
+        const h = Number($("default-text-height").value),
             angle = Number($("angle").value),
             factor = Number($("factor").value);
-        if (
-            !Number.isFinite(h) ||
-            h <= 0 ||
-            !Number.isFinite(angle) ||
-            !Number.isFinite(factor) ||
-            factor <= 0
-        ) {
-            points = [];
-            status("높이·배율은 양수, 각도는 유효한 숫자로 입력하세요.");
-            return;
-        }
+        if((['text','dimension'].includes(tool)&&(!Number.isFinite(h)||h<=0))||(['rotate','text'].includes(tool)&&!Number.isFinite(angle))||(tool==='scale'&&(!Number.isFinite(factor)||factor<=0))){points=[];status('글자 크기·각도·배율 값을 확인하세요.');render();return;}
+        if(['line','rectangle'].includes(tool)&&(C.distance(a,b)<1e-10||(tool==='rectangle'&&(Math.abs(a.x-b.x)<1e-10||Math.abs(a.y-b.y)<1e-10)))){points=[];status('길이·폭·높이는 0보다 커야 합니다.');render();return;}
         snapshot();
         if (tool === "line") add("LINE", { p: a, q: b });
         if (tool === "rectangle")
@@ -451,7 +477,7 @@
                 end: (Math.atan2(c.y - a.y, c.x - a.x) * 180) / Math.PI,
             });
         if (tool === "text")
-            add("TEXT", { p: a, text: $("text").value, height: h, angle });
+            add("TEXT", { p: a, text: $("default-text").value, height: h, angle });
         if (tool === "dimension") {
             add("LINE", { p: a, q: b });
             add("TEXT", {
@@ -491,37 +517,61 @@
             doc.entities.push(...copies);
         }
         points = [];
+        if(['line','rectangle','text'].includes(tool)){selected.clear();selected.add(doc.entities.at(-1).id);setTool('select');}
         render();
     }
-    canvas.onpointerdown = (e) => {
-        canvas.focus();
-        if (e.button === 1 || e.button === 2) {
-            e.preventDefault();
-            pan = { x: e.clientX, y: e.clientY, ox: origin.x, oy: origin.y };
-            canvas.setPointerCapture(e.pointerId);
-            return;
-        }
-        if (e.button === 0) point(snap(world(e)), e.shiftKey);
+    canvas.onpointerdown = e => {
+        if(gesture||pan)return;canvas.focus();
+        if(e.button===1||e.button===2){e.preventDefault();pan={pointerId:e.pointerId,x:e.clientX,y:e.clientY,ox:origin.x,oy:origin.y};canvas.setPointerCapture(e.pointerId);return;}
+        if(e.button!==0||!doc||busy)return;
+        const p=world(e);
+        if(tool==='select'){
+            const grip=!e.shiftKey&&gripAt(p),hit=grip?.entity||hitEntity(p);
+            if(!grip){if(e.shiftKey){if(hit){selected.has(hit.id)?selected.delete(hit.id):selected.add(hit.id);}render();return;}
+                if(!hit||!selected.has(hit.id))selected.clear();if(hit)selected.add(hit.id);}
+            render();if(!hit||!canManage||!editable(hit))return;
+            gesture={kind:grip?'resize':'move',key:grip?.key,entity:hit,start:p,end:p,pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false,originals:grip?[C.clone(hit)]:doc.entities.filter(e=>selected.has(e.id)&&editable(e)).map(C.clone),preview:new Map()};
+        }else if(['line','rectangle'].includes(tool)&&!points.length){
+            if(!canManage||doc.layers[$('layer').value]?.locked){status('읽기 전용 또는 작업 레이어 잠금입니다.');return;}
+            gesture={kind:'draw',tool,start:snap(p),end:snap(p),pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false};
+        }else {point(snap(p),e.shiftKey);return;}
+        canvas.setPointerCapture(e.pointerId);e.preventDefault();
     };
-    canvas.onpointermove = (e) => {
-        if (pan) {
-            origin = {
-                x: pan.ox + e.clientX - pan.x,
-                y: pan.oy + e.clientY - pan.y,
-            };
-            render();
-        }
-        const p = snap(world(e));
-        $("x").value = p.x.toFixed(4);
-        $("y").value = p.y.toFixed(4);
+    canvas.onpointermove=e=>{
+        if(pan&&pan.pointerId===e.pointerId){origin={x:pan.ox+e.clientX-pan.x,y:pan.oy+e.clientY-pan.y};render();return;}
+        const excluded=new Set(gesture?.originals?.map(e=>e.id)||[]),p=snap(world(e),excluded);
+        $('x').value=p.x.toFixed(4);$('y').value=p.y.toFixed(4);
+        if(!gesture||gesture.pointerId!==e.pointerId){canvas.style.cursor=tool==='select'?(gripAt(world(e))?'nwse-resize':hitEntity(world(e))?'move':'default'):'crosshair';return;}
+        if(!canManage||busy){cancelGesture();return;}
+        if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)<4&&!gesture.moved)return;
+        gesture.moved=true;gesture.end=p;
+        if(gesture.kind!=='draw'){
+            try{
+                if(gesture.originals.some(e=>!editable(doc.entities.find(n=>n.id===e.id)))){cancelGesture();return;}
+                const preview=gesture.originals.map(e=>gesture.kind==='resize'?C.resize(e,gesture.key,p):C.transform(e,{dx:p.x-gesture.start.x,dy:p.y-gesture.start.y}));
+                gesture.preview=new Map(preview.map(e=>[e.id,e]));gesture.invalid=false;
+            }catch(error){gesture.invalid=true;gesture.preview=new Map();status(error.message);}
+        }render();
     };
-    canvas.onpointerup = () => (pan = null);
-    canvas.onpointercancel = () => (pan = null);
+    canvas.onpointerup=e=>{
+        if(pan?.pointerId===e.pointerId){pan=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);return;}
+        if(!gesture||gesture.pointerId!==e.pointerId)return;
+        const finished=gesture;gesture=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+        if(!canManage||busy||finished.invalid){render();return;}
+        if(finished.kind==='draw'){
+            if(!finished.moved){point(finished.start);return;}
+            if(C.distance(finished.start,finished.end)<1e-10||(finished.tool==='rectangle'&&(Math.abs(finished.start.x-finished.end.x)<1e-10||Math.abs(finished.start.y-finished.end.y)<1e-10))){render();return;}
+            point(finished.start);point(finished.end);
+        }else if(finished.moved&&finished.preview.size){const changed=finished.originals.some(e=>JSON.stringify(C.geometry(e))!==JSON.stringify(C.geometry(finished.preview.get(e.id)||e)));if(changed){snapshot();doc.entities=doc.entities.map(e=>finished.preview.get(e.id)||e);}render();}
+    };
+    canvas.onpointercancel=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
+    canvas.onlostpointercapture=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
     canvas.oncontextmenu = (e) => e.preventDefault();
     canvas.addEventListener(
         "wheel",
         (e) => {
             e.preventDefault();
+            if(gesture||pan)return;
             const p = world(e),
                 r = canvas.getBoundingClientRect();
             scale = Math.min(
@@ -569,18 +619,21 @@
             span.textContent = name;
             visible.disabled = lock.disabled = color.disabled = !canManage;
             visible.onchange = () => {
+                if(busy||gesture){visible.checked=l.visible;return;}
                 snapshot();
                 doc.layersDirty = true;
                 l.visible = visible.checked;
                 render();
             };
             lock.onchange = () => {
+                if(busy||gesture){lock.checked=l.locked;return;}
                 snapshot();
                 doc.layersDirty = true;
                 l.locked = lock.checked;
                 render();
             };
             color.onchange = () => {
+                if(busy||gesture){color.value=l.color;return;}
                 snapshot();
                 doc.layersDirty = true;
                 l.color = color.value;
@@ -653,9 +706,11 @@
         status(j.title + " · " + doc.entities.length + "개 객체");
     }
     async function save() {
+        if(gesture){status('드래그를 끝내거나 Esc로 취소한 뒤 저장하세요.');return;}
         if (!record || !dirty || !canManage || busy) return;
         busy = true;
         $("save").disabled = true;
+        inspector();
         try {
             const content = C.exportDXF(doc),
                 j = await api("/" + record.id, {
@@ -678,6 +733,7 @@
         } finally {
             busy = false;
             $("save").disabled = !canManage;
+            inspector();
         }
     }
     function download() {
@@ -804,6 +860,7 @@
     };
     $("fit").onclick = fit;
     $("undo").onclick = () => {
+        if(busy||gesture)return;
         if (undo.length) {
             redo.push(C.clone(doc));
             doc = undo.pop();
@@ -814,6 +871,7 @@
         }
     };
     $("redo").onclick = () => {
+        if(busy||gesture)return;
         if (redo.length) {
             undo.push(C.clone(doc));
             doc = redo.pop();
@@ -824,28 +882,28 @@
         }
     };
     $("apply-text").onclick = () => {
-        if (!canManage || !doc) return;
+        if (!canManage || !doc || busy || gesture) return;
         const es = doc.entities.filter(
                 (e) =>
                     selected.has(e.id) &&
                     editable(e) &&
                     ["TEXT", "MTEXT"].includes(e.type),
             ),
-            h = Number($("height").value),
-            a = Number($("angle").value);
-        if (es.length && h > 0 && Number.isFinite(a)) {
+            h = Number($("height").value);
+        if(!textEdits.size){status('문자 내용·크기·색 중 변경할 값을 입력하세요.');return;}
+        if (es.length && (!textEdits.has('height')||(Number.isFinite(h)&&h>0))) {
             snapshot();
             es.forEach((e) => {
-                e.text = $("text").value;
-                e.height = h;
-                e.angle = a;
+                if(textEdits.has('text'))e.text=$('text').value;
+                if(textEdits.has('height'))e.height=h;
+                if(textEdits.has('text-color'))e.color=parseInt($('text-color').value.slice(1),16);
                 e.dirty = true;
             });
             render();
         }
     };
     $("new-layer").onclick = () => {
-        if (!doc || !canManage) return;
+        if (!doc || !canManage || busy || gesture) return;
         const name = prompt("레이어 이름 (DXF 저장 시 새 객체에 적용)");
         if (
             !name ||
@@ -864,6 +922,8 @@
         (id) => ($(id).onchange = render),
     );
     document.addEventListener("keydown", (e) => {
+        if(e.key==='Escape'&&gesture){e.preventDefault();cancelGesture();return;}
+        if(gesture)return;
         if (e.ctrlKey || e.metaKey) {
             if (e.key.toLowerCase() === "s") {
                 e.preventDefault();
@@ -896,7 +956,7 @@
             : [];
     }
     function operation(fn) {
-        if (!doc || !canManage) return;
+        if (!doc || !canManage || busy || gesture) return;
         try {
             const es = chosen();
             if (!es.length) throw Error("편집 가능한 객체를 선택하세요.");
@@ -952,19 +1012,22 @@
                 }),
         );
     $("apply-style").onclick = () =>
-        operation((es) => {
+        operation((selectedEntities) => {
+            const es=selectedEntities.filter(e=>!['TEXT','MTEXT'].includes(e.type));
+            if(!es.length)throw Error('선 또는 도형을 선택하세요.');
+            if(!styleEdits.size)throw Error("선·도형의 색 또는 굵기를 먼저 변경하세요.");
             const w = Number($("entity-width").value);
-            if (!Number.isFinite(w) || w < 0 || w > 2.11)
+            if (styleEdits.has("entity-width")&&(!Number.isFinite(w)||(w<0&&![-1,-2,-3].includes(w))||w>2.11))
                 throw Error("선 굵기는 0~2.11mm입니다.");
             return () =>
                 es.forEach((e) => {
-                    e.color = parseInt($("entity-color").value.slice(1), 16);
-                    e.lineType = $("entity-linetype").value;
+                    if(styleEdits.has("entity-color"))e.color=parseInt($("entity-color").value.slice(1),16);
+                    if(styleEdits.has("entity-linetype"))e.lineType=$("entity-linetype").value;
                     const weights = [
                         0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70,
                         80, 90, 100, 106, 120, 140, 158, 200, 211,
                     ];
-                    e.lineWeight = weights.reduce(
+                    if(styleEdits.has("entity-width"))e.lineWeight = w<0?w:weights.reduce(
                         (best, n) =>
                             Math.abs(n - w * 100) < Math.abs(best - w * 100)
                                 ? n
@@ -975,7 +1038,7 @@
                 });
         });
     $("rename-layer").onclick = () => {
-        if (!doc || !canManage) return;
+        if (!doc || !canManage || busy || gesture) return;
         const old = $("layer").value;
         const name = prompt("새 레이어 이름", old);
         if (!name) return;
@@ -990,6 +1053,8 @@
             fail(error);
         }
     };
+    for(const id of ['entity-color','entity-width','entity-linetype'])for(const event of ['input','change'])$(id).addEventListener(event,()=>styleEdits.add(id));
+    for(const id of ['text','height','text-color'])for(const event of ['input','change'])$(id).addEventListener(event,()=>textEdits.add(id));
     window.addEventListener("beforeunload", (e) => {
         if (dirty) {
             e.preventDefault();
