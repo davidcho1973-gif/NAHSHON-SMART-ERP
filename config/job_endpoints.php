@@ -359,6 +359,7 @@ return [
         'WbsScheduleController' => ['_module' => 'progress'],
         'DrawingSheetController' => ['_module' => 'progress'],
         'DrawingStudioController' => ['_module' => 'progress', 'save' => ['progress', 'edit'], 'readDimension' => ['progress', 'edit'], 'share' => ['progress', 'export']],
+        'CadDrawingController' => ['_module' => 'progress', 'download' => ['documents', 'export']],
         'WeekBoardDraftController' => ['_module' => 'progress'],
         'OpsVoiceController' => ['_module' => 'reports'],
         'OpsPhotoController' => ['_module' => 'reports'],

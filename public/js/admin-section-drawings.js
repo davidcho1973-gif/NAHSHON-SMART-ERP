@@ -468,7 +468,7 @@
       return u.pageHeader('공정별 도면', '현장을 먼저 고르세요.', siteSel) +
         '<div style="padding:40px;text-align:center;color:var(--text-tertiary)">위에서 현장을 고르면 그 현장의 공정과 도면이 나옵니다.</div>';
     }
-    var actions = siteSel +
+    var actions = siteSel + '<a class="btn" href="/cad?site_id=' + encodeURIComponent(d.siteId) + '" target="_blank" rel="noopener" style="padding:8px 12px;border:1px solid var(--border-default);border-radius:8px">CAD 도면 편집</a>' +
       (d.billing && d.billing.canManage ? u.primaryButton('증빙 한 번에 올리기', 'window.AdminDrawingEvidence.upload(' + d.siteId + ',' + (d.billing.contractId || 0) + ')', 'upload-simple') +
         (d.billing.contractId ? u.rowButton('증빙 확인 대기', 'window.AdminDrawingEvidence.review(' + d.billing.contractId + ')') : '') : '') +
       (d.canManage ? '<label style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer">' +

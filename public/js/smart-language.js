@@ -17,6 +17,7 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    'CAD 도면 편집': 'Edit CAD drawings',
     '관리업무': 'Management tasks',
     '관리업무 · 승인 대기': 'Management tasks · pending approvals',
     '담당 업무': 'Assigned tasks',
@@ -415,6 +416,7 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    'CAD 도면 편집': 'Editar planos CAD',
     '관리업무': 'Tareas de gestión',
     '관리업무 · 승인 대기': 'Gestión · aprobaciones pendientes',
     '담당 업무': 'Tareas asignadas',

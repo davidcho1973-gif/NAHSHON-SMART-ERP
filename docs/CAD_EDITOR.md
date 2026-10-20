@@ -1,0 +1,55 @@
+# CAD 도면 편집 (DWG / DXF)
+
+## 사용
+
+공정별 도면에서 **CAD 도면 편집**을 열거나 `/cad?site_id=현장ID`로 들어간다. 현장을 고른 뒤 DWG 또는 UTF-8 ASCII DXF(최대 20MiB)를 올린다. 원본은 비공개로 보관하며 편집 저장은 새 DXF 개정을 만든다. **DWG 내려받기**는 선택한 개정을 실제 DWG 2018(AC1032) 파일로 변환한다. ERP에 저장하는 작업과 DWG 파일 내려받기는 별도 동작이다.
+
+편집: 직선, 연속선, 사각형, 원, 원호, 문자, 정적 거리 치수, 거리 측정; 선택, 이동, 복사, 회전, 균일 배율, 대칭, 삭제, 직선/원 오프셋, 두 직선 자르기/연장, 직사각 배열. 좌표 입력, 스냅, 직교, 격자, 레이어, 색/선종류/선굵기, 실행 취소/다시 실행, 화면 이동/확대/전체 보기를 제공한다. 작업 전에 선택한 도구의 안내를 확인한다. 거리 수치는 파일의 도면 단위이며 자동 단위 추정이나 법정 물량 확정에 쓰지 않는다.
+
+다른 사용자가 먼저 저장하면 409로 거절하고 현재 브라우저 편집을 유지한다. DXF를 내려받아 보관하고 최신 개정을 연다. 변경 이력에서 이전 개정을 읽거나 내려받을 수 있다.
+
+## 지원 범위
+
+- 모델 공간의 지원하는 2D 객체를 편집한다. 일부 클래식 폴리선·타원·블록은 미리보기만 제공한다. 3D, 종이 공간, 곡선 폴리선, 특수 객체는 편집 대상이 아니다. 화면에 표시하지 못하는 객체 개수를 알린다.
+- 수정하지 않은 DXF 객체와 다른 섹션의 그룹 코드/값을 유지한다. 줄바꿈은 CRLF로 정규화하므로 DXF 파일 전체가 바이트 단위로 같다는 뜻은 아니다. 업로드 원본은 별도 파일로 그대로 보관한다.
+- DWG↔DXF 변환은 ACadSharp 3.8.0으로 수행한다. 알 수 없는 프록시 객체, 읽기 오류, 미구현 객체를 감지하면 변환을 거절하며 성공한 변환도 사용자 정의 객체·폰트·외부 참조·레이아웃의 완전한 보존을 보장하지 않는다. 내보낸 파일은 원래 사용하던 CAD에서 확인한다. 원본 DWG를 대체하지 않는다.
+- 설치된 LibreCAD v2.2.1.5의 실행 파일은 서버 변환 엔진이 아니다. REA 분석 범위와 근거는 `CAD_REA_ANALYSIS.md`에 기록했다. 웹 편집 코드는 별도로 작성했으며 GPL 소스를 복사하거나 바이너리를 포함하지 않았다.
+
+## 서버 설치
+
+PHP 앱과 같은 서버에서 .NET 8 런타임 및 아래 빌드를 사용하거나 Linux x64 자체 포함 실행 파일을 배포한다. 외부 변환 사이트로 도면을 보내지 않는다.
+
+```sh
+dotnet restore services/cad-converter/CadConverter.csproj --locked-mode
+dotnet publish services/cad-converter/CadConverter.csproj -c Release -r linux-x64 --self-contained true -o /opt/nahshon-cad
+/opt/nahshon-cad/Nahshon.CadConverter capabilities
+php artisan migrate --force
+```
+
+환경변수:
+
+```dotenv
+CAD_CONVERTER_BINARY=/opt/nahshon-cad/Nahshon.CadConverter
+CAD_STORAGE_DISK=s3
+```
+
+프레임워크 종속 DLL 배포는 `CAD_CONVERTER_BINARY=/absolute/Nahshon.CadConverter.dll`, `CAD_DOTNET_BINARY=/absolute/dotnet`을 설정한다. 앱 서비스 계정이 엔진을 실행하고 `storage/app/private/cad-tmp`를 생성할 수 있어야 한다. 엔진 설정이 없거나 실행되지 않으면 DWG 기능은 비활성화되고 DXF 편집을 사용할 수 있다. 실행 파일 존재만으로 지원 가능 표시를 하지 않고 `capabilities` 명령 응답을 확인한다.
+
+운영 파일은 비공개 영구 디스크가 필요하다. `CAD_STORAGE_DISK`가 비어 있으면 문서함의 `document-intelligence.disk`를 사용한다. 공개 디스크나 운영 임시 로컬 디스크에는 업로드를 허용하지 않는다. 스토리지 읽기/쓰기는 권한 검증 후 서버에서 수행한다. 웹서버/PHP의 `upload_max_filesize`, `post_max_size`도 20MiB 파일과 JSON 본문을 수용하도록 설정한다.
+
+루트 Dockerfile에는 Linux 변환기 빌드와 `/opt/cad` 설치가 포함되어 있다. Laravel Cloud의 기본 PHP 빌드 방식은 .NET 엔진을 자동 설치하지 않는다. 해당 환경에는 Linux 실행 파일과 라이브러리를 빌드/배포 단계에서 설치하고 위 환경변수를 연결하거나 이 Docker 이미지를 지원하는 호스팅을 사용한다. 코드 병합만으로 기존 Laravel Cloud의 DWG 엔진이 준비되었다고 간주하지 않는다.
+
+ACadSharp의 MIT 고지는 `services/cad-converter/ACadSharp.LICENSE`에 포함했다. 상용 CAD 라이선스를 재사용하지 않는다.
+
+## 검증
+
+```sh
+node --test tests/js/cad-core.test.mjs
+dotnet build services/cad-converter/CadConverter.csproj -c Release --locked-mode
+node scripts/test-cad-roundtrip.mjs /absolute/dotnet /absolute/Nahshon.CadConverter.dll /new/scratch/directory
+CAD_TEST_CONVERTER_BINARY=/absolute/Nahshon.CadConverter.dll CAD_TEST_DOTNET_BINARY=/absolute/dotnet php vendor/bin/phpunit --filter CadDrawingTest
+```
+
+왕복 테스트는 웹 편집기 직렬화 → 실제 DWG → DXF 재열기 → 좌표 이동 → DWG 재저장 → DXF 재열기를 검사하며 한글 문자와 원 반지름도 확인한다. 기존 출력 파일을 덮어쓰지 않으므로 재실행 시 새 scratch 디렉터리를 사용한다. PHP 테스트는 별도 `nahshon_smart_erp_test` 데이터베이스에서만 실행한다. `.github/workflows/cad.yml`은 Linux에서 실제 변환과 권한/이력 API 테스트를 함께 실행한다. 실제 사용자 DWG의 수용 검사는 추가로 필요하다.
+
+2026-10-20 로컬 검증 당시 Windows Application Control(0x800711C7)이 새로 빌드한 변환기 DLL 실행을 차단했다. 빌드 성공과 실제 DWG 왕복 성공을 구분하며, 정책을 우회하지 않았다. Linux CI 결과가 통과하기 전에는 DWG 저장 검증 완료로 표시하지 않는다.

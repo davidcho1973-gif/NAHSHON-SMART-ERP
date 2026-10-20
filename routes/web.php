@@ -344,6 +344,16 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/share', 'share')->middleware('throttle:10,1');
     });
 
+    Route::get('/cad', [\App\Http\Controllers\CadDrawingController::class, 'index'])->name('cad.index');
+    Route::prefix('admin-api/cad')->controller(\App\Http\Controllers\CadDrawingController::class)->group(function (): void {
+        Route::get('/', 'drawings');
+        Route::get('/capabilities', 'capabilities');
+        Route::post('/', 'store')->middleware('throttle:20,1');
+        Route::get('/{drawing}', 'show');
+        Route::put('/{drawing}', 'update')->middleware('throttle:30,1');
+        Route::get('/{drawing}/history', 'history');
+        Route::get('/{drawing}/download', 'download')->middleware('throttle:20,1');
+    });
     // 관리자 화면의 파일 업로드(multipart) — SPA 의 JSON API 로는 파일을 실을 수 없다.
     Route::post('/admin-api/contracts/{contract}/documents', [AdminUploadController::class, 'contractDocument'])
         ->name('admin.contract-document.upload');
