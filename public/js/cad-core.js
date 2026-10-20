@@ -845,7 +845,47 @@
         }
         return doc;
     }
+
+    // Orthogonal four-vertex polylines expose local axes, including rotated rectangles.
+    function rectangleFrame(e) {
+        if(e.type!=='LWPOLYLINE'||!e.closed||e.points?.length!==4)return null;
+        const [a,b,c,d]=e.points,w=distance(a,b),h=distance(a,d);
+        if(!w||!h)return null;
+        const u={x:(b.x-a.x)/w,y:(b.y-a.y)/w},v={x:(d.x-a.x)/h,y:(d.y-a.y)/h};
+        const tolerance=Math.max(w,h)*1e-8;
+        if(Math.abs(u.x*v.x+u.y*v.y)>1e-8||distance(c,{x:b.x+d.x-a.x,y:b.y+d.y-a.y})>tolerance)return null;
+        return {a,u,v,w,h};
+    }
+    function grips(e) {
+        if(e.type==='LINE')return [{key:'p',point:e.p},{key:'q',point:e.q}];
+        if(!rectangleFrame(e))return [];
+        return e.points.flatMap((p,i)=>[{key:'corner'+i,point:p},{key:'edge'+i,point:{x:(p.x+e.points[(i+1)%4].x)/2,y:(p.y+e.points[(i+1)%4].y)/2}}]);
+    }
+    function resize(e,key,p) {
+        if(!e.editable||![p.x,p.y].every(Number.isFinite))throw Error('크기를 조절할 수 없는 객체입니다.');
+        const n=clone(e);
+        if(e.type==='LINE'&&['p','q'].includes(key)){
+            if(distance(p,e[key==='p'?'q':'p'])<1e-10)throw Error('선 길이는 0보다 커야 합니다.');
+            n[key]={...p};n.dirty=true;return n;
+        }
+        const frame=rectangleFrame(e);if(!frame)throw Error('사각형 손잡이가 아닙니다.');
+        const {a,u,v,w,h}=frame,dx=p.x-a.x,dy=p.y-a.y,x=dx*u.x+dy*u.y,y=dx*v.x+dy*v.y;
+        let left=0,right=w,bottom=0,top=h;
+        const corners={corner0:()=>{left=x;bottom=y;},corner1:()=>{right=x;bottom=y;},corner2:()=>{right=x;top=y;},corner3:()=>{left=x;top=y;}};
+        const edges={edge0:()=>bottom=y,edge1:()=>right=x,edge2:()=>top=y,edge3:()=>left=x};
+        if(corners[key])corners[key]();else if(edges[key])edges[key]();else throw Error('알 수 없는 손잡이입니다.');
+        if(Math.abs(right-left)<1e-10||Math.abs(top-bottom)<1e-10)throw Error('사각형 폭과 높이는 0보다 커야 합니다.');
+        n.points=[[left,bottom],[right,bottom],[right,top],[left,top]].map(([x,y])=>({x:a.x+x*u.x+y*v.x,y:a.y+x*u.y+y*v.y}));
+        n.p={...n.points[0]};n.dirty=true;return n;
+    }
+    function contains(e,p) {
+        const f=rectangleFrame(e);if(!f)return false;
+        const x=(p.x-f.a.x)*f.u.x+(p.y-f.a.y)*f.u.y,y=(p.x-f.a.x)*f.v.x+(p.y-f.a.y)*f.v.y;
+        return x>=0&&x<=f.w&&y>=0&&y<=f.h;
+    }
+
     g.CADCore = {
+        rectangleFrame, grips, resize, contains,
         renameLayer,
         offset,
         trim,
