@@ -18,6 +18,7 @@
         canManage = false,
         cap = {},
         busy = false;
+    let activeIO=null,ioSequence=0,listSequence=0,uploadAllowed=false,capabilitiesReady=false;
     const query = new URLSearchParams(location.search);
     const claimContext = {
         lineId: Number(query.get('claim_line_id')),
@@ -82,8 +83,31 @@
         $("status").textContent = s;
     }
     function fail(e) {
-        status(e.message || String(e));
+        const message=e.message||String(e);status(message);
+        if(activeIO||!doc)canvasState('error','도면을 열지 못했습니다',message+(doc?' 기존 도면과 저장하지 않은 변경은 유지됩니다.':''));
     }
+    function canvasState(kind,title,message){
+        const el=$('drawing-state');el.hidden=false;el.dataset.state=kind;
+        $('drawing-state-title').textContent=title;$('drawing-state-message').textContent=message;
+        $('drawing-state-dismiss').hidden=!doc||kind==='loading';
+        $('viewport').setAttribute('aria-busy',String(kind==='loading'));
+    }
+    function ioControls(){
+        $('sites').disabled=busy||inClaim||proofMode;$('drawings').disabled=busy||proofMode;
+        $('upload').disabled=busy||!uploadAllowed||proofMode||!capabilitiesReady;
+        $('save').disabled=busy||!canManage||!record;$('reload').disabled=busy||!record;
+        $('history').disabled=busy||proofMode||!record;inspector();
+    }
+    function startIO(kind,title){
+        if(busy||gesture)return null;
+        const token=++ioSequence;activeIO={token,kind};busy=true;ioControls();
+        canvasState('loading',title,'파일 크기와 도면 복잡도에 따라 시간이 걸릴 수 있습니다. 완료될 때까지 기다려 주세요.');
+        return token;
+    }
+    function finishIO(token){
+        if(activeIO?.token!==token)return;activeIO=null;busy=false;ioControls();$('viewport').setAttribute('aria-busy','false');
+    }
+    $('drawing-state-dismiss').onclick=()=>{$('drawing-state').hidden=true;};
     async function api(path = "", options = {}) {
         const r = await fetch("/admin-api/cad" + path, {
             credentials: "same-origin",
@@ -98,14 +122,21 @@
                 ...options.headers,
             },
         });
-        const j = await r.json();
-        if (!r.ok)
+        const j = await r.json().catch(()=>null);
+        if(!j)throw Error(r.status===413?'파일이 서버 업로드 한도를 넘었습니다. 파일 크기를 줄이거나 관리자에게 문의하세요.':r.status===419?'로그인 세션이 만료되었습니다. 편집 중인 도면은 DXF로 보관한 뒤 다시 로그인하세요.':'서버 응답을 읽지 못했습니다. 잠시 후 다시 시도하세요. (HTTP '+r.status+')');
+        if (!r.ok||j.success===false)
             throw Error(
                 r.status === 409
                     ? (path.endsWith("/claim-draft") ? "기성 초안이 다른 화면에서 변경되었습니다. CAD 편집은 유지됩니다. 기성으로 돌아가 최신 초안을 확인한 뒤 다시 연결하세요." : "다른 사용자가 저장했습니다. 현재 편집은 유지됩니다. DXF를 내려받아 보관한 뒤 다시 열어 병합하세요.")
-                    : j.message || j.error || "요청 실패 " + r.status,
+                    : safeApiMessage(j,r.status),
             );
         return j.data || j;
+    }
+    function safeApiMessage(j,statusCode){
+        const messages=[];
+        for(const value of [j.message,j.error])if(typeof value==='string'&&!/<\/?(?:html|body|script|pre)\b/i.test(value)&&value.length<2000)messages.push(value);
+        if(j.errors&&typeof j.errors==='object')for(const values of Object.values(j.errors))for(const value of Array.isArray(values)?values:[values])if(typeof value==='string'&&!/<[^>]+>/.test(value)&&value.length<500)messages.push(value);
+        return [...new Set(messages)].join(' ')||'요청을 처리하지 못했습니다. (HTTP '+statusCode+')';
     }
     function guard() {
         if(gesture){status("드래그를 끝내거나 Esc로 취소하세요.");return false;}
@@ -645,9 +676,10 @@
         if (doc.layers[current]) $("layer").value = current;
     }
     async function list() {
-        const j = await api("?site_id=" + encodeURIComponent($("sites").value));
-        const listCanManage = !!j.canManage;
-        $("upload").disabled = !listCanManage || proofMode;
+        const site=$('sites').value,request=++listSequence;
+        const j=await api('?site_id='+encodeURIComponent(site));
+        if(request!==listSequence||$('sites').value!==site)return;
+        const listCanManage=!!j.canManage;uploadAllowed=listCanManage;ioControls();
         if (!record) canManage = listCanManage;
         const current = $("drawings").value;
         $("drawings").replaceChildren(new Option("도면 선택", ""));
@@ -671,12 +703,7 @@
             }
         }
     }
-    async function open(id, discard = true, revision = null) {
-        if (!id) return;
-        if (discard && !guard()) {
-            $("drawings").value = record ? String(record.id) : "";
-            return;
-        }
+    async function loadDrawing(id,revision,token){
         const j = await api(
             "/" +
                 encodeURIComponent(id) +
@@ -685,6 +712,7 @@
                     : ""),
         );
         const parsed = C.parse(j.dxf);
+        if(activeIO?.token!==token)return;
         doc = parsed;
         record = j;
         canManage = !!j.canManage && parsed.acadVersion >= 1015 && !proofMode;
@@ -694,7 +722,8 @@
         selected.clear();
         points = [];
         $("dirty").textContent = "개정 " + j.revision;
-        $("save").disabled = !canManage;
+        ioControls();
+        if(!Array.from($("drawings").options).some(option=>option.value===String(id)))$("drawings").add(new Option(j.title||("도면 "+id),String(id)));
         $("drawings").value = String(id);
         $("warnings").textContent =
             (j.warnings || []).join(" ") +
@@ -704,6 +733,16 @@
         layers();
         fit();
         status(j.title + " · " + doc.entities.length + "개 객체");
+        if(entities().some(e=>C.geometry(e).length))$('drawing-state').hidden=true;
+        else canvasState('notice','도면은 열렸지만 표시 가능한 2D 객체가 없습니다','원본 객체 '+doc.entities.length+'개가 보존되어 있습니다. 미지원 객체·외부 참조·숨김 레이어가 있는지 원래 CAD에서 확인하세요.');
+    }
+    async function open(id,discard=true,revision=null){
+        if(!id){if(record)$('drawings').value=String(record.id);return;}
+        if(busy||(discard&&!guard())){$('drawings').value=record?String(record.id):'';return;}
+        const token=startIO('open','도면을 불러오는 중…');if(!token)return;
+        try{await loadDrawing(id,revision,token);}
+        catch(error){$('drawings').value=record?String(record.id):'';fail(error);}
+        finally{finishIO(token);}
     }
     async function save() {
         if(gesture){status('드래그를 끝내거나 Esc로 취소한 뒤 저장하세요.');return;}
@@ -805,29 +844,24 @@
     $("reload").onclick = () => record && open(record.id,true,proofMode?Number(query.get("revision")):null).catch(fail);
     $("drawings").onchange = (e) => open(e.target.value).catch(fail);
     $("sites").onchange = () => list().catch(fail);
-    $("upload").onchange = async (e) => {
-        const f = e.target.files[0];
-        if (!f || !guard()) return;
-        if (/\.dwg$/i.test(f.name) && !cap.dwgRead) {
-            status(
-                "서버의 DWG 읽기 엔진이 준비되지 않았습니다. DXF 파일을 사용하거나 관리자에게 엔진 설정을 요청하세요.",
-            );
-            e.target.value = "";
-            return;
-        }
-        const fd = new FormData();
-        fd.append("file", f);
-        fd.append("title", f.name);
-        fd.append("site_id", $("sites").value);
-        try {
-            status("도면 업로드·변환 중…");
-            const j = await api("", { method: "POST", body: fd });
-            await list();
-            await open(j.id, false);
-        } catch (err) {
-            fail(err);
-        } finally {
-            e.target.value = "";
+    $('upload').onchange=async(e)=>{
+        let token=null;
+        try{
+            const file=e.target.files[0];if(!file)return;
+            if(!guard())return;
+            const site=$('sites').value;
+            if(!site)throw Error('도면을 등록할 현장을 먼저 선택하세요. 위의 현장 목록에서 현장을 선택한 뒤 다시 파일을 올려 주세요.');
+            if(/\.dwg$/i.test(file.name)&&!cap.dwgRead)throw Error('서버의 DWG 읽기 엔진이 준비되지 않았습니다. 관리자에게 DWG 엔진 상태를 확인해 주세요.');
+            token=startIO('upload',file.name+' · 업로드 및 변환 중…');if(!token)return;
+            const form=new FormData();form.append('file',file);form.append('title',file.name);form.append('site_id',site);
+            const created=await api('',{method:'POST',body:form});
+            await loadDrawing(created.id,null,token);
+            finishIO(token);token=null;
+            list().catch(error=>status('도면은 열렸지만 목록 새로고침에 실패했습니다. '+error.message));
+        }catch(error){
+            if(!activeIO||activeIO.token===token){fail(error);canvasState('error','도면 업로드 또는 변환에 실패했습니다',error.message+(doc?' 기존 도면과 저장하지 않은 변경은 유지됩니다.':''));}
+        }finally{
+            e.target.value='';if(token)finishIO(token);
         }
     };
     $("history").onclick = async () => {
@@ -1078,7 +1112,7 @@
                     " / 저장: " +
                     (j.dwgWrite ? "가능" : "엔진 설정 필요");
             $("dwg").disabled = !j.dwgWrite;
-        }),
+        }).finally(()=>{capabilitiesReady=true;ioControls();}),
         list().then(()=>{const drawingId=Number(query.get('drawing_id')),revision=Number(query.get('revision'));if(Number.isSafeInteger(drawingId)&&drawingId>0)return open(drawingId,false,Number.isSafeInteger(revision)&&revision>0?revision:null);}),
     ]).catch(fail);
 })();

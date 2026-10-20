@@ -8,6 +8,8 @@
 
 다른 사용자가 먼저 저장하면 409로 거절하고 현재 브라우저 편집을 유지한다. DXF를 내려받아 보관하고 최신 개정을 연다. 변경 이력에서 이전 개정을 읽거나 내려받을 수 있다.
 
+불러오기 진행 상태와 실패 이유는 도면 영역 중앙에 표시한다. 실패해도 기존 도면과 저장하지 않은 수정은 유지되며 같은 파일을 다시 선택할 수 있다. 성공한 업로드는 도면 목록 갱신에 실패하더라도 바로 열린다.
+
 ## 기성 편집에서 사용
 
 기성 줄의 **기성 편집** 또는 **도면 · 자료** 화면에서 **CAD 편집 · 기성 증빙 연결**을 연다. 먼저 현재 기성 초안을 저장한 뒤 같은 화면 안에서 CAD 편집기를 연다. 대상 계약·기성 줄·현장이 표시되며 해당 현장의 DWG/DXF를 올리거나 기존 CAD 도면을 선택할 수 있다.
@@ -22,7 +24,8 @@ CAD 편집을 저장한 뒤 **기성 증빙에 연결**을 누르면 저장한 �
 
 - 모델 공간의 지원하는 2D 객체를 편집한다. 일부 클래식 폴리선·타원·블록은 미리보기만 제공한다. 3D, 종이 공간, 곡선 폴리선, 특수 객체는 편집 대상이 아니다. 화면에 표시하지 못하는 객체 개수를 알린다.
 - 수정하지 않은 DXF 객체와 다른 섹션의 그룹 코드/값을 유지한다. 줄바꿈은 CRLF로 정규화하므로 DXF 파일 전체가 바이트 단위로 같다는 뜻은 아니다. 업로드 원본은 별도 파일로 그대로 보관한다.
-- DWG↔DXF 변환은 ACadSharp 3.8.0으로 수행한다. 알 수 없는 프록시 객체, 읽기 오류, 미구현 객체를 감지하면 변환을 거절하며 성공한 변환도 사용자 정의 객체·폰트·외부 참조·레이아웃의 완전한 보존을 보장하지 않는다. 내보낸 파일은 원래 사용하던 CAD에서 확인한다. 원본 DWG를 대체하지 않는다.
+- DWG↔DXF 변환은 ACadSharp 3.8.0으로 수행한다. 이름과 RGB 값이 모두 같은 중복 별색 정의만 합치며, 같은 이름에 서로 다른 RGB 값이 있으면 거절한다. 라이브러리의 이름/사전 키 처리 차이를 검증하는 호환 처리는 3.8.0에 고정되며 내부 구조가 달라지면 거절한다.
+- 2D 작업본은 3D 표시 스타일·태양광·연관 자동 갱신·상세/단면 보기 스타일과 해당 정보만 소유한 부가 레코드를 제외할 수 있고, 제외 사실을 경고에 표시한다. 일반 XRecord, 블록별 도형 종류·개수, 표시 RGB는 왕복 보존 검사를 통과해야 한다. 그 밖의 알 수 없는 프록시 객체, 동적 블록 정보, 읽기 오류, 미구현 객체는 계속 거절한다. 사용자 정의 객체·폰트·외부 참조·레이아웃의 완전한 보존을 보장하지 않으므로 내보낸 파일은 원래 사용하던 CAD에서 확인한다. 원본 DWG는 별도 보존한다.
 - 설치된 LibreCAD v2.2.1.5의 실행 파일은 서버 변환 엔진이 아니다. REA 분석 범위와 근거는 `CAD_REA_ANALYSIS.md`에 기록했다. 웹 편집 코드는 별도로 작성했으며 GPL 소스를 복사하거나 바이너리를 포함하지 않았다.
 
 ## 서버 설치
@@ -57,6 +60,7 @@ ACadSharp의 MIT 고지는 `services/cad-converter/ACadSharp.LICENSE`에 포함�
 node --test tests/js/cad-core.test.mjs
 dotnet build services/cad-converter/CadConverter.csproj -c Release -p:RestoreLockedMode=true
 node scripts/test-cad-roundtrip.mjs /absolute/dotnet /absolute/Nahshon.CadConverter.dll /new/scratch/directory
+dotnet run --project tests/cad-converter/CadCompatibilityTests.csproj -c Release -- /absolute/dotnet /absolute/Nahshon.CadConverter.dll
 CAD_TEST_CONVERTER_BINARY=/absolute/Nahshon.CadConverter.dll CAD_TEST_DOTNET_BINARY=/absolute/dotnet php vendor/bin/phpunit --filter CadDrawingTest
 ```
 
