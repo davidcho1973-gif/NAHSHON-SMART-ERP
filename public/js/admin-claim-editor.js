@@ -11,7 +11,7 @@
     if (!document.getElementById('ce-style')) { var style = document.createElement('style'); style.id = 'ce-style'; style.textContent = '.ce-editor{font:14px/1.5 system-ui,sans-serif}.ce-editor input,.ce-editor select,.ce-editor textarea{box-sizing:border-box;border:1px solid var(--border-default,#cbd5e1);border-radius:7px;padding:8px;background:var(--bg-surface,#fff);color:var(--text-primary,#123);max-width:100%;font:inherit}.ce-editor button{border:1px solid var(--border-default,#cbd5e1);border-radius:7px;padding:8px 12px;background:var(--bg-surface,#fff);color:var(--text-primary,#123);font:inherit;cursor:pointer}.ce-editor button:hover{border-color:#0ea5e9}.ce-editor button:disabled{opacity:.5}.ce-editor aside{max-height:65vh;overflow:auto;position:sticky;top:0}.ce-editor [data-edit-body]>div{align-items:start}.ce-editor section{padding:12px;border:1px solid var(--border-default,#cbd5e1);border-radius:10px}.ce-editor label{display:block;margin:8px 0}.ce-editor label input,.ce-editor label select,.ce-editor label textarea{display:block;width:100%}.ce-editor [data-commit],.ce-editor [data-period-prepare]{background:#086b9b;color:white}.ce-editor [data-total]{padding:12px;background:#eaf5ff;color:#145075;border-radius:8px;font-weight:700}.ce-editor [data-save-state]{color:#167755;margin-bottom:8px}.ce-editor h3,.ce-editor h4{margin:12px 0}.ce-editor [data-drawing-preview]{margin-top:12px;background:#f1f5f9;border-radius:8px}.ce-editor [data-calcs] input{min-width:0}@media(max-width:850px){.ce-editor [data-edit-body]>div{grid-template-columns:1fr!important}.ce-editor aside{max-height:160px;overflow:auto}}'; document.head.appendChild(style); }
     var u = global.AdminUI, esc = u.esc, box, data, line, content, revision = 0, timer, saving = Promise.resolve(), closed = false;
     var undo = [], redo = [], dirty = false, newWork = false, searchTimer, searchVersion = 0, activeSheetId = null;
-    var embedded = null, embeddedSheet = null, uploading = false, committing = false, modal, sending = false;
+    var embedded = null, embeddedSheet = null, uploading = false, committing = false, modal;
     function error(e) { if (dirty) state('저장되지 않음 · 다시 시도하세요'); u.toast(e.message || '처리하지 못했습니다.', 'error'); }
     function money(v) { return Number(v || 0).toLocaleString('en-US', { style: 'currency', currency: data.contract.currency || 'USD' }); }
     function snapshot() { undo.push(JSON.stringify(content)); redo = []; }
@@ -55,11 +55,18 @@
         revision = draft ? draft.revision : 0;
         content = draft ? JSON.parse(JSON.stringify(draft.content)) : { workDate: data.contract.today, location: '', stage: line.recognitionBasis === 'milestone' ? (Object.keys(line.stageWeights || {}).includes('installation') ? 'installation' : Object.keys(line.stageWeights || {})[0]) : 'installed', quantity: 0, calculations: [], evidence: [], marks: [], notes: '' };
         var preferred = (sheets || []).find(function (s) { return (s.sectionIds || []).includes(line.workSectionId); }) || (sheets || [])[0]; activeSheetId = preferred ? preferred.id : null;
-        undo = []; redo = []; dirty = false; newWork = false; render();
-        if (draft && draft.recordId) state('기록 완료 #' + draft.recordId);
+        undo = []; redo = []; dirty = false; newWork = false;
+        // A submitted work record stays immutable. Further attachments start a new draft.
+        if (options.fullscreen && draft && draft.recordId) {
+          newWork = true;
+          content = {workDate:data.contract.today,location:'',stage:content.stage,quantity:0,calculations:[],evidence:[],marks:[],notes:''};
+        }
+        render();
+        if (draft && draft.recordId && !options.fullscreen) state('기록 완료 #' + draft.recordId);
       }).catch(error);
     }
     function render() {
+      if (options.fullscreen) { renderEvidence(); return; }
       var stages = line.recognitionBasis === 'milestone' ? Object.keys(line.stageWeights || {}) : ['installed'];
       var records = data.records.filter(function (r) { return r.lineId === line.id; });
       if (options.fullscreen) box.querySelector('[data-record-title]').textContent = '#' + line.lineNo + ' ' + line.description;
@@ -112,15 +119,32 @@
       var savedDraft = data.drafts.find(function (d) { return d.lineId === line.id; });
       box.querySelector('[data-history]').innerHTML = ((savedDraft && savedDraft.history) || []).slice().reverse().map(function (h) { return '<p>' + esc(h.at + ' · 버전 ' + h.revision) + (savedDraft.recordId ? '' : ' <button type="button" data-restore="' + h.revision + '">복원</button>') + '</p>'; }).join('') || '저장된 수정 이력이 없습니다.';
       box.querySelectorAll('[data-restore]').forEach(function (b) { b.onclick = function () { var h = savedDraft.history.find(function (x) { return x.revision === Number(b.dataset.restore); }); if (!h) return; snapshot(); content = JSON.parse(JSON.stringify(h.content)); render(); queueSave(); }; });
-      if(options.fullscreen){
-        var tabs=document.createElement('nav');tabs.className='ce-studio-tabs';tabs.innerHTML='<button data-jump="record">작업 기록</button><button data-jump="calculation">산출표</button><button data-jump="evidence">증빙</button>';
-        box.querySelector('[data-edit-body]').prepend(tabs);tabs.querySelectorAll('[data-jump]').forEach(function(b){b.onclick=function(){box.querySelector('[data-panel="'+b.dataset.jump+'"]').scrollIntoView({block:'start'});};});
-      }
       calculations(); sources(); preview();
       if(locked()){
         box.querySelectorAll('[data-field],[data-upload],[data-add],[data-row],[data-delete-row],[data-source],[data-caption],[data-rotate],[data-up],[data-unlink],[data-template],[data-paste-table],[data-undo],[data-redo],[data-commit],[data-drawing],[data-ask],[data-restore]').forEach(function(e){e.disabled=true;});
         state('검토 요청 완료 · 기존 기록 수정 또는 새 작업을 선택하세요');
       }
+    }
+    // Drawing-side workspace is evidence + notes only; financial editing remains in the claim ledger.
+    function renderEvidence() {
+      box.querySelector('[data-record-title]').textContent = '#' + line.lineNo + ' ' + line.description;
+      box.querySelector('[data-edit-body]').innerHTML = '<section><label>자료 올리기<input data-upload type="file" multiple accept="image/*,.pdf,.docx,.xlsx,.csv"></label><div data-upload-state role="status"></div><div data-linked></div><label>작업 설명<textarea data-field="notes" rows="12" maxlength="5000">' + esc(content.notes) + '</textarea></label></section>';
+      var picker = box.querySelector('[data-sheet]');
+      if (!picker) {
+        picker = document.createElement('select'); picker.dataset.sheet = ''; picker.setAttribute('aria-label','도면 선택');
+        picker.innerHTML = (sheets || []).map(function(s){return '<option value="'+s.id+'">'+esc(s.sheetNo+' · '+s.title)+'</option>';}).join('');
+        box.querySelector('.ce-studio-toolbar').insertBefore(picker, box.querySelector('[data-save-state]'));
+      }
+      if (activeSheetId !== null) picker.value = String(activeSheetId);
+      picker.onchange = function(){if(embedded && !embedded.beforeClose()){this.value=String(activeSheetId);return;}if(embedded){embedded.close(true);embedded=null;embeddedSheet=null;}activeSheetId=Number(this.value);preview();};
+      box.querySelector('[data-upload]').onchange = uploadFiles;
+      box.querySelector('[data-field="notes"]').oninput = function(){content.notes=this.value;queueSave();};
+      attachments(); preview();
+    }
+    function attachments() {
+      box.querySelector('[data-linked]').innerHTML = content.evidence.map(function(e,i){var source=data.sourceOptions.find(function(o){return o.value===e.type+':'+e.id;});return '<div class="ce-attachment"><span>'+esc(source ? source.label : '연결 자료 #'+e.id)+'</span><button type="button" data-proof="'+i+'">보기</button><button type="button" data-unlink="'+i+'" aria-label="자료 연결 해제">×</button></div>';}).join('');
+      box.querySelectorAll('[data-proof]').forEach(function(b){b.onclick=function(){var e=content.evidence[Number(b.dataset.proof)];u.modal({title:'자료 보기',width:1100,body:'<iframe sandbox="allow-same-origin allow-downloads" title="자료 원본" src="/billing-export/contracts/'+contractId+'/daily-evidence/'+encodeURIComponent(e.type)+'/'+e.id+'" style="width:100%;height:65vh;border:0;background:white"></iframe>'});};});
+      box.querySelectorAll('[data-unlink]').forEach(function(b){b.onclick=function(){content.evidence.splice(Number(b.dataset.unlink),1);attachments();queueSave();};});
     }
     function uploadMarked(g) {
       if (!g.blob) return Promise.resolve();
@@ -134,11 +158,11 @@
     function selectedSheet() { return (sheets || []).find(function (s) { return String(s.id) === box.querySelector('[data-sheet]').value; }); }
     function preview() {
       var s = selectedSheet(), p = box.querySelector('[data-drawing-preview]');
-      p.innerHTML = s && s.thumbUrl ? '<img alt="도면 미리보기" src="' + esc(s.thumbUrl) + '" style="max-width:100%">' : '연결된 도면이 없습니다. 공정별 도면에서 도면을 지정하세요.';
+      if (p) p.innerHTML = s && s.thumbUrl ? '<img alt="도면 미리보기" src="' + esc(s.thumbUrl) + '" style="max-width:100%">' : '연결된 도면이 없습니다. 공정별 도면에서 도면을 지정하세요.';
       if (!options.fullscreen) return;
       var host = box.querySelector('[data-studio-drawing]');
       if (embedded && embeddedSheet === (s && s.id)) return;
-      if (!s || !global.DrawingMarker) { host.textContent = '연결된 도면이 없습니다. 오른쪽에서 작업 기록과 증빙을 작성할 수 있습니다.'; return; }
+      if (!s || !global.DrawingMarker) { host.textContent = '연결된 도면이 없습니다. 오른쪽에서 자료와 작업 설명을 저장할 수 있습니다.'; return; }
       host.textContent = ''; embeddedSheet = s.id;
       embedded = global.DrawingMarker.open({host:host, siteId:siteId, sheetNo:s.sheetNo, sectionId:line.workSectionId, line:line});
     }
@@ -154,6 +178,7 @@
     }
     function addSource(key) { var p = key.split(':'); if (!content.evidence.some(function (e) { return e.type === p[0] && e.id === Number(p[1]); })) content.evidence.push({ type: p[0], id: Number(p[1]), locator: '전체' }); }
     function sources() {
+      if (options.fullscreen) { attachments(); return; }
       var q = box.querySelector('[data-search]').value.toLowerCase();
       box.querySelector('[data-sources]').innerHTML = data.sourceOptions.filter(function (o) { return o.label.toLowerCase().includes(q); }).map(function (o) { return '<button draggable="true" type="button" data-source="' + esc(o.value) + '" style="display:block;text-align:left">+ ' + esc(o.label) + '</button>'; }).join('');
       box.querySelectorAll('[data-source]').forEach(function (e) { e.ondragstart = function (event) { event.dataTransfer.setData('text/plain', e.dataset.source); }; e.onclick = function () { snapshot(); addSource(e.dataset.source); sources(); queueSave(); }; });
@@ -196,38 +221,14 @@
         });
       }); },Promise.resolve()).then(function(){statusEl.textContent='업로드 완료 · 원본 보존 · 분석 및 검토 전';input.value='';}).catch(function(e){statusEl.textContent=e.message;error(e);}).finally(function(){uploading=false;input.disabled=false;});
     }
-    function exportRecord(format) {
-      return save().then(function(){if(!revision){dirty=true;return save();}}).then(function(){
-        var url='/claim-editor/lines/'+line.id+'/export/'+format+'?revision='+revision;
-        if(format==='html'){var frame=box.querySelector('[data-report-preview]');frame.src=url;box.querySelector('[data-report-panel]').hidden=false;return;}
-        return fetch(url,{credentials:'same-origin',headers:{Accept:'application/octet-stream'}}).then(async function(r){if(!r.ok)throw new Error('파일을 만들지 못했습니다. 저장 상태와 권한을 확인하세요.');var blob=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BOQ-'+line.lineNo+'-work-record.'+format;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},2000);});
-      }).catch(error);
-    }
-    function mailRecord() {
-      save().then(function(){if(!revision){dirty=true;return save();}}).then(function(){
-        var sentLine = line.id, sentRevision = revision, requestId = crypto.randomUUID();
-        var m = u.modal({title:'작업 보고서 이메일 보내기',width:980,beforeClose:function(){return !sending;},
-          body:'<iframe title="보낼 보고서 미리보기" style="width:100%;height:40vh;background:white;border:1px solid #aaa" src="/claim-editor/lines/'+sentLine+'/export/html?revision='+sentRevision+'"></iframe><p>현재 저장 버전 v'+sentRevision+' · 보고서와 증빙 목록만 첨부됩니다. 증빙 원본은 포함하지 않습니다.</p><label>수신 이메일<input data-mail-to type="email" required style="width:100%;padding:8px"></label><label>제목<input data-mail-subject maxlength="200" value="'+esc('BOQ '+line.lineNo+' 작업 보고서')+'" style="width:100%;padding:8px"></label><label>첨부 형식<select data-mail-format><option value="docx">Word (.docx)</option><option value="xlsx">Excel (.xlsx)</option></select></label><label>메시지<textarea data-mail-body maxlength="3500" rows="3" style="width:100%"></textarea></label><label><input data-mail-confirm type="checkbox"> 수신처와 미리보기 내용을 확인했습니다.</label><p data-mail-result></p>',
-          actions:[{label:'취소',value:null},{label:'확인한 보고서 보내기',value:'keep',kind:'primary'}],onAction:function(a,el){
-            var to=el.querySelector('[data-mail-to]'),subject=el.querySelector('[data-mail-subject]').value.trim(),result=el.querySelector('[data-mail-result]');
-            if(sending)return;if(!to.value||!to.checkValidity()||!subject||!el.querySelector('[data-mail-confirm]').checked){result.textContent='수신 이메일, 제목과 확인란을 확인하세요.';return;}
-            sending=true;el.querySelectorAll('input,textarea,select,button').forEach(function(x){x.disabled=true;});result.textContent='발송 요청 중…';
-            fetch('/claim-editor/lines/'+sentLine+'/send',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content||''},body:JSON.stringify({requestId:requestId,revision:sentRevision,to:to.value,subject:subject,body:el.querySelector('[data-mail-body]').value,format:el.querySelector('[data-mail-format]').value,confirmed:true})}).then(async function(res){var j=await res.json();if(!res.ok||j.success===false)throw new Error(j.message||j.error||'발송 실패');result.textContent='메일 서버에 발송했습니다. 서신 원장에서 이력을 확인할 수 있습니다.';}).catch(function(e){result.textContent=e.message+' 전송 결과를 확인한 뒤 다시 여세요.';}).finally(function(){sending=false;el.querySelector('[data-m="0"]').disabled=false;el.querySelector('[data-m="0"]').textContent='닫기';});
-          }});
-      }).catch(error);
-    }
     function setupStudio() {
       box.classList.add('ce-studio');
-      box.querySelector('[data-send-report]').onclick = mailRecord;
-      box.querySelector('[data-save-now]').onclick=function(){if(!revision){dirty=true;}save().catch(error);};
-      box.querySelectorAll('[data-export-format]').forEach(function(b){b.onclick=function(){exportRecord(b.dataset.exportFormat);};});
-      box.querySelector('[data-close-preview]').onclick=function(){box.querySelector('[data-report-panel]').hidden=true;};
-      box.querySelector('[data-print-preview]').onclick=function(){box.querySelector('[data-report-preview]').contentWindow.print();};
+      box.querySelector('[data-save-now]').onclick=function(){save().catch(error);};
       box.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&!e.target.closest('.dm-wrap')){e.preventDefault();save().catch(error);}});
     }
     call('api_getClaimEditor', [contractId]).then(function (r) {
       data = r; if (!data.lines.length) throw new Error('계약 공정을 먼저 등록하세요.');
-      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing || sending) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '공정 기록 작업실' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-save-now>초안 저장 · Ctrl+S</button><button data-export-format="html">보고서 미리보기 · PDF</button><button data-export-format="docx">Word</button><button data-export-format="xlsx">Excel</button><button data-send-report>이메일 보내기</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div><div data-report-panel hidden><div><button data-close-preview>편집으로 돌아가기</button><button data-print-preview>인쇄 / PDF 저장</button></div><iframe title="작업 보고서 미리보기" data-report-preview></iframe></div>' : '<div data-save-state></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
+      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '도면 · 자료' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-save-now>저장 · Ctrl+S</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div>' : '<div data-save-state></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
       modal = m;
     }).catch(error);
   }
