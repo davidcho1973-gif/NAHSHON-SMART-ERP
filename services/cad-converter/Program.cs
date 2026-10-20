@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using ACadSharp;
 using ACadSharp.IO;
+using ACadSharp.Objects;
+using ACadSharp.Tables;
 
 // The ERP needs real DWG serialization: changing an extension cannot convert a drawing.
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -34,8 +36,10 @@ try
         ? DwgReader.Read(input, new DwgReaderConfiguration { Failsafe = false, KeepUnknownEntities = true, KeepUnknownNonGraphicalObjects = true }, Notify)
         : DxfReader.Read(input, new DxfReaderConfiguration { CreateDefaults = true, Failsafe = false, KeepUnknownEntities = true, KeepUnknownNonGraphicalObjects = true }, Notify);
     var inputEntities = document.BlockRecords.SelectMany(b => b.Entities).ToList();
-    if (inputEntities.Any(e => e.GetType().Name.StartsWith("Unknown", StringComparison.Ordinal)))
-        throw new InvalidDataException("Unknown proxy entities cannot be preserved by the writer. Keep the original drawing.");
+    var inputObjects = Inventory(document).ToList();
+    var unsafeObjects = new HashSet<string> { "EvaluationGraph", "BlockRepresentationData", "DynamicBlockPurgePreventer" };
+    if (inputObjects.Any(e => e.GetType().Name.StartsWith("Unknown", StringComparison.Ordinal) || unsafeObjects.Contains(e.GetType().Name)))
+        throw new InvalidDataException("Proxy objects or dynamic block metadata cannot be preserved by the writer. Keep the original drawing.");
     // UTF-8 DXF and DWG 2018 are the explicit interchange version, including old source drawings.
     document.Header.Version = ACadVersion.AC1032;
     if (target == ".dwg") DwgWriter.Write(output, document, notification: Notify);
@@ -44,6 +48,10 @@ try
     // Reopen actual emitted bytes, never report a successful file extension alone.
     var check = target == ".dwg" ? DwgReader.Read(output, Notify) : DxfReader.Read(output, Notify);
     if (check.BlockRecords.SelectMany(b => b.Entities).Count() != inputEntities.Count) throw new InvalidDataException("Entity count changed during serialization; conversion refused.");
+    var outputTypes = Inventory(check).GroupBy(o => o.GetType().FullName!).ToDictionary(g => g.Key, g => g.Count());
+    foreach (var group in inputObjects.GroupBy(o => o.GetType().FullName!))
+        if (outputTypes.GetValueOrDefault(group.Key) < group.Count())
+            throw new InvalidDataException("Object inventory decreased during serialization: " + group.Key);
     warnings.Insert(0, "DWG/DXF conversion may change custom/proxy objects, layouts, fonts and external references. Original is preserved; verify the exported drawing in your CAD program.");
     Console.WriteLine(JsonSerializer.Serialize(new { warnings = warnings.Distinct().Take(100), entities = check.Entities.Count, engine = "ACadSharp 3.8.0", outputVersion = "AC1032" }));
     return 0;
@@ -53,4 +61,27 @@ catch (Exception e)
     // No stack traces, paths or document content are sent to browser users by the PHP bridge.
     Console.Error.WriteLine(JsonSerializer.Serialize(new { error = e.GetType().Name, message = e.Message }));
     return 2;
+}
+
+static IEnumerable<CadObject> Inventory(CadDocument document)
+{
+    var seen = new HashSet<CadObject>(ReferenceEqualityComparer.Instance);
+    var queue = new Queue<CadObject>();
+    if (document.RootDictionary != null) queue.Enqueue(document.RootDictionary);
+    // All public table/object collections, then nested block entities and extension dictionaries.
+    foreach (var property in typeof(CadDocument).GetProperties())
+    {
+        if (property.GetIndexParameters().Length != 0 || !typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType)) continue;
+        if (property.GetValue(document) is System.Collections.IEnumerable collection)
+            foreach (var item in collection) if (item is CadObject cad) queue.Enqueue(cad);
+    }
+    while (queue.TryDequeue(out var item))
+    {
+        if (!seen.Add(item)) continue;
+        yield return item;
+        if (item.XDictionary != null) queue.Enqueue(item.XDictionary);
+        foreach (var reactor in item.Reactors) queue.Enqueue(reactor);
+        if (item is CadDictionary dictionary) foreach (var child in dictionary) queue.Enqueue(child);
+        if (item is BlockRecord block) foreach (var entity in block.Entities) queue.Enqueue(entity);
+    }
 }

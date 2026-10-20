@@ -45,7 +45,7 @@ ACadSharp의 MIT 고지는 `services/cad-converter/ACadSharp.LICENSE`에 포함�
 
 ```sh
 node --test tests/js/cad-core.test.mjs
-dotnet build services/cad-converter/CadConverter.csproj -c Release --locked-mode
+dotnet build services/cad-converter/CadConverter.csproj -c Release -p:RestoreLockedMode=true
 node scripts/test-cad-roundtrip.mjs /absolute/dotnet /absolute/Nahshon.CadConverter.dll /new/scratch/directory
 CAD_TEST_CONVERTER_BINARY=/absolute/Nahshon.CadConverter.dll CAD_TEST_DOTNET_BINARY=/absolute/dotnet php vendor/bin/phpunit --filter CadDrawingTest
 ```
