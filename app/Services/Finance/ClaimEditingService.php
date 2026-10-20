@@ -297,17 +297,19 @@ class ClaimEditingService
 
     private function normalize(array $input, array $ledger): array
     {
-        $this->ledger->editableReferences((int) $ledger['contract']['id'], (array) ($input['evidence'] ?? []));
+        $references = $this->ledger->editableReferences((int) $ledger['contract']['id'], (array) ($input['evidence'] ?? []));
         $proof = [];
         foreach (array_slice((array) ($input['evidence'] ?? []), 0, 21) as $p) {
             if (! is_array($p)) {
                 throw new InvalidArgumentException('근거 자료 접근 권한을 다시 확인하세요.');
             }
-            $hash = $p['type'] === 'document' ? IntelligentDocument::visibleTo(auth()->user())->find((int) $p['id'])?->sha256 : null;
+            $reference = collect($references)->first(fn ($r) => $r['type'] === $p['type'] && (int) $r['id'] === (int) $p['id']);
+            $hash = $reference['sha256'] ?? null;
             if (! empty($p['sha256']) && $p['sha256'] !== $hash) {
                 throw new InvalidArgumentException('초안 저장 후 원본이 변경되었습니다. 해당 자료를 다시 연결하세요.');
             }
-            $proof[] = ['type' => $p['type'], 'id' => (int) $p['id'], 'locator' => mb_substr((string) ($p['locator'] ?? '전체'), 0, 255), 'note' => mb_substr((string) ($p['note'] ?? ''), 0, 2000), 'sha256' => $hash];
+            $proof[] = ['type' => $p['type'], 'id' => (int) $p['id'], 'locator' => mb_substr((string) ($p['locator'] ?? '전체'), 0, 255), 'note' => mb_substr((string) ($p['note'] ?? ''), 0, 2000), 'sha256' => $hash]
+                + ($p['type'] === 'cad_revision' ? array_intersect_key($reference ?? [], array_flip(['drawingId', 'drawingRevision', 'url', 'title'])) : []);
         }
         if (count($proof) > 20) {
             throw new InvalidArgumentException('증빙은 20개 이내로 연결하세요.');

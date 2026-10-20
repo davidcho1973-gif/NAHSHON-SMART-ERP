@@ -38,7 +38,11 @@ class ClaimRecordReport
 
         return ['draft' => $draft, 'line' => $line, 'content' => $c, 'rows' => $calc['rows'],
             'quantity' => $calc['rows'] ? $calc['total'] : $c['quantity'],
-            'evidence' => array_map(fn ($e) => ['title' => $sources->get($e['type'].':'.$e['id'])['label'] ?? '증빙 #'.$e['id'], 'locator' => $e['locator']], $c['evidence']),
+            'evidence' => array_map(function ($e) use ($sources, $proof): array {
+                $resolved = collect($proof)->first(fn ($p) => $p['type'] === $e['type'] && (int) $p['id'] === (int) $e['id']);
+
+                return ['title' => $sources->get($e['type'].':'.$e['id'])['label'] ?? $resolved['title'] ?? '증빙 #'.$e['id'], 'locator' => $e['locator']];
+            }, $c['evidence']),
             'title' => 'BOQ '.$line->line_no.' — '.$line->description,
             'status' => $draft->claim_work_record_id ? '검토 요청 기록 #'.$draft->claim_work_record_id.' · 승인 결과는 ERP에서 확인' : '작성 중 초안 · 시공 및 기성 승인 아님'];
     }

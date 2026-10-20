@@ -2,6 +2,8 @@
 
 namespace App\Services\Finance;
 
+use App\Models\CadDrawingRevision;
+use App\Models\ClaimEditDraft;
 use App\Models\ClaimWorkRecord;
 use App\Models\ContractBoqLine;
 use App\Models\IntelligentDocument;
@@ -13,12 +15,15 @@ use App\Models\ProjectContract;
 use App\Models\WbsPhoto;
 use App\Models\WorkSection;
 use App\Services\Admin\BillingAdminService;
+use App\Services\Drawings\CadDrawingService;
+use App\Support\AiInformationAccess;
 use App\Support\FieldClaimAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Contract terms, measured work and claim reservations have different meanings.
@@ -578,6 +583,9 @@ class ClaimEvidenceService
     /** Guard before existing model hooks delete the actual file. */
     public static function sourceIsProtected(string $type, int $id): bool
     {
+        if ($type === 'cad_revision' && ClaimEditDraft::whereJsonContains('content->evidence', [['type' => $type, 'id' => $id]])->exists()) {
+            return true;
+        }
         if ($type === 'document' && Schema::hasTable('field_claim_attachments')
             && DB::table('field_claim_attachments')->where('intelligent_document_id', $id)->exists()) {
             return true;
@@ -643,6 +651,24 @@ class ClaimEvidenceService
             $type = (string) ($entry['type'] ?? '');
             $id = (int) ($entry['id'] ?? 0);
             $locator = $this->text($entry['locator'] ?? '', '근거 위치', 255);
+            if ($type === 'cad_revision') {
+                $revision = $this->cadRevision($contract, $id);
+                $drawing = $revision->drawing;
+                $proof = ['type' => $type, 'id' => $id, 'locator' => $locator,
+                    'note' => $this->optionalText($entry['note'] ?? null, 2000),
+                    'title' => $drawing->title.' · CAD r'.$revision->revision,
+                    'revision' => (string) $revision->revision, 'sha256' => $revision->sha256,
+                    'filePath' => $revision->dxf_path, 'disk' => $drawing->disk,
+                    'drawingId' => $drawing->id, 'drawingRevision' => $revision->revision,
+                    'url' => '/cad?drawing_id='.$drawing->id.'&revision='.$revision->revision,
+                    'downloadUrl' => '/admin-api/cad/'.$drawing->id.'/download?format=dxf&revision='.$revision->revision];
+                if ($requirePhysical) {
+                    $proof += $this->physicalProof('document', (object) ['file_path' => $revision->dxf_path, 'disk' => $drawing->disk, 'sha256' => $revision->sha256]);
+                }
+                $resolved[$type.':'.$id.':'.$locator] = $proof;
+
+                continue;
+            }
             $source = match ($type) {
                 'document' => IntelligentDocument::visibleTo(auth()->user())->find($id),
                 'intake' => OpsIntakeItem::find($id),
@@ -804,13 +830,24 @@ class ClaimEvidenceService
         $seen = [];
         foreach ($evidence as $proof) {
             $key = ($proof['type'] ?? '').':'.($proof['id'] ?? 0);
+            if (($proof['type'] ?? '') === 'cad_revision') {
+                try {
+                    $revision = $this->cadRevision($contract, (int) ($proof['id'] ?? 0));
+                } catch (InvalidArgumentException) {
+                    continue;
+                }
+                // Two revisions of the same drawing are one drawing requirement, never two independent proofs.
+                $key = 'cad_drawing:'.$revision->cad_drawing_id;
+                $type = 'drawing';
+            } else {
+                $type = ($proof['type'] ?? '') === 'document'
+                    ? IntelligentDocument::visibleTo(auth()->user())->whereKey($proof['id'])->value('document_type')
+                    : (($proof['type'] ?? '') === 'receipt' ? 'material_receipt' : ($proof['type'] ?? ''));
+            }
             if (isset($seen[$key])) {
                 continue;
             }
             $seen[$key] = true;
-            $type = ($proof['type'] ?? '') === 'document'
-                ? IntelligentDocument::visibleTo(auth()->user())->whereKey($proof['id'])->value('document_type')
-                : (($proof['type'] ?? '') === 'receipt' ? 'material_receipt' : ($proof['type'] ?? ''));
             $counts[$type ?? ''] = ($counts[$type ?? ''] ?? 0) + 1;
         }
         $labels = ['photo' => '시공 사진', 'material_receipt' => '입고 송장'] + IntelligentDocument::TYPE_OPTIONS;
@@ -831,6 +868,29 @@ class ClaimEvidenceService
     public function editableReferences(int $contractId, array $references): array
     {
         return $this->resolveEvidence($this->contract($contractId, false), $references);
+    }
+
+    /** CAD evidence always names an immutable revision, never the drawing's mutable head. */
+    public function cadRevision(ProjectContract $contract, int $id): CadDrawingRevision
+    {
+        $revision = CadDrawingRevision::with('drawing.site')->find($id);
+
+        return $this->checkedCadRevision($contract, $revision);
+    }
+
+    private function checkedCadRevision(ProjectContract $contract, ?CadDrawingRevision $revision): CadDrawingRevision
+    {
+        if (! $revision || ! $revision->drawing || (int) $revision->drawing->site_id !== (int) $contract->site_id
+            || (int) $revision->drawing->company_id !== (int) $contract->company_id) {
+            throw new InvalidArgumentException('같은 계약 현장의 CAD 개정본을 선택하세요.');
+        }
+        try {
+            app(CadDrawingService::class)->access(auth()->user(), $revision->drawing, false, true);
+        } catch (HttpException $e) {
+            throw new InvalidArgumentException('CAD 개정본 열람·내보내기 권한이 없습니다.', previous: $e);
+        }
+
+        return $revision;
     }
 
     private function sourceOptions(ProjectContract $contract, string $search = ''): array
@@ -873,6 +933,21 @@ class ClaimEvidenceService
             ->when($search !== '', fn ($q) => $q->where('vendor', 'ilike', '%'.addcslashes($search, '\\%_').'%'))
             ->whereNotNull('photo_path')->orderByDesc('id')->limit(200)->get() as $receipt) {
             $sources[] = ['value' => 'receipt:'.$receipt->id, 'label' => '입고 송장 #'.$receipt->id.' · '.$receipt->vendor.' · '.$receipt->received_on?->toDateString()];
+        }
+
+        $canCad = false;
+        try {
+            app(CadDrawingService::class)->gate(auth()->user(), false, true);
+            $canCad = $contract->site && AiInformationAccess::canUseSite(auth()->user(), $contract->site);
+        } catch (HttpException) { /* Ordinary claim sources remain available. */
+        }
+        foreach (CadDrawingRevision::with('drawing')->whereHas('drawing', fn ($q) => $q->where('site_id', $contract->site_id ?: -1)->where('company_id', $contract->company_id))
+            ->when(! $canCad, fn ($q) => $q->whereRaw('1 = 0'))
+            ->when($search !== '', fn ($q) => $q->whereHas('drawing', fn ($d) => $d->where('title', 'ilike', '%'.addcslashes($search, '\\%_').'%')))
+            ->orderByDesc('id')->limit(200)->get() as $revision) {
+            $sources[] = ['value' => 'cad_revision:'.$revision->id, 'label' => 'CAD · '.$revision->drawing->title.' · r'.$revision->revision,
+                'drawingId' => $revision->cad_drawing_id, 'drawingRevision' => $revision->revision, 'sha256' => $revision->sha256,
+                'url' => '/cad?drawing_id='.$revision->cad_drawing_id.'&revision='.$revision->revision];
         }
 
         return ['sourceOptions' => $sources, 'sourceDocumentOptions' => $documentOptions];
@@ -937,7 +1012,15 @@ class ClaimEvidenceService
     private function recordRow(ClaimWorkRecord $record): array
     {
         $allocated = (float) $record->allocations->sum('quantity');
-        $evidence = array_map(function (array $proof): array {
+        $evidence = array_map(function (array $proof) use ($record): array {
+            if (($proof['type'] ?? '') === 'cad_revision') {
+                try {
+                    $revision = CadDrawingRevision::with('drawing')->find((int) ($proof['id'] ?? 0));
+                    $this->checkedCadRevision($record->line->contract, $revision);
+                } catch (InvalidArgumentException) {
+                    return ['type' => 'cad_revision', 'id' => (int) ($proof['id'] ?? 0), 'title' => '현재 열람할 수 없는 CAD 개정본', 'locator' => '', 'unavailable' => true];
+                }
+            }
             if (($proof['type'] ?? '') === 'document') {
                 $document = IntelligentDocument::visibleTo(auth()->user())->find((int) ($proof['id'] ?? 0));
                 if (! $document || $document->access_level === 'private') {

@@ -11,7 +11,7 @@
     if (!document.getElementById('ce-style')) { var style = document.createElement('style'); style.id = 'ce-style'; style.textContent = '.ce-editor{font:14px/1.5 system-ui,sans-serif}.ce-editor input,.ce-editor select,.ce-editor textarea{box-sizing:border-box;border:1px solid var(--border-default,#cbd5e1);border-radius:7px;padding:8px;background:var(--bg-surface,#fff);color:var(--text-primary,#123);max-width:100%;font:inherit}.ce-editor button{border:1px solid var(--border-default,#cbd5e1);border-radius:7px;padding:8px 12px;background:var(--bg-surface,#fff);color:var(--text-primary,#123);font:inherit;cursor:pointer}.ce-editor button:hover{border-color:#0ea5e9}.ce-editor button:disabled{opacity:.5}.ce-editor aside{max-height:65vh;overflow:auto;position:sticky;top:0}.ce-editor [data-edit-body]>div{align-items:start}.ce-editor section{padding:12px;border:1px solid var(--border-default,#cbd5e1);border-radius:10px}.ce-editor label{display:block;margin:8px 0}.ce-editor label input,.ce-editor label select,.ce-editor label textarea{display:block;width:100%}.ce-editor [data-commit],.ce-editor [data-period-prepare]{background:#086b9b;color:white}.ce-editor [data-total]{padding:12px;background:#eaf5ff;color:#145075;border-radius:8px;font-weight:700}.ce-editor [data-save-state]{color:#167755;margin-bottom:8px}.ce-editor h3,.ce-editor h4{margin:12px 0}.ce-editor [data-drawing-preview]{margin-top:12px;background:#f1f5f9;border-radius:8px}.ce-editor [data-calcs] input{min-width:0}@media(max-width:850px){.ce-editor [data-edit-body]>div{grid-template-columns:1fr!important}.ce-editor aside{max-height:160px;overflow:auto}}'; document.head.appendChild(style); }
     var u = global.AdminUI, esc = u.esc, box, data, line, content, revision = 0, timer, saving = Promise.resolve(), closed = false;
     var undo = [], redo = [], dirty = false, newWork = false, searchTimer, searchVersion = 0, activeSheetId = null;
-    var embedded = null, embeddedSheet = null, uploading = false, committing = false, modal;
+    var embedded = null, embeddedSheet = null, uploading = false, committing = false, modal, cadActive = false;
     function error(e) { if (dirty) state('저장되지 않음 · 다시 시도하세요'); u.toast(e.message || '처리하지 못했습니다.', 'error'); }
     function money(v) { return Number(v || 0).toLocaleString('en-US', { style: 'currency', currency: data.contract.currency || 'USD' }); }
     function snapshot() { undo.push(JSON.stringify(content)); redo = []; }
@@ -45,7 +45,7 @@
       return saving;
     }
     function choose(id) {
-      if (uploading || committing) return Promise.resolve();
+      if (uploading || committing || cadActive) return Promise.resolve();
       if (embedded && !embedded.beforeClose()) return Promise.resolve();
       if (embedded) { embedded.close(true); embedded = null; embeddedSheet = null; }
       return save().then(function () { if (dirty) return save(); }).then(function () {
@@ -63,6 +63,7 @@
         }
         render();
         if (draft && draft.recordId && !options.fullscreen) state('기록 완료 #' + draft.recordId);
+        if(options.openCAD){options.openCAD=false;openCAD();}
       }).catch(error);
     }
     function render() {
@@ -72,7 +73,7 @@
       if (options.fullscreen) box.querySelector('[data-record-title]').textContent = '#' + line.lineNo + ' ' + line.description;
       box.querySelector('[data-edit-body]').innerHTML = '<div style="display:grid;grid-template-columns:minmax(150px,1fr) minmax(250px,3fr) minmax(240px,2fr);gap:12px;overflow:auto">' +
         '<aside><input data-line-search placeholder="공정명·번호 검색" style="width:100%;position:sticky;top:0;margin-bottom:8px">' + (options.fullscreen ? data.lines.filter(function (l) { return l.id === line.id; }) : data.lines).map(function (l) { return '<button type="button" data-line="' + l.id + '" style="display:block;width:100%;padding:12px;text-align:left;margin-bottom:6px">#' + esc(l.lineNo) + ' ' + esc(l.description) + '<br><small>미배정 ' + money(l.availableAmount) + '<br>' + esc(l.nextAction || '') + '</small></button>'; }).join('') + '</aside>' +
-        '<section data-panel="calculation"><select data-sheet style="width:100%">' + (sheets || []).map(function (s) { return '<option value="' + s.id + '">' + esc(s.sheetNo + ' · ' + s.title) + '</option>'; }).join('') + '</select><button type="button" data-drawing>도면 크게 열기 · 표시</button><div data-drawing-preview style="height:300px;overflow:auto"></div>' +
+        '<section data-panel="calculation"><select data-sheet style="width:100%">' + (sheets || []).map(function (s) { return '<option value="' + s.id + '">' + esc(s.sheetNo + ' · ' + s.title) + '</option>'; }).join('') + '</select><button type="button" data-drawing>도면 크게 열기 · 표시</button><button type="button" data-cad>CAD 편집 · 기성 증빙 연결</button><div data-drawing-preview style="height:300px;overflow:auto"></div>' +
         '<h4>산출표 · ' + esc(line.unit) + '</h4><div style="display:flex;gap:4px;color:#64748b;font-size:12px"><span style="width:18%">위치</span><span style="width:18%">길이</span><span style="width:18%">높이</span><span style="width:18%">개수</span><span style="width:18%">공제</span></div><div data-calcs></div><button type="button" data-add>+ 산출 행</button><p data-total></p>' +
         '<details><summary>AI에게 질문</summary><textarea data-question rows="3" placeholder="선택한 공정의 도면 근거와 부족한 자료를 설명해줘" style="width:100%"></textarea><button type="button" data-ask>질문하기</button><div data-answer></div></details></section>' +
         '<section data-panel="record"><h3>#' + esc(line.lineNo) + ' ' + esc(line.description) + '</h3><p>계약 ' + esc(line.contractQty) + ' ' + esc(line.unit) + '</p><p data-money>확인 금액 ' + money(line.verifiedAmount) + '<br>기존 회차 배정 ' + money(line.allocatedAmount) + '<br>미배정 확인액 ' + money(line.availableAmount) + '<br>잔여 계약액 ' + money(line.remainingContractAmount) + '</p>' +
@@ -82,6 +83,7 @@
         '<details><summary>초안 수정 이력</summary><div data-history></div></details><details data-record-history><summary>작업 이력 ' + records.length + '건</summary>' + records.map(function (r) { return '<p>' + (r.status === 'pending' && r.recordKind === 'actual' ? '<input type="checkbox" data-record-select value="' + r.id + '"> ' : '') + esc(r.workDate + ' · ' + r.location + ' · ' + r.reportedQty + ' ' + line.unit + ' · ' + r.status) + (r.status === 'pending' && r.recordKind === 'actual' ? ' <button data-edit-record="'+r.id+'">수정</button>' : '') + '</p>'; }).join('') + '<button type="button" data-bulk>선택 기록에 위 작업일·위치 적용</button></details></section></div>';
       box.querySelectorAll('[data-edit-record]').forEach(function(b){b.onclick=function(){var record=data.records.find(function(r){return r.id===Number(b.dataset.editRecord);});u.formModal({title:'작업 기록 #'+record.id+' 수정',subtitle:'검토 대기 기록의 수정 이력이 남습니다.',fields:[{name:'workDate',label:'작업일',type:'date',value:record.workDate,required:true},{name:'location',label:'작업 위치',value:record.location,required:true},{name:'reportedQty',label:'보고 수량 ('+line.unit+')',type:'number',value:record.reportedQty,required:true},{name:'notes',label:'작업 설명',type:'textarea',value:record.notes||'',colSpan:2}],onSave:function(v){return call('api_saveClaimRecord',[Object.assign({id:record.id},v)]).then(function(){return call('api_getClaimEditor',[contractId]);}).then(function(r){data=r;render();return {success:true};}).catch(function(e){return {success:false,error:e.message};});}});};});
       box.querySelector('[data-upload]').onchange = uploadFiles;
+      if(box.querySelector('[data-cad]'))box.querySelector('[data-cad]').onclick=openCAD;
       box.querySelector('[data-template]').onclick=function(){snapshot();content.notes+=(content.notes?'\n\n':'')+'작업 내용\n• \n\n시공 위치 및 범위\n• \n\n자재 · 장비\n• \n\n검측 및 보완사항\n• \n\n다음 작업 계획\n• ';box.querySelector('[data-field="notes"]').value=content.notes;queueSave();};
       box.querySelector('[data-paste-table]').onclick=function(){u.formModal({title:'Excel 산출표 붙여넣기',subtitle:'머리글 없이 위치 / 길이 / 높이 / 개수 / 공제 순서의 5열을 복사하세요. 붙여넣은 행은 기존 표 뒤에 추가됩니다.',fields:[{name:'table',label:'복사한 셀',type:'textarea',required:true,colSpan:2}],onSave:function(v){var rows=String(v.table||'').trim().split(/\r?\n/).map(function(row){return row.split('\t');});if(rows.length+content.calculations.length>100||rows.some(function(r){return r.length!==5||r.slice(1).some(function(n){return n.trim()===''||!Number.isFinite(Number(n))||Number(n)<0;});}))return Promise.resolve({success:false,error:'5열의 숫자와 최대 100행을 확인하세요.'});snapshot();rows.forEach(function(r){content.calculations.push({label:r[0],length:Number(r[1]),height:Number(r[2]),count:Number(r[3]),deduction:Number(r[4])});});calculations();queueSave();return save().then(function(){return {success:true};});}});};
       box.querySelector('[data-line-search]').oninput = function () { var query = this.value.toLowerCase(); box.querySelectorAll('[data-line]').forEach(function (b) { b.hidden = !b.textContent.toLowerCase().includes(query); b.style.display = b.hidden ? 'none' : 'block'; }); };
@@ -121,14 +123,54 @@
       box.querySelectorAll('[data-restore]').forEach(function (b) { b.onclick = function () { var h = savedDraft.history.find(function (x) { return x.revision === Number(b.dataset.restore); }); if (!h) return; snapshot(); content = JSON.parse(JSON.stringify(h.content)); render(); queueSave(); }; });
       calculations(); sources(); preview();
       if(locked()){
-        box.querySelectorAll('[data-field],[data-upload],[data-add],[data-row],[data-delete-row],[data-source],[data-caption],[data-rotate],[data-up],[data-unlink],[data-template],[data-paste-table],[data-undo],[data-redo],[data-commit],[data-drawing],[data-ask],[data-restore]').forEach(function(e){e.disabled=true;});
+        box.querySelectorAll('[data-field],[data-upload],[data-add],[data-row],[data-delete-row],[data-source],[data-caption],[data-rotate],[data-up],[data-unlink],[data-template],[data-paste-table],[data-undo],[data-redo],[data-commit],[data-drawing],[data-ask],[data-restore],[data-cad]').forEach(function(e){e.disabled=true;});
         state('검토 요청 완료 · 기존 기록 수정 또는 새 작업을 선택하세요');
       }
     }
     // Drawing-side workspace is evidence + notes only; financial editing remains in the claim ledger.
+
+    // CAD attachment increments the same draft revision. Freeze this editor until its
+    // authoritative draft is reloaded so stale autosaves cannot overwrite evidence.
+    function openCAD() {
+      if(cadActive || uploading || committing || !line)return;
+      if(locked()){u.toast('기록 완료된 작업은 새 작업을 시작한 뒤 CAD 증빙을 연결하세요.');return;}
+      if(embedded && !embedded.beforeClose())return;
+      const selectedLineId=line.id, contract=Number(contractId), site=Number(siteId);
+      if(!site){u.toast('현장을 먼저 선택하세요.');return;}
+      cadActive=true;box.inert=true;clearTimeout(timer);
+      const flush=()=>save().then(()=>dirty?flush():undefined);
+      flush().then(function(){
+        if(!revision || newWork){dirty=true;return flush();}
+      }).then(function(){
+        if(closed || !line || line.id!==selectedLineId)throw Error('기성 줄이 변경되었습니다. 다시 여세요.');
+        var frame,attached=false;
+        const src='/cad?site_id='+site+'&claim_line_id='+selectedLineId+'&claim_contract_id='+contract+'&claim_draft_revision='+revision;
+        const nested=u.modal({title:'CAD 편집 · 기성 #'+line.lineNo+' 증빙',subtitle:'기성 내용은 저장되어 있습니다. CAD의 저장한 개정을 연결하면 현재 작업 초안의 증빙에 추가됩니다. 수량은 자동 변경되지 않습니다.',width:1800,body:'<iframe data-claim-cad title="기성 CAD 도면 편집" src="'+esc(src)+'" style="width:100%;height:76vh;border:0"></iframe>',actions:[{label:'기성 편집으로 돌아가기',value:null}],beforeClose:function(){
+          try{return !frame || !frame.contentWindow.CADClaimBridge || frame.contentWindow.CADClaimBridge.beforeClose();}catch(e){return true;}
+        },onReady:function(el){frame=el.querySelector('[data-claim-cad]');}});
+        function receive(event){
+          if(!frame || event.origin!==location.origin || event.source!==frame.contentWindow || !event.data || Number(event.data.lineId)!==selectedLineId || Number(event.data.contractId)!==contract)return;
+          if(event.data.type==='erp:cad-claim-attached'){attached=true;nested.close(null);}
+          if(event.data.type==='erp:cad-claim-close')nested.close(null);
+        }
+        global.addEventListener('message',receive);
+        return nested.result.then(function(){
+          global.removeEventListener('message',receive);
+          if(global.apiCache)delete global.apiCache['api_getClaimEditor'+JSON.stringify([contract])];
+          return call('api_getClaimEditor',[contract]).then(function(fresh){
+            if(closed || !line || line.id!==selectedLineId)return;
+            var saved=fresh.drafts.find(function(d){return d.lineId===selectedLineId;});
+            if(!saved)throw Error('기성 초안을 다시 불러오지 못했습니다. 편집기를 다시 여세요.');
+            data=fresh;content=JSON.parse(JSON.stringify(saved.content));revision=saved.revision;newWork=false;dirty=false;undo=[];redo=[];
+            render();state(attached?'CAD 개정이 기성 초안 증빙에 연결됨 · 수량 유지':'저장된 기성 초안으로 돌아왔습니다.');
+          });
+        });
+      }).catch(error).finally(function(){cadActive=false;if(box)box.inert=false;});
+    }
+
     function renderEvidence() {
       box.querySelector('[data-record-title]').textContent = '#' + line.lineNo + ' ' + line.description;
-      box.querySelector('[data-edit-body]').innerHTML = '<section><label>자료 올리기<input data-upload type="file" multiple accept="image/*,.pdf,.docx,.xlsx,.csv"></label><div data-upload-state role="status"></div><div data-linked></div><label>작업 설명<textarea data-field="notes" rows="12" maxlength="5000">' + esc(content.notes) + '</textarea></label></section>';
+      box.querySelector('[data-edit-body]').innerHTML = '<section><button type="button" data-cad>CAD 편집 · 기성 증빙 연결</button><label>자료 올리기<input data-upload type="file" multiple accept="image/*,.pdf,.docx,.xlsx,.csv"></label><div data-upload-state role="status"></div><div data-linked></div><label>작업 설명<textarea data-field="notes" rows="12" maxlength="5000">' + esc(content.notes) + '</textarea></label></section>';
       var picker = box.querySelector('[data-sheet]');
       if (!picker) {
         picker = document.createElement('select'); picker.dataset.sheet = ''; picker.setAttribute('aria-label','도면 선택');
@@ -139,11 +181,27 @@
       picker.onchange = function(){if(embedded && !embedded.beforeClose()){this.value=String(activeSheetId);return;}if(embedded){embedded.close(true);embedded=null;embeddedSheet=null;}activeSheetId=Number(this.value);preview();};
       box.querySelector('[data-upload]').onchange = uploadFiles;
       box.querySelector('[data-field="notes"]').oninput = function(){content.notes=this.value;queueSave();};
+      box.querySelector('[data-cad]').onclick=openCAD;
       attachments(); preview();
     }
+
+    function viewProof(index){
+      var proof=content.evidence[index];if(!proof)return;
+      var source=data.sourceOptions.find(function(o){return o.value===proof.type+':'+proof.id;})||{};
+      if(proof.type==='cad_revision'){
+        var drawingId=Number(source.drawingId||proof.drawingId),drawingRevision=Number(source.drawingRevision||proof.drawingRevision);
+        if(Number.isSafeInteger(drawingId)&&drawingId>0&&Number.isSafeInteger(drawingRevision)&&drawingRevision>0){
+          var src='/cad?drawing_id='+drawingId+'&revision='+drawingRevision;
+          u.modal({title:'기성 증빙 CAD · 저장된 개정 '+drawingRevision,subtitle:'SHA256 '+(proof.sha256||source.sha256||'확인 필요'),width:1800,body:'<iframe title="저장된 CAD 증빙 개정" src="'+src+'" style="width:100%;height:76vh;border:0"></iframe>'});return;
+        }
+      }
+      var url='/billing-export/contracts/'+contractId+'/daily-evidence/'+encodeURIComponent(proof.type)+'/'+Number(proof.id);
+      u.modal({title:'증빙 원본 · '+proof.locator,width:1100,body:'<p><a target="_blank" rel="noopener" href="'+esc(url)+'">원본 열기 / 다운로드</a></p><iframe sandbox="allow-same-origin allow-downloads" title="증빙 원본" src="'+esc(url)+'" style="width:100%;height:65vh;border:0;background:white"></iframe>'});
+    }
+
     function attachments() {
       box.querySelector('[data-linked]').innerHTML = content.evidence.map(function(e,i){var source=data.sourceOptions.find(function(o){return o.value===e.type+':'+e.id;});return '<div class="ce-attachment"><span>'+esc(source ? source.label : '연결 자료 #'+e.id)+'</span><button type="button" data-proof="'+i+'">보기</button><button type="button" data-unlink="'+i+'" aria-label="자료 연결 해제">×</button></div>';}).join('');
-      box.querySelectorAll('[data-proof]').forEach(function(b){b.onclick=function(){var e=content.evidence[Number(b.dataset.proof)];u.modal({title:'자료 보기',width:1100,body:'<iframe sandbox="allow-same-origin allow-downloads" title="자료 원본" src="/billing-export/contracts/'+contractId+'/daily-evidence/'+encodeURIComponent(e.type)+'/'+e.id+'" style="width:100%;height:65vh;border:0;background:white"></iframe>'});};});
+      box.querySelectorAll('[data-proof]').forEach(function(b){b.onclick=function(){viewProof(Number(b.dataset.proof));};});
       box.querySelectorAll('[data-unlink]').forEach(function(b){b.onclick=function(){content.evidence.splice(Number(b.dataset.unlink),1);attachments();queueSave();};});
     }
     function uploadMarked(g) {
@@ -182,8 +240,8 @@
       var q = box.querySelector('[data-search]').value.toLowerCase();
       box.querySelector('[data-sources]').innerHTML = data.sourceOptions.filter(function (o) { return o.label.toLowerCase().includes(q); }).map(function (o) { return '<button draggable="true" type="button" data-source="' + esc(o.value) + '" style="display:block;text-align:left">+ ' + esc(o.label) + '</button>'; }).join('');
       box.querySelectorAll('[data-source]').forEach(function (e) { e.ondragstart = function (event) { event.dataTransfer.setData('text/plain', e.dataset.source); }; e.onclick = function () { snapshot(); addSource(e.dataset.source); sources(); queueSave(); }; });
-      box.querySelector('[data-linked]').innerHTML = content.evidence.map(function (e, i) { var o = data.sourceOptions.find(function (o) { return o.value === e.type + ':' + e.id; }); return '<p>' + esc(o ? o.label : '자료 확인 필요') + (['document','photo','receipt','expense'].includes(e.type) ? ' <button type="button" data-proof="'+i+'">원본 보기</button>' : '') + ' <button type="button" data-rotate="' + i + '">↻</button><button type="button" data-up="' + i + '">↑</button><button type="button" data-unlink="' + i + '">×</button><input aria-label="증빙 설명" data-caption="' + i + '" value="' + esc(e.locator) + '"></p>'; }).join('');
-      box.querySelectorAll('[data-proof]').forEach(function(b){b.onclick=function(){var e=content.evidence[Number(b.dataset.proof)],url='/billing-export/contracts/'+contractId+'/daily-evidence/'+e.type+'/'+e.id;u.modal({title:'증빙 원본 · '+e.locator,width:1100,body:'<p><a target="_blank" rel="noopener" href="'+esc(url)+'">원본 열기 / 다운로드</a> · Office 파일은 내려받아 열 수 있습니다.</p><iframe sandbox="allow-same-origin allow-downloads" title="증빙 원본" src="'+esc(url)+'" style="width:100%;height:65vh;border:0;background:white"></iframe>'});};});
+      box.querySelector('[data-linked]').innerHTML = content.evidence.map(function (e, i) { var o = data.sourceOptions.find(function (o) { return o.value === e.type + ':' + e.id; }); return '<p>' + esc(o ? o.label : '자료 확인 필요') + (['document','photo','receipt','expense','cad_revision'].includes(e.type) ? ' <button type="button" data-proof="'+i+'">원본 보기</button>' : '') + ' <button type="button" data-rotate="' + i + '">↻</button><button type="button" data-up="' + i + '">↑</button><button type="button" data-unlink="' + i + '">×</button><input aria-label="증빙 설명" data-caption="' + i + '" value="' + esc(e.locator) + '"></p>'; }).join('');
+      box.querySelectorAll('[data-proof]').forEach(function(b){b.onclick=function(){viewProof(Number(b.dataset.proof));};});
       var linked = box.querySelector('[data-linked]'); linked.ondragover = function (event) { event.preventDefault(); }; linked.ondrop = function (event) { event.preventDefault(); var key = event.dataTransfer.getData('text/plain'); if (!data.sourceOptions.some(function (o) { return o.value === key; })) return; snapshot(); addSource(key); sources(); queueSave(); };
       box.querySelectorAll('[data-caption]').forEach(function (e) { e.oninput = function () { content.evidence[Number(e.dataset.caption)].locator = e.value; queueSave(); }; });
       box.querySelectorAll('[data-rotate]').forEach(function (e) { e.onclick = function () { snapshot(); var p = content.evidence[Number(e.dataset.rotate)], match = (p.note || '').match(/presentationRotation:(90|180|270)/); var rotation = ((match ? Number(match[1]) : 0) + 90) % 360; p.note = 'presentationRotation:' + rotation; u.toast('제출용 사진 회전 ' + rotation + '° · 원본 유지'); queueSave(); }; });
@@ -228,7 +286,7 @@
     }
     call('api_getClaimEditor', [contractId]).then(function (r) {
       data = r; if (!data.lines.length) throw new Error('계약 공정을 먼저 등록하세요.');
-      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '도면 · 자료' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-save-now>저장 · Ctrl+S</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div>' : '<div data-save-state></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
+      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing || cadActive) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '도면 · 자료' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-save-now>저장 · Ctrl+S</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div>' : '<div data-save-state></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
       modal = m;
     }).catch(error);
   }
