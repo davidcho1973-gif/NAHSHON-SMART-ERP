@@ -123,6 +123,26 @@ class CadDrawingTest extends TestCase
         $this->getJson('/admin-api/cad/capabilities')->assertOk()->assertJsonPath('dwgRead', false)->assertJsonPath('dwgWrite', false);
     }
 
+    public function test_converter_failure_is_visible_without_leaking_native_paths_or_creating_a_drawing(): void
+    {
+        $fake = tempnam(sys_get_temp_dir(), 'cad-bridge-').'.dll';
+        file_put_contents($fake, '<?php
+if ($argv[1] === "capabilities") { echo json_encode(["dwgRead"=>true,"dwgWrite"=>true]); exit(0); }
+fwrite(STDERR, json_encode(["error"=>"InvalidDataException", "message"=>"Entity count changed during serialization; /private/customer-secret.dwg"])); exit(2);');
+        config(['cad.converter_binary' => $fake, 'cad.dotnet_binary' => PHP_BINARY]);
+        try {
+            $response = $this->upload("AC1032\0fixture", 'plan.dwg')->assertUnprocessable();
+            $this->assertStringContainsString('객체나 표시 색상이 달라져', $response->json('message'));
+            $this->assertStringNotContainsString('customer-secret', $response->getContent());
+            $this->assertDatabaseCount('cad_drawings', 0);
+            $this->assertDatabaseCount('cad_drawing_revisions', 0);
+            $this->assertSame([], glob(storage_path('app/private/cad-tmp/*/input.dwg')) ?: []);
+        } finally {
+            unlink($fake);
+            unlink(substr($fake, 0, -4));
+        }
+    }
+
     public function test_invalid_converter_output_is_never_downloaded_as_dwg(): void
     {
         $id = $this->upload()->json('id');

@@ -2,7 +2,9 @@
 
 namespace App\Services\Drawings;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 class CadConverter
@@ -50,11 +52,20 @@ class CadConverter
             $process->setTimeout(config('cad.converter_timeout', 60));
             try {
                 $process->run();
+            } catch (ProcessTimedOutException $e) {
+                report($e);
+                abort(503, '도면 변환 시간이 초과되었습니다. 도면을 나누거나 불필요한 외부 참조를 정리한 뒤 다시 시도하세요.');
             } catch (\Throwable $e) {
                 report($e);
                 abort(503, '도면 변환 엔진을 실행할 수 없습니다.');
             }
-            abort_unless($process->isSuccessful() && is_file($output), 422, '이 도면을 변환하지 못했습니다. 원본을 보관하고 지원 객체를 확인하세요.');
+            if (! $process->isSuccessful() || ! is_file($output)) {
+                $failure = $this->conversionFailure($process->getErrorOutput());
+                // Native diagnostics may include filenames and document content.
+                // Record only a fixed category; never expose raw stderr to users.
+                Log::warning('CAD conversion failed', ['reason' => $failure['reason'], 'exit_code' => $process->getExitCode(), 'from' => $from, 'to' => $to]);
+                abort(422, $failure['message']);
+            }
             abort_if(filesize($output) > config('cad.max_bytes'), 422, '변환된 도면이 크기 제한을 초과합니다.');
             $meta = json_decode($process->getOutput(), true);
             $warnings = array_values(array_filter((array) ($meta['warnings'] ?? []), 'is_string'));
@@ -71,5 +82,21 @@ class CadConverter
             }
             rmdir($dir);
         }
+    }
+
+    public function conversionFailure(string $stderr): array
+    {
+        $meta = json_decode($stderr, true);
+        $detail = is_array($meta) && is_string($meta['message'] ?? null) ? $meta['message'] : '';
+        [$reason, $message] = match (true) {
+            str_contains($detail, 'to ACAD_COLOR|') => ['conflicting_book_colors', '도면의 중복 별색 정의를 안전하게 읽지 못했습니다. 원래 CAD에서 색상 정의를 정리한 뒤 다시 불러오세요.'],
+            str_contains($detail, 'Proxy objects or dynamic block metadata') => ['unsupported_objects', '이 도면의 특수 객체 또는 동적 블록 정보를 보존할 수 없어 불러오기를 중단했습니다. 원래 CAD에서 해당 객체를 일반 2D 객체로 변환한 사본을 사용하세요.'],
+            str_contains($detail, 'Custom rendering materials') => ['custom_materials', '이 도면에 포함된 사용자 정의 3D 재질을 지원하지 않습니다. 원래 CAD에서 2D 도면 사본을 저장한 뒤 불러오세요.'],
+            str_contains($detail, 'during serialization') => ['preservation_failed', '변환 중 도면 객체나 표시 색상이 달라져 불러오기를 중단했습니다. 원본은 변경되지 않았습니다.'],
+            str_contains($detail, 'Invalid output size') => ['output_size', '변환된 도면이 비어 있거나 크기 제한을 넘었습니다. 도면을 나누어 다시 불러오세요.'],
+            default => ['conversion_failed', 'DWG 도면을 변환하지 못했습니다. 지원하지 않는 객체나 손상된 데이터가 있을 수 있습니다. 원래 CAD에서 도면 검사 후 새 DWG 또는 DXF 사본으로 저장해 다시 불러오세요.'],
+        };
+
+        return compact('reason', 'message');
     }
 }

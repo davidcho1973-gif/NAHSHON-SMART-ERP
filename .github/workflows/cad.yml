@@ -8,6 +8,8 @@ on:
       - 'app/**/Cad*.php'
       - 'tests/Feature/CadDrawingTest.php'
       - 'tests/Fixtures/cad-line.dxf'
+      - 'tests/Fixtures/cad-presentation.*'
+      - 'tests/cad-converter/**'
       - 'tests/js/cad-core.test.mjs'
       - 'scripts/test-cad-roundtrip.mjs'
       - 'scripts/build-cad-converter.sh'
@@ -58,6 +60,8 @@ jobs:
         run: |
           node --test tests/js/cad-core.test.mjs
           node scripts/test-cad-roundtrip.mjs "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll" "$RUNNER_TEMP/cad-roundtrip"
+      - name: Real duplicate book colors and conflicting RGB rejection
+        run: dotnet run --project tests/cad-converter/CadCompatibilityTests.csproj -c Release -- "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll"
       - name: Prepare Laravel
         run: |
           composer install --prefer-dist --no-interaction --no-progress

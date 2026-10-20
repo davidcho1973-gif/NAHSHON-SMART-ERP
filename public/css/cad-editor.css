@@ -150,3 +150,11 @@ body.claim-linked main {height:calc(100dvh - 205px);}
 #tools details {margin:10px 0;border:1px solid #40516c;padding:7px;border-radius:6px;}
 #tools summary {cursor:pointer;color:#83d7ff;}
 #canvas {cursor:crosshair;}
+
+#drawing-state {position:absolute;z-index:3;inset:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:28px;background:rgba(13,22,39,.94);border:1px solid #45607f;border-radius:10px;gap:12px;}
+#drawing-state[hidden] {display:none;}
+#drawing-state strong {font-size:20px;color:#b7e9ff;}
+#drawing-state p {max-width:680px;white-space:pre-wrap;overflow-wrap:anywhere;color:#c3d2e6;margin:0;}
+#drawing-state[data-state=error] {border-color:#db946b;}
+#drawing-state[data-state=error] strong {color:#ffd1a8;}
+#drawing-state[data-state=loading] {cursor:progress;}
