@@ -1,7 +1,7 @@
 (function(global){
   'use strict';
   const C=global.DrawingStudioCore, E=C.esc;
-  const TYPES={select:['↖','선택'],hand:['✋','이동'],dimension:['↔','거리'],angle:['∠','각도'],line:['╱','직선'],polyline:['⌁','연속선'],polygon:['⬡','면적'],rect:['▭','사각형'],ellipse:['○','타원'],cloud:['☁','구름'],arrow:['↗','화살표'],text:['T','문자'],pen:['✎','펜'],highlight:['▰','강조']};
+  const TYPES={select:['↖','선택·수정'],hand:['✋','화면 이동'],dimension:['↔','길이 재기'],angle:['∠','각도'],line:['╱','직선'],polyline:['⌁','연속선'],polygon:['⬡','면적 재기'],rect:['▭','사각형'],ellipse:['○','타원'],cloud:['☁','구름'],arrow:['↗','화살표'],text:['T','문자'],pen:['✎','펜'],highlight:['▰','강조']};
   const id=()=>global.crypto.randomUUID();
   function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);}
   async function api(url,method='GET',body){const headers={Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content||''};
@@ -23,6 +23,7 @@
     const {wrap,world,stage}=host,base='/admin-api/drawing-sheets/'+host.sheetId+'/studio';
     let doc=null,revision=0,canManage=false,active=false,mode='edit',tool='select',layer='default',selected=[],draft=[],hover=null,gesture=null,dirty=false,saving=false,dead=false,undo=[],redo=[],snap=true,ortho=false,grid=false,preview=null,previewUrl=null,options=null,sendId=null,sent=false,sending=false,conflict=false,newText='';
     let style={color:'#ef4444',fill:'none',width:1.5,opacity:1,dash:'solid',fontSize:12},snapLabel='';
+    const panelSections={};
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('ds-overlay');svg.style.pointerEvents='none';world.appendChild(svg);
     const panel=document.createElement('aside');panel.className='ds-panel';panel.style.display='none';panel.setAttribute('aria-label','도면 편집 및 공유');wrap.querySelector('.dm-body').appendChild(panel);
     const toolbar=document.createElement('div');toolbar.className='ds-toolbar';toolbar.style.display='none';stage.appendChild(toolbar);
@@ -39,7 +40,10 @@
     function activate(next='edit'){if(sending)return;if(!doc){host.hint('편집 자료를 불러오는 중입니다.');return;}active=true;mode=next;panel.style.display='block';toolbar.style.display=next==='edit'?'grid':'none';footer.style.display=next==='edit'?'block':'none';
       host.side.style.display='none';host.tools.style.display='none';host.setHand();renderToolbar();renderPanel();render();}
     function deactivate(){if(sending)return;active=false;panel.style.display='none';toolbar.style.display='none';footer.style.display='none';host.side.style.display='';host.tools.style.display=host.canManage?'':'none';svg.style.pointerEvents='none';draft=[];render();}
-    function renderToolbar(){toolbar.innerHTML=Object.entries(TYPES).map(([key,t])=>`<button class="dm-btn ${key===tool?'on':''}" data-tool="${key}" title="${t[1]}" ${!canManage&&!['select','hand'].includes(key)?'disabled':''}><b>${t[0]}</b>${t[1]}</button>`).join('')+`<button class="dm-btn ds-wide" data-finish>완료 ↵</button><button class="dm-btn ds-wide" data-cancel>취소 Esc</button>`;
+    function renderToolbar(){const button=key=>{const t=TYPES[key];return `<button class="dm-btn ${key===tool?'on':''}" data-tool="${key}" title="${t[1]}" ${!canManage&&!['select','hand'].includes(key)?'disabled':''}><b>${t[0]}</b>${t[1]}</button>`;};
+      toolbar.innerHTML='<span class="ds-tool-group">선택 / 이동</span>'+['select','hand'].map(button).join('')+'<span class="ds-tool-group">측정 / 작도</span>'+['dimension','polygon','line','rect','arrow','text'].map(button).join('')+
+        `<details class="ds-more-tools" ${['angle','polyline','ellipse','cloud','pen','highlight'].includes(tool)?'open':''}><summary>도구 더보기</summary><div>${['angle','polyline','ellipse','cloud','pen','highlight'].map(button).join('')}</div></details>`+
+        `<button class="dm-btn ds-wide" data-finish>그리기 완료 ↵</button><button class="dm-btn ds-wide" data-cancel>취소 Esc</button>`;
       toolbar.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));toolbar.querySelector('[data-finish]').onclick=finish;toolbar.querySelector('[data-cancel]').onclick=()=>{draft=[];render();};}
     function summary(e){const m=C.measure(e,v().wPt,v().hPt,v().fpp);if(e.type==='angle')return m.angle===null?'각도 미정':m.angle.toFixed(doc.precision)+'°';
       if(['rect','polygon','ellipse','cloud'].includes(e.type))return C.format(m.area,doc.unit,doc.precision,true)+' · 둘레 '+C.format(m.length,doc.unit,doc.precision);
@@ -61,25 +65,39 @@
       svg.innerHTML=html;
     }
     function renderPanel(){if(!active||!doc)return;if(mode==='share'){renderShare();return;}
+      panel.querySelectorAll('[data-panel-section]').forEach(el=>panelSections[el.dataset.panelSection]=el.open);
       const picked=chosen(),e=picked.length===1?picked[0]:null,s=e||style;
       panel.innerHTML=`<div class="ds-row"><h3 style="flex:1">도면 스튜디오</h3><button class="dm-btn" data-exit title="편집 패널 접기">✕</button></div>
         <div class="ds-row"><button class="dm-btn primary" data-save ${!dirty||saving||!canManage||conflict?'disabled':''}>${saving?'저장 중…':'저장'}</button><button class="dm-btn" data-undo title="실행 취소 (Ctrl+Z)" ${!undo.length?'disabled':''}>↶</button><button class="dm-btn" data-redo title="다시 실행 (Ctrl+Shift+Z)" ${!redo.length?'disabled':''}>↷</button><button class="dm-btn" data-share>공유 ↗</button></div>
         <div class="ds-status ${conflict?'error':''}" data-status>${conflict?'저장 충돌: 작업 JSON을 보관하고 다시 여세요.':dirty?'저장하지 않은 변경 있음':`저장됨 · 버전 ${revision}`}</div>
+        <div class="ds-calibration">
+          <strong>${v().fpp?'측정 기준 설정됨':'먼저 도면 치수로 축척을 맞추세요'}</strong>
+          <div class="ds-muted">${v().fpp?E(host.scaleLabel()||'실제 치수 기준'):'도면의 치수선 양 끝을 찍고 실제 길이를 입력합니다.'}</div>
+          <button class="dm-btn primary" data-reference-scale ${!canManage?'disabled':''}>📐 두 점 찍고 실제 길이 입력</button>
+          <button class="dm-btn" data-read-scale ${!canManage?'disabled':''}>도면의 치수 숫자 읽기</button>
+          ${e&&['line','dimension','arrow'].includes(e.type)?`<button class="dm-btn" data-selected-scale ${!canManage?'disabled':''}>선택한 선을 기준 치수로 사용</button>`:''}
+        </div>
         <div class="ds-grid"><label>측정 단위<select data-unit>${['ft','ft-in','m','mm'].map(u=>`<option ${doc.unit===u?'selected':''}>${u}</option>`).join('')}</select></label><label>소수 자릿수<select data-precision>${[0,1,2,3,4].map(n=>`<option ${doc.precision===n?'selected':''}>${n}</option>`).join('')}</select></label></div>
         <div class="ds-row"><button class="dm-btn ${snap?'on':''}" data-snap>스냅</button><button class="dm-btn ${ortho?'on':''}" data-ortho>직교</button><button class="dm-btn ${grid?'on':''}" data-grid>격자</button></div>
         <div class="ds-muted">스냅은 작도한 도형의 끝점·중점·선 위에 맞춥니다.</div>
         <h4>${picked.length?picked.length+'개 선택':'새 도형 스타일'}</h4>
-        ${e?`<div class="ds-status">${E(summary(e))}</div>`:''}
-        <div class="ds-grid"><label>선 색<input data-style="color" type="color" value="${E(s.color)}"></label><label>채우기 색<input data-style="fill" type="color" value="${s.fill==='none'?'#ffffff':E(s.fill)}"></label><label>선 굵기 (pt)<input data-style="width" type="number" min=".25" max="20" step=".25" value="${s.width}"></label><label>문자 크기 (pt)<input data-style="fontSize" type="number" min="6" max="72" value="${s.fontSize}"></label><label>불투명도<input data-style="opacity" type="range" min=".05" max="1" step=".05" value="${s.opacity}"></label><label>선 종류<select data-style="dash">${[['solid','실선'],['dash','파선'],['dot','점선']].map(([k,t])=>`<option value="${k}" ${s.dash===k?'selected':''}>${t}</option>`).join('')}</select></label></div>
-        <div class="ds-row"><button class="dm-btn" data-clear-fill>채우기 없음</button><button class="dm-btn" data-delete ${!picked.length?'disabled':''}>삭제</button><button class="dm-btn" data-duplicate ${!picked.length?'disabled':''}>복제</button></div>
+        ${e?`<div class="ds-status ds-measurement">${E(summary(e))}</div>`:'<div class="ds-muted">도형을 선택하면 치수를 수정할 수 있습니다.</div>'}
+        <div class="ds-grid"><label>선 길이 (${doc.unit==='ft-in'?'ft / in':doc.unit})<input data-length type="text" placeholder="예: 12&#39;-6&quot;"></label><label>회전 (도)<input data-rotate type="number" value="0" step="15"></label></div>
+        ${e&&['rect','ellipse','cloud'].includes(e.type)?`<div class="ds-grid"><label>가로 (${doc.unit})<input data-size-width type="text" placeholder="${E(C.format(Math.abs(e.points[1][0]-e.points[0][0])*v().wPt*(v().fpp||0),doc.unit,doc.precision))}"></label><label>세로 (${doc.unit})<input data-size-height type="text" placeholder="${E(C.format(Math.abs(e.points[1][1]-e.points[0][1])*v().hPt*(v().fpp||0),doc.unit,doc.precision))}"></label></div>`:''}
+        <div class="ds-muted">숫자는 선택 단위로, 12′-6″ · 300 mm처럼 단위를 붙여도 입력할 수 있습니다.</div>
+        <div class="ds-row"><button class="dm-btn primary" data-transform ${!picked.length?'disabled':''}>치수 적용</button><button class="dm-btn" data-delete ${!picked.length?'disabled':''}>삭제</button><button class="dm-btn" data-duplicate ${!picked.length?'disabled':''}>복제</button></div>
         <label>문자 / 도형 이름<input data-text maxlength="2000" placeholder="문자 도구를 고르고 도면을 클릭하세요" value="${E(e?.text??newText)}"></label>
+        <details data-panel-section="style" ${panelSections.style?'open':''}><summary>색상 · 선 · 정렬</summary>
+        <div class="ds-grid"><label>선 색<input data-style="color" type="color" value="${E(s.color)}"></label><label>채우기 색<input data-style="fill" type="color" value="${s.fill==='none'?'#ffffff':E(s.fill)}"></label><label>선 굵기 (pt)<input data-style="width" type="number" min=".25" max="20" step=".25" value="${s.width}"></label><label>문자 크기 (pt)<input data-style="fontSize" type="number" min="6" max="72" value="${s.fontSize}"></label><label>불투명도<input data-style="opacity" type="range" min=".05" max="1" step=".05" value="${s.opacity}"></label><label>선 종류<select data-style="dash">${[['solid','실선'],['dash','파선'],['dot','점선']].map(([k,t])=>`<option value="${k}" ${s.dash===k?'selected':''}>${t}</option>`).join('')}</select></label></div>
+        <div class="ds-row"><button class="dm-btn" data-clear-fill>채우기 없음</button></div>
         <div class="ds-row"><button class="dm-btn" data-front>맨 앞으로</button><button class="dm-btn" data-back>맨 뒤로</button><button class="dm-btn" data-align>왼쪽 정렬</button></div>
-        <div class="ds-grid"><label>회전 (도)<input data-rotate type="number" value="0" step="15"></label><label>직선 길이 (${doc.unit==='ft-in'?'ft':doc.unit})<input data-length type="number" min="0" step=".01" placeholder="선 선택 후 입력"></label></div>
-        <div class="ds-row"><button class="dm-btn" data-transform>선택 도형에 적용</button></div>
-        <h4>레이어</h4><div data-layers>${layers().map(l=>`<div class="ds-row ds-layer ${layer===l.id?'active':''}" data-layer="${E(l.id)}"><input type="radio" name="ds-layer" ${layer===l.id?'checked':''} style="width:auto" data-active><input type="text" value="${E(l.name)}" data-name maxlength="80"><button class="dm-btn" data-visible title="표시/숨기기">${l.visible?'◉':'○'}</button><button class="dm-btn" data-lock title="잠금/해제">${l.locked?'🔒':'🔓'}</button></div>`).join('')}</div><button class="dm-btn" data-add-layer>＋ 레이어</button>
+        </details><details data-panel-section="layers" ${panelSections.layers?'open':''}><summary>레이어</summary><div data-layers>${layers().map(l=>`<div class="ds-row ds-layer ${layer===l.id?'active':''}" data-layer="${E(l.id)}"><input type="radio" name="ds-layer" ${layer===l.id?'checked':''} style="width:auto" data-active><input type="text" value="${E(l.name)}" data-name maxlength="80"><button class="dm-btn" data-visible title="표시/숨기기">${l.visible?'◉':'○'}</button><button class="dm-btn" data-lock title="잠금/해제">${l.locked?'🔒':'🔓'}</button></div>`).join('')}</div><button class="dm-btn" data-add-layer>＋ 레이어</button></details>
         <details><summary>도형 목록 (${objects().length})</summary><div class="ds-object-list">${objects().map(x=>`<button class="dm-btn ${selected.includes(x.id)?'on':''}" data-object="${E(x.id)}">${E(TYPES[x.type]?.[1]||x.type)} · ${E(x.text||summary(x))}</button>`).join('')}</div></details>
         <details><summary>저장 이력 / 작업 보관</summary><div class="ds-row"><button class="dm-btn" data-history>수정 이력</button><button class="dm-btn" data-json>작업 JSON</button></div><div class="ds-history" data-history-list></div><div class="ds-muted">이전 버전 복원도 새로운 버전으로 저장됩니다. 변경 이력은 유지됩니다.</div></details>`;
       $('[data-exit]').onclick=deactivate;$('[data-save]').onclick=save;$('[data-undo]').onclick=()=>history(true);$('[data-redo]').onclick=()=>history(false);$('[data-share]').onclick=()=>activate('share');
+      $('[data-reference-scale]').onclick=()=>host.calibrate();
+      $('[data-read-scale]').onclick=()=>host.readDimension();
+      if($('[data-selected-scale]'))$('[data-selected-scale]').onclick=()=>host.calibrate(C.clone(e.points));
       $('[data-unit]').onchange=ev=>mutate(()=>doc.unit=ev.target.value);$('[data-precision]').onchange=ev=>mutate(()=>doc.precision=Number(ev.target.value));
       $('[data-snap]').onclick=()=>{snap=!snap;renderPanel();};$('[data-ortho]').onclick=()=>{ortho=!ortho;renderPanel();};$('[data-grid]').onclick=()=>{grid=!grid;renderPanel();render();};
       panel.querySelectorAll('[data-style]').forEach(el=>el.onchange=()=>{let value=['width','opacity','fontSize'].includes(el.dataset.style)?Number(el.value):el.value;if(!el.checkValidity())return;style[el.dataset.style]=value;if(picked.length)mutate(()=>picked.filter(editable).forEach(x=>x[el.dataset.style]=value));});
@@ -99,8 +117,17 @@
     function exportJson(){download(new Blob([JSON.stringify({sheetId:host.sheetId,sheetNo:host.sheetNo,revision,document:doc},null,2)],{type:'application/json'}),host.sheetNo+'-edit.json');}
     async function loadHistory(){try{const r=await api(base+'/history');$('[data-history-list]').innerHTML=r.rows.map(row=>`<button class="dm-btn" data-revision="${row.revision}">v${row.revision} · ${E(row.created_at)}</button>`).join('')||'저장 이력이 없습니다.';
       panel.querySelectorAll('[data-revision]').forEach(b=>b.onclick=async()=>{if(!canManage)return;try{const r=await api(base+'/history?revision='+b.dataset.revision);mutate(()=>{doc=r.document;selected=[];layer=doc.layers[0].id;});}catch(e){status(e.message,true);}});}catch(e){status(e.message,true);}}
-    function transform(){const a=chosen().filter(editable);if(!a.length)return;const angle=Number($('[data-rotate]').value),length=Number($('[data-length]').value);let transformed=C.clone(a),view=v();
-      if(length>0){if(a.length!==1||!['line','dimension','arrow'].includes(a[0].type)||!view.fpp){status('축척을 설정하고 직선·거리·화살표 하나를 선택하세요.',true);return;}const e=transformed[0],ft=length/(doc.unit==='mm'?304.8:doc.unit==='m'?.3048:1),p=e.points[0],q=e.points[1],t=Math.atan2((q[1]-p[1])*view.hPt,(q[0]-p[0])*view.wPt);e.points[1]=[p[0]+ft/view.fpp*Math.cos(t)/view.wPt,p[1]+ft/view.fpp*Math.sin(t)/view.hPt];}
+    function transform(){const a=chosen().filter(editable);if(!a.length)return;const angle=Number($('[data-rotate]').value),raw=$('[data-length]').value.trim();
+      const widthRaw=$('[data-size-width]')?.value.trim()||'',heightRaw=$('[data-size-height]')?.value.trim()||'';
+      const length=raw?host.parseDistance(raw,doc.unit):null,width=widthRaw?host.parseDistance(widthRaw,doc.unit):null,height=heightRaw?host.parseDistance(heightRaw,doc.unit):null;
+      if(!Number.isFinite(angle)||[[raw,length],[widthRaw,width],[heightRaw,height]].some(([text,n])=>text&&!(Number.isFinite(n)&&n>0))){status('0보다 큰 실제 치수를 입력하세요. 예: 12′-6″ 또는 300 mm',true);return;}
+      let transformed=C.clone(a),view=v();
+      if(length>0){if(a.length!==1||!['line','dimension','arrow'].includes(a[0].type)||!view.fpp){status('축척을 설정하고 직선·거리·화살표 하나를 선택하세요.',true);return;}const e=transformed[0],ft=length,p=e.points[0],q=e.points[1],t=Math.atan2((q[1]-p[1])*view.hPt,(q[0]-p[0])*view.wPt);e.points[1]=[p[0]+ft/view.fpp*Math.cos(t)/view.wPt,p[1]+ft/view.fpp*Math.sin(t)/view.hPt];}
+      if(widthRaw||heightRaw){if(a.length!==1||!['rect','ellipse','cloud'].includes(a[0].type)||!view.fpp){status('축척을 설정하고 사각형·타원·구름 하나를 선택하세요.',true);return;}
+        const e=transformed[0],p=e.points[0],q=e.points[1];
+        if(widthRaw)q[0]=p[0]+(q[0]<p[0]?-1:1)*width/view.fpp/view.wPt;
+        if(heightRaw)q[1]=p[1]+(q[1]<p[1]?-1:1)*height/view.fpp/view.hPt;
+      }
       if(angle){if(transformed.some(x=>['rect','ellipse','cloud','text'].includes(x.type))){status('사각형·타원·구름·문자의 회전은 지원하지 않습니다. 선이나 다각형을 선택하세요.',true);return;}const b=C.bounds(transformed.flatMap(e=>e.points)),cx=(b.x+b.right)/2,cy=(b.y+b.bottom)/2,t=angle*Math.PI/180;
         transformed.forEach(e=>e.points=e.points.map(p=>{const x=(p[0]-cx)*view.wPt,y=(p[1]-cy)*view.hPt;return[cx+(x*Math.cos(t)-y*Math.sin(t))/view.wPt,cy+(x*Math.sin(t)+y*Math.cos(t))/view.hPt];}));}
       if(transformed.some(e=>e.points.some(p=>p.some(n=>!Number.isFinite(n)||n<0||n>1)))){status('변경하면 도형이 도면 밖으로 나갑니다.',true);return;}mutate(()=>transformed.forEach(e=>Object.assign(objects().find(x=>x.id===e.id),e)));}
@@ -143,11 +170,13 @@
       if(['rect','ellipse','cloud'].includes(tool)){const b=C.bounds(draft);if((b.right-b.x)*v().wPt<.5||(b.bottom-b.y)*v().hPt<.5){draft=draft.slice(0,1);hover=null;host.hint('폭과 높이가 있도록 반대쪽 모서리를 찍으세요.');render();return;}}
       let text=$('[data-text]')?.value||newText||'';if(tool==='text'&&!text.trim()){host.hint('오른쪽 문자 칸에 내용을 입력하고 Enter를 누르세요.');$('[data-text]')?.focus();return;}
       const item={...style,id:id(),type:tool,points:C.clone(draft),text,layer};if(tool==='highlight'){item.width=Math.max(item.width,12);item.opacity=.35;}
-      mutate(()=>{doc.entities.push(item);selected=[item.id];draft=[];hover=null;});
+      mutate(()=>{doc.entities.push(item);selected=[item.id];draft=[];hover=null;tool='select';});
+      renderToolbar();
     }
     function key(ev){if(!active||(host.scopedKeys&&!wrap.contains(ev.target)))return;const input=ev.target.closest('input,textarea,select,[contenteditable=true]');
       if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='s'){ev.preventDefault();ev.stopImmediatePropagation();if(mode==='edit'&&input?.matches('[data-text],[data-style],[data-name],[data-unit],[data-precision]'))input.dispatchEvent(new Event('change',{bubbles:true}));save();return;}
-      if(input){if(ev.key==='Enter'&&ev.target.matches('[data-text]')&&draft.length){ev.preventDefault();ev.stopImmediatePropagation();finish();}else ev.stopPropagation();return;}
+      if(input){if(ev.key==='Enter'&&ev.target.matches('[data-length],[data-size-width],[data-size-height],[data-rotate]')){ev.preventDefault();ev.stopImmediatePropagation();transform();}
+        else if(ev.key==='Enter'&&ev.target.matches('[data-text]')&&draft.length){ev.preventDefault();ev.stopImmediatePropagation();finish();}else ev.stopPropagation();return;}
       if(ev.key==='Escape'){ev.preventDefault();ev.stopImmediatePropagation();if(draft.length){draft=[];hover=null;render();}else if(selected.length){selected=[];render();renderPanel();}else deactivate();return;}
       if(mode!=='edit')return;
       if((ev.ctrlKey||ev.metaKey)&&['z','y','d','a'].includes(ev.key.toLowerCase())){ev.preventDefault();ev.stopImmediatePropagation();const k=ev.key.toLowerCase();if(k==='a'){selected=shown().map(e=>e.id);render();renderPanel();}else if(k==='d')duplicate();else history(k==='z'&&!ev.shiftKey);return;}
