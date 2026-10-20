@@ -263,11 +263,14 @@ class DocumentIntelligenceController extends Controller
         $request->validate([
             'files' => ['required', 'array', 'min:1', 'max:50'],
             'files.*' => ['required', 'file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
-            'purpose' => ['nullable', 'in:claim_evidence'],
+            'purpose' => ['nullable', 'in:claim_evidence,drawing'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'site_id' => ['nullable', 'integer', 'exists:sites,id'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
         ]);
+        if ($request->input('purpose') === 'drawing') {
+            $request->validate(['files.*' => ['mimes:pdf']]);
+        }
 
         [$companyId, $siteId, $projectId] = $this->validatedScope(
             $request->user(),
@@ -290,7 +293,7 @@ class DocumentIntelligenceController extends Controller
             $result = $intake->ingest(
                 $file,
                 ['company_id' => $companyId, 'site_id' => $siteId, 'project_id' => $projectId],
-                ['uploaded_by' => $request->user()->id, 'source' => $request->input('purpose') === 'claim_evidence' ? 'claim_evidence' : 'dropzone'],
+                ['uploaded_by' => $request->user()->id, 'source' => $request->input('purpose') ?: 'dropzone'],
             );
 
             match ($result['status']) {
@@ -298,6 +301,10 @@ class DocumentIntelligenceController extends Controller
                 'duplicate' => $duplicates[] = [
                     'file' => $originalName,
                     'documentId' => $result['document']?->id,
+                    'drawing' => $request->input('purpose') === 'drawing' && $result['document']
+                        ? ['id' => $result['document']->id, 'title' => $result['document']->displayTitle(),
+                            'pdfUrl' => route('document-intelligence.preview', ['document' => $result['document']->id])]
+                        : null,
                     'requeued' => $result['requeued'],
                     'reason' => $result['reason'],
                 ],
@@ -875,6 +882,7 @@ class DocumentIntelligenceController extends Controller
             'mimeType' => $document->mime_type,
             'extension' => strtolower((string) $document->extension),
             'fileSize' => $document->file_size,
+            'pdfUrl' => route('document-intelligence.preview', ['document' => $document->id]),
             // 원본이 실제로 남아 있는지 — 배포로 로컬 디스크가 초기화되면 레코드만 남고
             // 파일은 사라진다. 그 상태를 화면에서 알 수 없으면 사용자는 다운로드를
             // 눌러 보고 나서야 404 를 만난다.

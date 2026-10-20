@@ -12,6 +12,7 @@ use App\Services\Drawings\SectionDrawingService;
 use App\Services\Ocr\OcrEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -300,6 +301,32 @@ class SectionDrawingsTest extends TestCase
         $board = app(SectionDrawingService::class)->board('703K');
         $this->assertSame([$misfiled->id], array_column($board['documents'], 'id'));
         $this->assertSame([], $board['otherPdfs']);
+    }
+
+    public function test_drawing_upload_is_in_library_before_analysis_and_duplicates_return_direct_reference(): void
+    {
+        $this->admin();
+        Queue::fake();
+        $file = UploadedFile::fake()->createWithContent('new-plan.pdf', "%PDF-1.4\nDrawing upload fixture");
+        $response = $this->postJson(route('document-intelligence.upload'), [
+            'files' => [$file], 'purpose' => 'drawing', 'site_id' => $this->site->id,
+            'company_id' => $this->company->id,
+        ])->assertStatus(202);
+        $id = $response->json('documents.0.id');
+        $this->assertNotNull($id);
+        $doc = IntelligentDocument::findOrFail($id);
+        $this->assertSame('drawing', $doc->source);
+        // AI classification must not decide whether an explicitly uploaded drawing exists.
+        $doc->update(['category' => 'general', 'document_type' => 'other']);
+        $board = app(SectionDrawingService::class)->board('703K');
+        $this->assertContains($id, array_column($board['documents'], 'id'));
+        $this->assertNotContains($id, array_column($board['otherPdfs'], 'id'));
+        $this->postJson(route('document-intelligence.upload'), [
+            'files' => [$file], 'purpose' => 'drawing', 'site_id' => $this->site->id,
+            'company_id' => $this->company->id,
+        ])->assertStatus(202)->assertJsonPath('duplicates.0.drawing.id', $id)
+            ->assertJsonPath('duplicates.0.drawing.pdfUrl', route('document-intelligence.preview', ['document' => $id]));
+        $this->assertSame(1, IntelligentDocument::count());
     }
 
     public function test_only_site_operators_read_and_pick_and_other_sites_stay_hidden(): void

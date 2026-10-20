@@ -461,6 +461,7 @@ class SectionDrawingService
         return $this->documentQuery($user, $site)
             ->where(function (Builder $q) use ($read): void {
                 $q->where('category', self::DRAWING_CATEGORY)->orWhere('document_type', self::DRAWING_TYPE)
+                    ->orWhere('source', 'drawing')
                     ->orWhereIn('id', $read->keys()->all() ?: [0]);
             })
             ->orderBy('title')->get(['id', 'title', 'original_file_name', 'file_size', 'created_at'])
@@ -490,6 +491,7 @@ class SectionDrawingService
     private function otherPdfs(User $user, Site $site, Collection $sheets): array
     {
         return $this->documentQuery($user, $site)
+            ->where(fn (Builder $q) => $q->whereNull('source')->orWhere('source', '!=', 'drawing'))
             ->where(fn (Builder $q) => $q->whereNull('category')->orWhere('category', '!=', self::DRAWING_CATEGORY))
             ->where(fn (Builder $q) => $q->whereNull('document_type')->orWhere('document_type', '!=', self::DRAWING_TYPE))
             ->whereNotIn('id', $sheets->pluck('intelligent_document_id')->unique()->all() ?: [0])
