@@ -5,10 +5,20 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 class CadDrawing extends Model
 {
     protected $guarded = [];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $drawing): void {
+            if ($drawing->revisions()->exists()) {
+                throw ValidationException::withMessages(['drawing' => '저장된 CAD 개정본 이력이 있는 도면은 삭제할 수 없습니다.']);
+            }
+        });
+    }
 
     public function site(): BelongsTo
     {

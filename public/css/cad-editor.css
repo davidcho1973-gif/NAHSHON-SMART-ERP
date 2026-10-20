@@ -140,3 +140,8 @@ footer {
         max-width: 130px;
     }
 }
+
+#claim-context:not([hidden]) {display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#123f53;border-bottom:1px solid #2f8199;}
+#claim-result {color:#80e5ba;}
+
+body.claim-linked main {height:calc(100dvh - 205px);}

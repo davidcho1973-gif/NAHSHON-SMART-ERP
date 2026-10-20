@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CadDrawing;
 use App\Models\Site;
+use App\Services\Drawings\CadClaimDraftService;
 use App\Services\Drawings\CadConverter;
 use App\Services\Drawings\CadDrawingService;
 use Illuminate\Http\Request;
@@ -25,6 +26,20 @@ class CadDrawingController extends Controller
         $this->cad->gate($request->user());
 
         return response()->json($this->converter->capabilities());
+    }
+
+    public function claimContext(Request $request, CadClaimDraftService $claims)
+    {
+        $data = $request->validate(['lineId' => 'required|integer|min:1']);
+
+        return response()->json($claims->context($data['lineId']));
+    }
+
+    public function claimDraft(Request $request, CadDrawing $drawing, CadClaimDraftService $claims)
+    {
+        $data = $request->validate(['lineId' => 'required|integer|min:1', 'drawingRevision' => 'required|integer|min:1', 'draftRevision' => 'required|integer|min:0']);
+
+        return response()->json($claims->attach($drawing, $data['lineId'], $data['drawingRevision'], $data['draftRevision']));
     }
 
     public function drawings(Request $request)

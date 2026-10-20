@@ -18,6 +18,46 @@
         canManage = false,
         cap = {},
         busy = false;
+    const query = new URLSearchParams(location.search);
+    const claimContext = {
+        lineId: Number(query.get('claim_line_id')),
+        contractId: Number(query.get('claim_contract_id')),
+        siteId: Number(query.get('site_id')),
+        draftRevision: Number(query.get('claim_draft_revision')),
+    };
+    const inClaim = [claimContext.lineId,claimContext.contractId,claimContext.siteId,claimContext.draftRevision].every(n=>Number.isSafeInteger(n)&&n>0);
+    const proofMode = query.has('drawing_id') && query.has('revision') && !inClaim;
+    let claimValid = false;
+    const claimParent = window.parent !== window ? window.parent : null;
+    window.CADClaimBridge = {beforeClose: guard};
+    function notifyClaim(type) {
+        if(claimParent)claimParent.postMessage({type,lineId:claimContext.lineId,contractId:claimContext.contractId},location.origin);
+    }
+    if(inClaim){
+        document.body.classList.add('claim-linked');
+        $('claim-context').hidden=false;
+        $('claim-attach').disabled=true;
+        $('claim-context-label').textContent='기성 계약 #'+claimContext.contractId+' · 공정 줄 #'+claimContext.lineId+' · 현장 고정';
+        $('sites').disabled=true;
+        document.querySelector('header a').hidden=true;
+        $('claim-return').onclick=()=>{if(claimParent)notifyClaim('nahshon:cad-claim-close');else if(guard())history.back();};
+        $('claim-attach').onclick=attachClaim;
+    }
+    async function attachClaim(){
+        if(!inClaim||!claimValid||!record||busy)return;
+        if(dirty){status('CAD 도면을 먼저 저장한 뒤 저장한 개정을 연결하세요.');return;}
+        if(Number(record.site_id)!==claimContext.siteId){status('이 기성 공정의 현장과 같은 현장 도면을 선택하세요.');return;}
+        const drawingId=record.id,drawingRevision=record.revision;
+        busy=true;$('claim-attach').disabled=true;
+        try{
+            const result=await api('/'+drawingId+'/claim-draft',{method:'POST',body:JSON.stringify({lineId:claimContext.lineId,drawingRevision,draftRevision:claimContext.draftRevision})});
+            claimContext.draftRevision=result.draft.revision;
+            $('claim-result').textContent='CAD 개정 '+drawingRevision+' 연결됨 · SHA256 '+String(result.evidence.sha256||'').slice(0,16)+' · 기성 수량 유지';
+            busy=false;
+            notifyClaim('nahshon:cad-claim-attached');
+        }catch(e){fail(e);}finally{busy=false;$('claim-attach').disabled=false;}
+    }
+    if(proofMode){$('sites').disabled=true;$('drawings').disabled=true;$('history').disabled=true;}
     const labels = {
         select: "선택",
         line: "선",
@@ -59,7 +99,7 @@
         if (!r.ok)
             throw Error(
                 r.status === 409
-                    ? "다른 사용자가 저장했습니다. 현재 편집은 유지됩니다. DXF를 내려받아 보관한 뒤 다시 열어 병합하세요."
+                    ? (path.endsWith("/claim-draft") ? "기성 초안이 다른 화면에서 변경되었습니다. CAD 편집은 유지됩니다. 기성으로 돌아가 최신 초안을 확인한 뒤 다시 연결하세요." : "다른 사용자가 저장했습니다. 현재 편집은 유지됩니다. DXF를 내려받아 보관한 뒤 다시 열어 병합하세요.")
                     : j.message || j.error || "요청 실패 " + r.status,
             );
         return j.data || j;
@@ -554,7 +594,7 @@
     async function list() {
         const j = await api("?site_id=" + encodeURIComponent($("sites").value));
         const listCanManage = !!j.canManage;
-        $("upload").disabled = !listCanManage;
+        $("upload").disabled = !listCanManage || proofMode;
         if (!record) canManage = listCanManage;
         const current = $("drawings").value;
         $("drawings").replaceChildren(new Option("도면 선택", ""));
@@ -594,7 +634,7 @@
         const parsed = C.parse(j.dxf);
         doc = parsed;
         record = j;
-        canManage = !!j.canManage && parsed.acadVersion >= 1015;
+        canManage = !!j.canManage && parsed.acadVersion >= 1015 && !proofMode;
         dirty = false;
         undo = [];
         redo = [];
@@ -706,7 +746,7 @@
         }
     };
     $("save").onclick = () => save().catch(fail);
-    $("reload").onclick = () => record && open(record.id).catch(fail);
+    $("reload").onclick = () => record && open(record.id,true,proofMode?Number(query.get("revision")):null).catch(fail);
     $("drawings").onchange = (e) => open(e.target.value).catch(fail);
     $("sites").onchange = () => list().catch(fail);
     $("upload").onchange = async (e) => {
@@ -958,6 +998,12 @@
     });
     new ResizeObserver(render).observe($("viewport"));
     Promise.all([
+        inClaim ? api('/claim-context?lineId='+claimContext.lineId).then(context=>{
+            claimValid=!!context.canManage&&!context.recordId&&Number(context.line.contractId)===claimContext.contractId&&Number(context.line.siteId)===claimContext.siteId&&Number(context.draftRevision)===claimContext.draftRevision;
+            $('claim-attach').disabled=!claimValid;
+            $('claim-context-label').textContent='기성 · '+context.line.description+' · 현장 고정';
+            if(!claimValid)$('claim-result').textContent='기성 초안 또는 권한이 변경되었습니다. 기성으로 돌아가 최신 초안을 확인하세요.';
+        }) : Promise.resolve(),
         api("/capabilities").then((j) => {
             cap = j;
             $("capability").textContent =
@@ -968,6 +1014,6 @@
                     (j.dwgWrite ? "가능" : "엔진 설정 필요");
             $("dwg").disabled = !j.dwgWrite;
         }),
-        list(),
+        list().then(()=>{const drawingId=Number(query.get('drawing_id')),revision=Number(query.get('revision'));if(Number.isSafeInteger(drawingId)&&drawingId>0)return open(drawingId,false,Number.isSafeInteger(revision)&&revision>0?revision:null);}),
     ]).catch(fail);
 })();
