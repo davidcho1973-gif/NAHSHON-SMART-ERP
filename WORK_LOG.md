@@ -1,3 +1,9 @@
+## 2026-10-20 — CAD measurement and editing usability
+- Root cause: calibration was separated from CAD editing, numeric transforms accepted only decimal numbers, and styles/layers crowded measurement controls. Completed drawings also stayed in drawing mode, inviting accidental new shapes instead of editing.
+- CAD panel now exposes two-point/printed-dimension calibration and selected-line reference calibration without resizing that line. Reuse the existing dimensional parser for ft/in fractions and metric units. Add rectangle/ellipse/cloud width and height inputs with bounds/invalid-value rejection; Enter applies dimensions and undo restores geometry.
+- Group basic toolbar tools, fold specialist tools/styles/layers, emphasize measured quantities, and return completed drawings to selection mode.
+- Existing synthetic browser regression expanded for metric rectangle area, invalid dimensions, preserved reference geometry, foot-inch transforms and undo. Targeted PHP drawing permissions/storage checks: 16 tests, 124 assertions. Full staging/main release checks required.
+
 ## 2026-10-19 — Drawing upload picker integration
 - Root cause: drawing uploads used generic intake, depended on the latest 50 unclassified PDFs, dropped reads when busy, and opened a cached picker.
 - Preserve explicit drawing source in the shared document library; use intake response references for new/duplicate PDFs without altering duplicate evidence ownership. Queue reads sequentially and fetch the latest catalog when opening the picker.
