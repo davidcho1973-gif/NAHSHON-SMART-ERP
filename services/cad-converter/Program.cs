@@ -40,6 +40,9 @@ try
     var unsafeObjects = new HashSet<string> { "EvaluationGraph", "BlockRepresentationData", "DynamicBlockPurgePreventer" };
     if (inputObjects.Any(e => e.GetType().Name.StartsWith("Unknown", StringComparison.Ordinal) || unsafeObjects.Contains(e.GetType().Name)))
         throw new InvalidDataException("Proxy objects or dynamic block metadata cannot be preserved by the writer. Keep the original drawing.");
+    var defaultMaterials = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Global", "ByLayer", "ByBlock" };
+    if (inputObjects.OfType<Material>().Any(m => !defaultMaterials.Contains(m.Name)))
+        throw new InvalidDataException("Custom rendering materials require the original CAD application.");
     // UTF-8 DXF and DWG 2018 are the explicit interchange version, including old source drawings.
     document.Header.Version = ACadVersion.AC1032;
     if (target == ".dwg") DwgWriter.Write(output, document, notification: Notify);
@@ -51,7 +54,13 @@ try
     var outputTypes = Inventory(check).GroupBy(o => o.GetType().FullName!).ToDictionary(g => g.Key, g => g.Count());
     foreach (var group in inputObjects.GroupBy(o => o.GetType().FullName!))
         if (outputTypes.GetValueOrDefault(group.Key) < group.Count())
-            throw new InvalidDataException("Object inventory decreased during serialization: " + group.Key);
+        {
+            // The library synthesizes the three default 3D materials when reading DWG.
+            // They are outside this 2D editor; explicitly disclose their omission.
+            if (group.All(o => o is Material m && defaultMaterials.Contains(m.Name)))
+                warnings.Add("Default 3D rendering materials are omitted by 2D DXF interchange; 2D geometry is preserved.");
+            else throw new InvalidDataException("Object inventory decreased during serialization: " + group.Key);
+        }
     warnings.Insert(0, "DWG/DXF conversion may change custom/proxy objects, layouts, fonts and external references. Original is preserved; verify the exported drawing in your CAD program.");
     Console.WriteLine(JsonSerializer.Serialize(new { warnings = warnings.Distinct().Take(100), entities = check.Entities.Count, engine = "ACadSharp 3.8.0", outputVersion = "AC1032" }));
     return 0;

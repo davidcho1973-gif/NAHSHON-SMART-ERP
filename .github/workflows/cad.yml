@@ -10,6 +10,7 @@ on:
       - 'tests/Fixtures/cad-line.dxf'
       - 'tests/js/cad-core.test.mjs'
       - 'scripts/test-cad-roundtrip.mjs'
+      - 'scripts/build-cad-converter.sh'
       - '.github/workflows/cad.yml'
   workflow_dispatch:
 
@@ -68,8 +69,8 @@ jobs:
           export CAD_TEST_DOTNET_BINARY="$(command -v dotnet)"
           php vendor/bin/phpunit --filter CadDrawingTest
       - name: Publish Linux server converter
-        run: dotnet publish services/cad-converter/CadConverter.csproj -c Release -r linux-x64 --self-contained true -o "$RUNNER_TEMP/cad-linux"
+        run: bash scripts/build-cad-converter.sh
       - uses: actions/upload-artifact@v4
         with:
           name: nahshon-cad-converter-linux-x64
-          path: ${{ runner.temp }}/cad-linux
+          path: services/cad-converter/publish

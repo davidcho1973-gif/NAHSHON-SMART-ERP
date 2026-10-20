@@ -37,7 +37,7 @@ CAD_STORAGE_DISK=s3
 
 운영 파일은 비공개 영구 디스크가 필요하다. `CAD_STORAGE_DISK`가 비어 있으면 문서함의 `document-intelligence.disk`를 사용한다. 공개 디스크나 운영 임시 로컬 디스크에는 업로드를 허용하지 않는다. 스토리지 읽기/쓰기는 권한 검증 후 서버에서 수행한다. 웹서버/PHP의 `upload_max_filesize`, `post_max_size`도 20MiB 파일과 JSON 본문을 수용하도록 설정한다.
 
-루트 Dockerfile에는 Linux 변환기 빌드와 `/opt/cad` 설치가 포함되어 있다. Laravel Cloud의 기본 PHP 빌드 방식은 .NET 엔진을 자동 설치하지 않는다. 해당 환경에는 Linux 실행 파일과 라이브러리를 빌드/배포 단계에서 설치하고 위 환경변수를 연결하거나 이 Docker 이미지를 지원하는 호스팅을 사용한다. 코드 병합만으로 기존 Laravel Cloud의 DWG 엔진이 준비되었다고 간주하지 않는다.
+루트 Dockerfile에는 Linux 변환기 빌드와 `/opt/cad` 설치가 포함되어 있다. Laravel Cloud에서는 기존 Build commands 끝에 `bash scripts/build-cad-converter.sh`를 추가한다. 이 스크립트는 .NET SDK가 없으면 Microsoft 공식 고정 버전 아카이브를 SHA512로 검증해 임시 폴더에 설치하고, 자체 포함 Linux 실행 파일을 `services/cad-converter/publish`에 빌드한다. PHP 설정은 이 경로를 기본으로 찾으므로 별도 비밀값 수정이 필요 없다. `capabilities` 실행이 실패하면 빌드도 실패한다. 코드 병합만으로 기존 Laravel Cloud의 DWG 엔진이 준비되었다고 간주하지 않는다. 파일 다운로드·변환은 20초 HTTP 제한을 넘길 수 있으므로 현장 도면으로 확인 후 서버 timeout과 PHP 한도를 조정한다.
 
 ACadSharp의 MIT 고지는 `services/cad-converter/ACadSharp.LICENSE`에 포함했다. 상용 CAD 라이선스를 재사용하지 않는다.
 
