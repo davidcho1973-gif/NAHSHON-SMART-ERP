@@ -150,8 +150,8 @@
         },onReady:function(el){frame=el.querySelector('[data-claim-cad]');}});
         function receive(event){
           if(!frame || event.origin!==location.origin || event.source!==frame.contentWindow || !event.data || Number(event.data.lineId)!==selectedLineId || Number(event.data.contractId)!==contract)return;
-          if(event.data.type==='nahshon:cad-claim-attached'){attached=true;nested.close(null);}
-          if(event.data.type==='nahshon:cad-claim-close')nested.close(null);
+          if(event.data.type==='erp:cad-claim-attached'){attached=true;nested.close(null);}
+          if(event.data.type==='erp:cad-claim-close')nested.close(null);
         }
         global.addEventListener('message',receive);
         return nested.result.then(function(){

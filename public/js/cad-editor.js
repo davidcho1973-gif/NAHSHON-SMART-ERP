@@ -40,7 +40,7 @@
         $('claim-context-label').textContent='기성 계약 #'+claimContext.contractId+' · 공정 줄 #'+claimContext.lineId+' · 현장 고정';
         $('sites').disabled=true;
         document.querySelector('header a').hidden=true;
-        $('claim-return').onclick=()=>{if(claimParent)notifyClaim('nahshon:cad-claim-close');else if(guard())history.back();};
+        $('claim-return').onclick=()=>{if(claimParent)notifyClaim('erp:cad-claim-close');else if(guard())history.back();};
         $('claim-attach').onclick=attachClaim;
     }
     async function attachClaim(){
@@ -54,7 +54,7 @@
             claimContext.draftRevision=result.draft.revision;
             $('claim-result').textContent='CAD 개정 '+drawingRevision+' 연결됨 · SHA256 '+String(result.evidence.sha256||'').slice(0,16)+' · 기성 수량 유지';
             busy=false;
-            notifyClaim('nahshon:cad-claim-attached');
+            notifyClaim('erp:cad-claim-attached');
         }catch(e){fail(e);}finally{busy=false;$('claim-attach').disabled=false;}
     }
     if(proofMode){$('sites').disabled=true;$('drawings').disabled=true;$('history').disabled=true;}
