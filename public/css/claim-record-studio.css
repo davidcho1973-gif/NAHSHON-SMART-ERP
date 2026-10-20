@@ -17,9 +17,7 @@
 .ce-studio .ds-panel{position:static;max-height:none}
 .ce-studio .ds-toolbar button{padding:3px;font-size:11px}
 .ce-studio .ds-toolbar .ds-wide{padding:0;font-size:11px}
-.ce-studio [data-report-panel]{position:absolute;inset:65px 0 62px;background:var(--bg-surface);z-index:20;padding:12px;display:flex;flex-direction:column;gap:10px}
-.ce-studio [data-report-panel][hidden]{display:none}
-.ce-studio [data-report-preview]{flex:1;width:100%;background:white;border:0}
 @media(max-width:1000px){.ce-studio-layout{grid-template-columns:minmax(0,1fr) 350px}.ce-studio-toolbar strong{max-width:100%}}
 @media(max-width:760px){.ce-studio-layout{display:flex;flex-direction:column;overflow:auto}.ce-studio [data-studio-drawing]{height:55vh;flex:none}.ce-studio [data-edit-body]{overflow:visible}.ce-studio [data-m-body]{overflow:auto!important}.ce-studio-toolbar{position:sticky;top:0;z-index:3;background:var(--bg-surface)}}
-.ce-studio-tabs{display:flex;gap:6px;position:sticky;top:-12px;padding:8px 0;background:var(--bg-surface);z-index:4}.ce-studio [data-panel="record"]{order:1}.ce-studio [data-panel="calculation"]{order:2}.ce-studio [data-money]{display:none}.ce-studio [data-panel]{scroll-margin-top:50px}
+
+.ce-studio-toolbar [data-sheet]{max-width:360px;min-width:0}.ce-attachment{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border-default)}.ce-attachment span{flex:1;overflow-wrap:anywhere}.ce-studio [data-field="notes"]{min-height:220px;resize:vertical}
