@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\CadDrawing;
 use App\Models\Company;
+use App\Models\DrawingSheet;
+use App\Models\IntelligentDocument;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
@@ -13,6 +15,7 @@ use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CadDrawingTest extends TestCase
@@ -45,6 +48,63 @@ class CadDrawingTest extends TestCase
     {
         return ['id' => 'area-1', 'kind' => 'area', 'points' => [['x' => 1, 'y' => 2], ['x' => 30, 'y' => 2], ['x' => 30, 'y' => 20]],
             'color' => '#38bdf8', 'opacity' => 0.35, 'width' => 2, 'size' => 8, 'pattern' => 'diagonal', 'text' => '', 'locked' => false];
+    }
+
+    public function test_pdf_studio_import_is_page_pinned_idempotent_and_keeps_document_permissions(): void
+    {
+        $pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
+        Storage::disk('local')->put('source.pdf', $pdf);
+        $document = IntelligentDocument::create(['uuid' => (string) Str::uuid(), 'company_id' => $this->site->company_id, 'site_id' => $this->site->id, 'disk' => 'local', 'sha256' => hash('sha256', $pdf), 'stored_file_name' => 'source.pdf', 'file_path' => 'source.pdf', 'original_file_name' => 'source.pdf', 'mime_type' => 'application/pdf', 'extension' => 'pdf', 'document_type' => 'drawing', 'access_level' => 'private', 'owner_user_id' => $this->admin->id]);
+        $sheet = DrawingSheet::create(['intelligent_document_id' => $document->id, 'site_id' => $this->site->id, 'page_no' => 2, 'sheet_no' => 'A2']);
+        $endpoint = '/admin-api/cad/source-sheets/'.$sheet->id;
+        $this->getJson($endpoint)->assertOk()->assertJsonPath('page', 2);
+        $this->get($endpoint.'/file')->assertContent($pdf);
+        $body = ['requestKey' => (string) Str::uuid(), 'title' => 'A2', 'reference' => ['page' => 2, 'width' => 400, 'height' => 300]];
+        $id = $this->postJson($endpoint, $body)->assertCreated()->assertJsonPath('reference.sourceSheetId', $sheet->id)->json('id');
+        $this->postJson($endpoint, $body)->assertCreated()->assertJsonPath('id', $id);
+        $this->assertDatabaseCount('cad_drawings', 1);
+        $this->postJson($endpoint, array_replace_recursive($body, ['requestKey' => (string) Str::uuid(), 'reference' => ['page' => 1]]))->assertUnprocessable();
+        $this->getJson('/admin-api/cad')->assertJsonCount(1, 'drawings');
+        $other = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($other);
+        $this->getJson($endpoint)->assertNotFound();
+        $this->getJson('/admin-api/cad/'.$id)->assertNotFound();
+        $this->get('/admin-api/cad/'.$id.'/reference')->assertNotFound();
+        $this->getJson('/admin-api/cad')->assertJsonCount(0, 'drawings');
+        $this->assertDatabaseCount('drawing_studios', 0);
+    }
+
+    public function test_reference_image_keeps_original_pixels_and_rejects_cad_geometry_changes(): void
+    {
+        $file = UploadedFile::fake()->image('reference.png', 400, 300);
+        $bytes = $file->get();
+        $result = $this->postJson('/admin-api/cad', ['site_id' => $this->site->id, 'title' => 'Reference', 'file' => $file])->assertCreated()
+            ->assertJsonPath('sourceFormat', 'png')->assertJsonPath('reference.width', 400)->assertJsonPath('reference.height', 300);
+        $id = $result->json('id');
+        $dxf = $result->json('dxf');
+        $url = '/admin-api/cad/'.$id;
+        $this->get($url.'/reference')->assertOk()->assertContent($bytes)->assertHeader('Content-Type', 'image/png');
+        $this->putJson($url, ['revision' => 1, 'dxf' => $dxf, 'markups' => [$this->markup()]])->assertOk();
+        $this->putJson($url, ['revision' => 2, 'dxf' => self::DXF, 'markups' => []])->assertUnprocessable();
+        $this->getJson($url.'/download?format=dxf')->assertUnprocessable();
+        $this->get($url.'/download?format=original')->assertStreamedContent($bytes);
+        $this->postJson($url.'/copies', ['requestKey' => (string) Str::uuid(), 'revision' => 2, 'title' => 'Copy', 'dxf' => $dxf, 'markups' => [$this->markup()], 'workspace' => []])
+            ->assertCreated()->assertJsonPath('reference.width', 400)->assertJsonPath('sourceFormat', 'png');
+        $outsider = User::factory()->create(['access_role' => 'site_manager', 'account_status' => 'active', 'access_scope' => 'site', 'allowed_site_id' => null]);
+        $this->actingAs($outsider)->get($url.'/reference')->assertNotFound();
+    }
+
+    public function test_linked_details_require_a_valid_source_and_parallelogram_frame(): void
+    {
+        $id = $this->upload()->json('id');
+        $detail = $this->markup();
+        $detail['kind'] = 'detail';
+        $detail['points'] = [['x' => 20, 'y' => 0], ['x' => 40, 'y' => 0], ['x' => 40, 'y' => 20], ['x' => 20, 'y' => 20]];
+        $detail['detail'] = ['minX' => 0, 'minY' => 0, 'maxX' => 10, 'maxY' => 10];
+        $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$detail]])->assertOk();
+        $detail['points'][2]['x'] = 39;
+        $this->putJson('/admin-api/cad/'.$id, ['revision' => 2, 'dxf' => self::DXF, 'markups' => [$detail]])->assertUnprocessable();
+        $this->assertDatabaseCount('cad_drawing_revisions', 2);
     }
 
     public function test_cad_workspace_uses_the_current_organization_name(): void
@@ -99,6 +159,59 @@ class CadDrawingTest extends TestCase
         $this->actingAs($viewer)->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$mark]])->assertForbidden();
     }
 
+    public function test_holes_text_groups_and_calibration_survive_immutable_revisions_and_old_clients(): void
+    {
+        $id = $this->upload()->json('id');
+        $area = $this->markup();
+        $area['points'] = [['x' => 0, 'y' => 0], ['x' => 100, 'y' => 0], ['x' => 100, 'y' => 100], ['x' => 0, 'y' => 100]];
+        $area['holes'] = [[['x' => 20, 'y' => 20], ['x' => 30, 'y' => 20], ['x' => 30, 'y' => 30], ['x' => 20, 'y' => 30]]];
+        $area['group'] = 'review-group';
+        $area['layer'] = 'fire';
+        $area['label'] = 'REV-03';
+        $text = array_replace($this->markup(), ['id' => 'note', 'kind' => 'text', 'points' => [['x' => 10, 'y' => 10]], 'text' => '검토 메모', 'rotation' => 90,
+            'textStyle' => ['font' => 'sans', 'bold' => true, 'italic' => false, 'align' => 'center', 'lineHeight' => 1.5, 'boxWidth' => 30, 'background' => 'none', 'border' => false]]);
+        $workspace = ['layers' => [['id' => 'fire', 'name' => '소방', 'color' => '#ff0000', 'visible' => true, 'locked' => false]],
+            'measurement' => ['metersPerUnit' => .01, 'unit' => 'm', 'source' => 'calibrated', 'points' => [['x' => 0, 'y' => 0], ['x' => 100, 'y' => 0]], 'distance' => 1],
+            'underlay' => ['opacity' => .4, 'grayscale' => true]];
+        $url = '/admin-api/cad/'.$id;
+        $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$area, $text], 'workspace' => $workspace])->assertOk()
+            ->assertJsonPath('workspace.measurement.metersPerUnit', .01)->assertJsonPath('markups.0.holes.0.0.x', 20)->assertJsonPath('markups.1.textStyle.bold', true);
+        $this->putJson($url, ['revision' => 2, 'dxf' => self::DXF])->assertOk()->assertJsonPath('workspace.layers.0.id', 'fire')->assertJsonPath('markups.0.group', 'review-group');
+        $this->getJson($url.'/history?revision=2')->assertJsonPath('markups.1.rotation', 90)->assertJsonPath('workspace.underlay.grayscale', true);
+        $this->get($url.'/download?format=original')->assertStreamedContent(self::DXF);
+        $this->putJson($url, ['revision' => 2, 'dxf' => self::DXF, 'workspace' => []])->assertConflict();
+        $this->assertDatabaseCount('cad_drawing_revisions', 3);
+    }
+
+    public function test_invalid_hole_topology_unknown_layers_and_false_scale_are_rejected_atomically(): void
+    {
+        $id = $this->upload()->json('id');
+        $url = '/admin-api/cad/'.$id;
+        $mark = $this->markup();
+        $square = [['x' => 0, 'y' => 0], ['x' => 10, 'y' => 0], ['x' => 10, 'y' => 10], ['x' => 0, 'y' => 10]];
+        $inner = [['x' => 2, 'y' => 2], ['x' => 4, 'y' => 2], ['x' => 4, 'y' => 4], ['x' => 2, 'y' => 4]];
+        foreach ([
+            ['points' => $square, 'holes' => [$square]],
+            ['points' => $square, 'holes' => [$inner, $inner]],
+            ['points' => $inner, 'holes' => [$square]],
+            ['points' => [['x' => 0, 'y' => 0], ['x' => 10, 'y' => 8], ['x' => 0, 'y' => 10], ['x' => 8, 'y' => 0]]],
+            ['layer' => 'missing'],
+            ['kind' => 'pen', 'holes' => [$inner]],
+            ['textStyle' => ['font' => 'url(javascript:bad)']],
+        ] as $change) {
+            $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [array_replace($mark, $change)]])->assertUnprocessable();
+        }
+        foreach ([
+            ['measurement' => ['unit' => 'mm', 'metersPerUnit' => 1, 'source' => 'declared']],
+            ['measurement' => ['unit' => 'm', 'metersPerUnit' => 1, 'source' => 'calibrated']],
+            ['underlay' => ['opacity' => 0, 'grayscale' => true]],
+            ['approvedQuantity' => 100],
+        ] as $workspace) {
+            $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'workspace' => $workspace])->assertUnprocessable();
+        }
+        $this->assertDatabaseCount('cad_drawing_revisions', 1);
+    }
+
     public function test_import_save_history_conflict_and_private_downloads_preserve_original(): void
     {
         $id = $this->upload()->assertCreated()->assertJsonPath('revision', 1)->assertJsonPath('dxf', self::DXF)->json('id');
@@ -115,6 +228,30 @@ class CadDrawingTest extends TestCase
         $drawing = CadDrawing::findOrFail($id);
         Storage::disk($drawing->disk)->assertExists($drawing->original_path);
         $this->assertDatabaseCount('cad_drawing_revisions', 2);
+    }
+
+    public function test_stale_recovery_creates_an_idempotent_scoped_copy_without_overwriting_current_drawing(): void
+    {
+        $id = $this->upload()->json('id');
+        $url = '/admin-api/cad/'.$id;
+        $latest = str_replace("11\n100", "11\n200", self::DXF);
+        $this->putJson($url, ['revision' => 1, 'dxf' => $latest])->assertOk();
+        $payload = ['requestKey' => (string) Str::uuid(), 'revision' => 1, 'title' => 'Recovered plan', 'dxf' => self::DXF,
+            'markups' => [$this->markup()], 'workspace' => ['measurement' => ['unit' => 'mm', 'metersPerUnit' => .001, 'source' => 'declared']]];
+        $copyId = $this->postJson($url.'/copies', $payload)->assertCreated()->assertJsonPath('revision', 1)->assertJsonPath('markups.0.id', 'area-1')->json('id');
+        $files = Storage::disk('local')->allFiles('cad');
+        $this->postJson($url.'/copies', $payload)->assertCreated()->assertJsonPath('id', $copyId);
+        $this->assertSame($files, Storage::disk('local')->allFiles('cad'));
+        $this->postJson($url.'/copies', array_replace($payload, ['title' => 'Different request']))->assertConflict();
+        $this->getJson($url)->assertJsonPath('dxf', $latest)->assertJsonPath('revision', 2)->assertJsonPath('markups', []);
+        $this->get('/admin-api/cad/'.$copyId.'/download?format=original')->assertStreamedContent(self::DXF);
+        $copy = CadDrawing::findOrFail($copyId);
+        $source = CadDrawing::findOrFail($id);
+        $this->assertSame($source->site_id, $copy->site_id);
+        $this->assertEquals($source->revisions()->where('revision', 1)->value('id'), $copy->copied_from_revision_id);
+        $this->assertDatabaseCount('cad_drawings', 2);
+        $viewer = User::factory()->create(['access_role' => 'payroll', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($viewer)->postJson($url.'/copies', $payload)->assertForbidden();
     }
 
     public function test_actual_contents_are_validated_and_dwg_fails_closed_without_converter(): void

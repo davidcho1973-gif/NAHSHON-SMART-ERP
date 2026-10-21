@@ -11,6 +11,11 @@ class CadDrawing extends Model
 {
     protected $guarded = [];
 
+    protected function casts(): array
+    {
+        return ['reference' => 'array'];
+    }
+
     protected static function booted(): void
     {
         static::deleting(function (self $drawing): void {

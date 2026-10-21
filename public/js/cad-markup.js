@@ -105,43 +105,108 @@
             };
         });
     }
-    function lines(text) {
+    function lines(text, maxWidth = 28) {
         return String(text || "")
             .split("\n")
             .flatMap((line) => {
                 const chars = Array.from(line),
                     result = [];
-                do {
-                    result.push(chars.splice(0, 28).join(""));
-                } while (chars.length);
+                let current = "",
+                    width = 0;
+                for (const char of chars) {
+                    const w = char.charCodeAt(0) > 255 ? 1 : 0.65;
+                    if (current && width + w > maxWidth) {
+                        result.push(current);
+                        current = "";
+                        width = 0;
+                    }
+                    current += char;
+                    width += w;
+                }
+                result.push(current);
                 return result;
             });
     }
+    let metricsContext;
+    function textWidth(text, style = {}) {
+        if (!metricsContext && root.document)
+            metricsContext = root.document
+                .createElement("canvas")
+                .getContext("2d");
+        if (metricsContext) {
+            metricsContext.font = `${style.italic ? "italic " : ""}${style.bold ? "700 " : "400 "}100px ${{ sans: "sans-serif", serif: "serif", mono: "monospace" }[style.font] || "sans-serif"}`;
+            return metricsContext.measureText(text).width / 100;
+        }
+        return Array.from(text).reduce(
+            (n, c) => n + (c.charCodeAt(0) > 255 ? 1 : 0.65),
+            0,
+        );
+    }
     function labelBox(item) {
-        const ls = lines(item.text),
-            p = item.points[1],
+        const style = item.textStyle || {},
+            limit = style.boxWidth
+                ? Math.max(0.01, style.boxWidth / item.size - 1)
+                : 28,
+            ls = String(item.text || "")
+                .split("\n")
+                .flatMap((line) => {
+                    const wrapped = [];
+                    let part = "";
+                    for (const char of Array.from(line)) {
+                        if (part && textWidth(part + char, style) > limit) {
+                            wrapped.push(part);
+                            part = "";
+                        }
+                        part += char;
+                    }
+                    wrapped.push(part);
+                    return wrapped;
+                }),
+            p = item.points[item.kind === "text" ? 0 : 1],
             s = item.size;
         const width =
-            Math.max(
-                3,
-                ...ls.map((line) =>
-                    Array.from(line).reduce(
-                        (n, c) => n + (c.charCodeAt(0) > 255 ? 1 : 0.65),
-                        0,
-                    ),
-                ),
-            ) *
-                s +
-            s;
-        return { x: p.x, y: p.y, width, height: (ls.length * 1.35 + 0.8) * s };
+            Math.max(3, ...ls.map((line) => textWidth(line, style))) * s + s;
+        return {
+            x: p.x,
+            y: p.y,
+            width: style.boxWidth || width,
+            height: (ls.length * (style.lineHeight || 1.35) + 0.8) * s,
+            lines: ls,
+        };
+    }
+    function labelCorners(item) {
+        const b = labelBox(item),
+            origin = { x: b.x, y: b.y },
+            angle = ((item.rotation || 0) * Math.PI) / 180;
+        return rect(origin, { x: b.x + b.width, y: b.y - b.height }).map(
+            (p) => ({
+                x:
+                    origin.x +
+                    (p.x - origin.x) * Math.cos(angle) -
+                    (p.y - origin.y) * Math.sin(angle),
+                y:
+                    origin.y +
+                    (p.x - origin.x) * Math.sin(angle) +
+                    (p.y - origin.y) * Math.cos(angle),
+            }),
+        );
     }
     function bounds(item) {
         let ps = item.points;
         if (item.kind === "cloud")
             ps = cloud(ps, item.size).flatMap((p) => [p.a, p.b, p.c]);
-        if (item.kind === "callout") {
-            const b = labelBox(item);
-            ps = [...ps, { x: b.x + b.width, y: b.y - b.height }];
+        if (["callout", "text"].includes(item.kind))
+            ps = [...ps, ...labelCorners(item)];
+        if (["area", "cloud", "route"].includes(item.kind) && item.label) {
+            const p = item.points[0];
+            ps = [
+                ...ps,
+                p,
+                {
+                    x: p.x + textWidth(item.label, { bold: true }) * item.size,
+                    y: p.y + item.size * 1.4,
+                },
+            ];
         }
         const padding = item.kind === "pin" ? item.size : 0;
         return {
@@ -152,35 +217,51 @@
         };
     }
     function hit(item, p, tolerance) {
+        if(item.kind === 'detail') return inside(p,item.points);
         if (item.kind === "pin")
             return distance(p, item.points[0]) <= item.size + tolerance;
-        if (item.kind === "callout") {
-            const b = labelBox(item);
-            if (
-                p.x >= b.x &&
-                p.x <= b.x + b.width &&
-                p.y <= b.y &&
-                p.y >= b.y - b.height
-            )
-                return true;
-        }
-        if (["area", "cloud"].includes(item.kind) && inside(p, item.points))
+        if (
+            ["callout", "text"].includes(item.kind) &&
+            inside(p, labelCorners(item))
+        )
+            return true;
+        if (
+            ["area", "cloud"].includes(item.kind) &&
+            inside(p, item.points) &&
+            !(item.holes || []).some((ring) => inside(p, ring))
+        )
             return true;
         const ps = ["area", "cloud"].includes(item.kind)
             ? [...item.points, item.points[0]]
             : item.points;
-        return ps
-            .slice(1)
-            .some(
-                (q, i) =>
-                    segmentDistance(p, ps[i], q) <=
-                    tolerance + (item.kind === "cloud" ? item.size : 0),
-            );
+        return (
+            (item.holes || []).some((ring) =>
+                ring.some(
+                    (a, i) =>
+                        segmentDistance(p, a, ring[(i + 1) % ring.length]) <=
+                        tolerance,
+                ),
+            ) ||
+            ps
+                .slice(1)
+                .some(
+                    (q, i) =>
+                        segmentDistance(p, ps[i], q) <=
+                        tolerance + (item.kind === "cloud" ? item.size : 0),
+                )
+        );
     }
     function translate(item, dx, dy) {
         return {
             ...item,
             points: item.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+            ...(item.holes
+                ? {
+                      holes: item.holes.map((ring) =>
+                          ring.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+                      ),
+                  }
+                : {}),
         };
     }
     function draw(ctx, item, screen, scale, options = {}) {
@@ -188,18 +269,27 @@
             size = item.size * scale;
         ctx.save();
         ctx.strokeStyle = ctx.fillStyle = item.color;
-        ctx.lineWidth = item.width;
+        const lineScale = options.lineScale || 1;
+        ctx.lineWidth = item.width * lineScale;
         ctx.lineJoin = ctx.lineCap = "round";
         ctx.setLineDash([]);
         ctx.globalAlpha = item.opacity;
         ctx.beginPath();
         ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-        if (item.kind === "area") {
+        if (item.kind === 'detail') {
+            root.CADReview?.drawDetail(ctx,item,screen,scale,options);
+        } else if (item.kind === "area") {
             ctx.closePath();
-            ctx.fill();
+            for (const ring of item.holes || []) {
+                ring.map(screen).forEach((p, i) =>
+                    i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+                );
+                ctx.closePath();
+            }
+            ctx.fill("evenodd");
             if (item.pattern !== "solid") {
                 ctx.save();
-                ctx.clip();
+                ctx.clip("evenodd");
                 ctx.globalAlpha = Math.min(1, item.opacity + 0.35);
                 const b = bounds(item),
                     a = screen({ x: b.minX, y: b.maxY }),
@@ -212,7 +302,7 @@
                     right = Math.min(w + 40, z.x),
                     bottom = Math.min(h + 40, z.y);
                 const step = Math.max(8, Math.min(32, size));
-                ctx.lineWidth = 1;
+                ctx.lineWidth = lineScale;
                 ctx.beginPath();
                 for (let x = left - (bottom - top); x < right; x += step) {
                     ctx.moveTo(x, top);
@@ -231,6 +321,12 @@
                 i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
             );
             ctx.closePath();
+            for (const ring of item.holes || []) {
+                ring.map(screen).forEach((p, i) =>
+                    i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+                );
+                ctx.closePath();
+            }
             ctx.stroke();
         } else if (item.kind === "cloud") {
             ctx.beginPath();
@@ -250,46 +346,99 @@
             ctx.fill();
             ctx.globalAlpha = 1;
             ctx.strokeStyle = "#fff";
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 1.5 * lineScale;
             ctx.stroke();
             ctx.fillStyle = "#fff";
             ctx.font = `600 ${Math.max(1, size * Math.min(1.05, 2 / Math.max(1, Array.from(item.text).length)))}px sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(item.text, p.x, p.y);
-        } else if (item.kind === "callout") {
-            ctx.stroke();
-            const [a, b] = ps,
-                angle = Math.atan2(a.y - b.y, a.x - b.x),
-                arrow = Math.min(14, size * 0.65);
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(
-                a.x - Math.cos(angle - 0.45) * arrow,
-                a.y - Math.sin(angle - 0.45) * arrow,
-            );
-            ctx.lineTo(
-                a.x - Math.cos(angle + 0.45) * arrow,
-                a.y - Math.sin(angle + 0.45) * arrow,
-            );
-            ctx.closePath();
-            ctx.fill();
+        } else if (["callout", "text"].includes(item.kind)) {
+            if (item.kind === "callout") {
+                ctx.stroke();
+                const [a, b] = ps,
+                    angle = Math.atan2(a.y - b.y, a.x - b.x),
+                    arrow = Math.min(14, size * 0.65);
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(
+                    a.x - Math.cos(angle - 0.45) * arrow,
+                    a.y - Math.sin(angle - 0.45) * arrow,
+                );
+                ctx.lineTo(
+                    a.x - Math.cos(angle + 0.45) * arrow,
+                    a.y - Math.sin(angle + 0.45) * arrow,
+                );
+                ctx.closePath();
+                ctx.fill();
+            }
             const box = labelBox(item);
+            const b = ps[item.kind === "text" ? 0 : 1],
+                style = item.textStyle || {};
+            ctx.translate(b.x, b.y);
+            const anchor=item.points[item.kind==='text'?0:1],angle=(item.rotation||0)*Math.PI/180,axis=screen({x:anchor.x+Math.cos(angle),y:anchor.y+Math.sin(angle)});
+            ctx.rotate(Math.atan2(axis.y-b.y,axis.x-b.x));
             ctx.globalAlpha = 1;
-            ctx.fillStyle = options.paper ? "#ffffff" : "#152338";
-            ctx.fillRect(b.x, b.y, box.width * scale, box.height * scale);
-            ctx.strokeRect(b.x, b.y, box.width * scale, box.height * scale);
+            ctx.fillStyle =
+                style.background || (options.paper ? "#ffffff" : "#152338");
+            if (style.background !== "none")
+                ctx.fillRect(0, 0, box.width * scale, box.height * scale);
+            if (style.border !== false)
+                ctx.strokeRect(0, 0, box.width * scale, box.height * scale);
             ctx.fillStyle = item.color;
             ctx.textBaseline = "top";
-            ctx.font = `${Math.max(1, size)}px sans-serif`;
-            lines(item.text).forEach((line, i) =>
+            ctx.font = `${style.italic ? "italic " : ""}${style.bold ? "700 " : "400 "}${Math.max(1, size)}px ${{ sans: "sans-serif", serif: "serif", mono: "monospace" }[style.font] || "sans-serif"}`;
+            ctx.textAlign = style.align || "left";
+            const x =
+                style.align === "center"
+                    ? (box.width * scale) / 2
+                    : style.align === "right"
+                      ? box.width * scale - size * 0.5
+                      : size * 0.5;
+            box.lines.forEach((line, i) =>
                 ctx.fillText(
                     line,
-                    b.x + size * 0.5,
-                    b.y + size * 0.4 + i * size * 1.35,
+                    x,
+                    size * 0.4 + i * size * (style.lineHeight || 1.35),
                 ),
             );
-        } else ctx.stroke();
+        } else {
+            ctx.stroke();
+            if (
+                item.kind === "route" &&
+                ps.length > 1 &&
+                item.arrows !== "none"
+            ) {
+                const arrow = (a, b) => {
+                    const angle = Math.atan2(b.y - a.y, b.x - a.x),
+                        length = Math.min(14, Math.max(6, size * 0.6));
+                    ctx.beginPath();
+                    ctx.moveTo(b.x, b.y);
+                    ctx.lineTo(
+                        b.x - Math.cos(angle - 0.45) * length,
+                        b.y - Math.sin(angle - 0.45) * length,
+                    );
+                    ctx.lineTo(
+                        b.x - Math.cos(angle + 0.45) * length,
+                        b.y - Math.sin(angle + 0.45) * length,
+                    );
+                    ctx.closePath();
+                    ctx.fill();
+                };
+                arrow(ps.at(-2), ps.at(-1));
+                if (item.arrows === "both") arrow(ps[1], ps[0]);
+            }
+        }
+        if (["cloud", "area", "route"].includes(item.kind) && item.label) {
+            const p = ps[0];
+            ctx.globalAlpha = 1;
+            ctx.font = `600 ${Math.max(1, size)}px sans-serif`;
+            ctx.textBaseline = "bottom";
+            ctx.strokeStyle = options.paper ? "#fff" : "#152338";
+            ctx.lineWidth = 3;
+            ctx.strokeText(item.label, p.x, p.y - size * 0.4);
+            ctx.fillText(item.label, p.x, p.y - size * 0.4);
+        }
         ctx.restore();
     }
     root.CADMarkup = {
@@ -302,6 +451,7 @@
         cloud,
         lines,
         labelBox,
+        labelCorners,
         bounds,
         hit,
         translate,

@@ -75,6 +75,7 @@
       panel.innerHTML=`<div class="ds-row"><h3 style="flex:1">도면 스튜디오</h3><button class="dm-btn" data-exit title="편집 패널 접기">✕</button></div>
         <div class="ds-row"><button class="dm-btn primary" data-save ${!dirty||saving||!canManage||conflict?'disabled':''}>${saving?'저장 중…':'저장'}</button><button class="dm-btn" data-undo title="실행 취소 (Ctrl+Z)" ${!undo.length?'disabled':''}>↶</button><button class="dm-btn" data-redo title="다시 실행 (Ctrl+Shift+Z)" ${!redo.length?'disabled':''}>↷</button><button class="dm-btn" data-share>공유 ↗</button></div>
         <div class="ds-status ${conflict?'error':''}" data-status>${conflict?'저장 충돌: 작업 JSON을 보관하고 다시 여세요.':dirty?'저장하지 않은 변경 있음':`저장됨 · 버전 ${revision}`}</div>
+        ${canManage?`<p class="ds-muted"><a href="/cad?sheet_id=${Number(host.sheetId)}" target="_blank" rel="noopener">이 원본 PDF로 새 CAD 편집본 열기 ↗</a><br>면적 합치기·빼기·확대 상세도·ERP 연결을 사용합니다. 기존 스튜디오 표시는 이곳에 유지됩니다.</p>`:''}
         <div class="ds-calibration">
           <strong>${v().fpp?'측정 기준 설정됨':'먼저 도면 치수로 축척을 맞추세요'}</strong>
           <div class="ds-muted">${v().fpp?E(host.scaleLabel()||'실제 치수 기준'):'도면의 치수선 양 끝을 찍고 실제 길이를 입력합니다.'}</div>
