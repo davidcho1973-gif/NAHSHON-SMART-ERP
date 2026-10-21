@@ -17,6 +17,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -65,6 +66,19 @@ class FieldClaimAccessTest extends TestCase
     private function saveUrl(?ContractBoqLine $line = null): string
     {
         return '/field-claims/lines/'.($line ?? $this->line)->id.'/records';
+    }
+
+    public function test_retried_team_submission_creates_one_record_and_stale_changes_are_preserved(): void
+    {
+        $payload = $this->payload(['requestId' => (string) Str::uuid()]);
+        $first = $this->postJson($this->saveUrl(), $payload)->assertOk()->json();
+        $this->postJson($this->saveUrl(), $payload)->assertOk()->assertJsonPath('id', $first['id']);
+        $this->assertDatabaseCount('claim_work_records', 1);
+        $this->postJson($this->saveUrl(), $this->payload(['id' => $first['id'], 'expectedRevision' => 1, 'notes' => 'Updated']))->assertOk();
+        $this->postJson($this->saveUrl(), $this->payload(['id' => $first['id'], 'expectedRevision' => 1, 'notes' => 'Stale']))->assertStatus(422);
+        $this->assertSame('Updated', ClaimWorkRecord::find($first['id'])->notes);
+        $this->getJson('/field-claims/data')->assertOk()->assertJsonPath('sections.0.lines.0.records.0.revision', 2)
+            ->assertJsonMissingPath('sections.0.lines.0.unitPrice');
     }
 
     public function test_workspace_only_returns_assigned_quantities_and_no_financial_payload(): void

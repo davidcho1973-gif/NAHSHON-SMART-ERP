@@ -18,6 +18,9 @@ class ClaimQuantityCalculation
             if (! is_array($row)) {
                 throw new InvalidArgumentException('산출 항목을 확인하세요.');
             }
+            if (mb_strlen((string) ($row['label'] ?? '')) > 255) {
+                throw new InvalidArgumentException('산출 위치는 255자 이내로 입력하세요. 내용은 잘라서 저장하지 않습니다.');
+            }
             $values = [];
             foreach (['length', 'height', 'count', 'deduction'] as $key) {
                 $v = $row[$key] ?? ($key === 'height' || $key === 'count' ? 1 : 0);

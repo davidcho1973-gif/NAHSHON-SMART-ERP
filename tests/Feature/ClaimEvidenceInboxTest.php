@@ -20,6 +20,7 @@ use App\Models\WbsPhoto;
 use App\Models\WorkSection;
 use App\Models\WorkSectionSheet;
 use App\Services\Drawings\DrawingMarkService;
+use App\Services\Drawings\SectionDrawingService;
 use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Services\Finance\ClaimLineWorkspaceService;
 use App\Services\Ocr\OcrEngine;
@@ -64,6 +65,24 @@ class ClaimEvidenceInboxTest extends TestCase
     private function service(): ClaimEvidenceInboxService
     {
         return app(ClaimEvidenceInboxService::class);
+    }
+
+    public function test_review_drawings_follow_the_saved_child_selection_including_an_empty_selection(): void
+    {
+        $section = WorkSection::create(['site_id' => $this->contract->site_id, 'project_contract_id' => $this->contract->id,
+            'division' => 'MEP', 'code' => 'D', 'name' => 'Drawings']);
+        $this->line->update(['work_section_id' => $section->id]);
+        $doc = $this->document();
+        foreach (['A-1', 'A-2'] as $i => $no) {
+            DrawingSheet::create(['site_id' => $this->contract->site_id, 'intelligent_document_id' => $doc->id, 'sheet_no' => $no, 'page_no' => $i + 1]);
+        }
+        $drawings = app(SectionDrawingService::class);
+        $this->assertTrue($drawings->setSheets($section->id, ['A-1'])['success']);
+        $this->assertTrue($drawings->setSheets($section->id, ['A-2'], $this->line->id)['success']);
+        $workspace = app(ClaimLineWorkspaceService::class)->get($this->contract->id, $this->line->id);
+        $this->assertSame(['A-2'], array_column($workspace['drawings'], 'sheetNo'));
+        $this->assertTrue($drawings->setSheets($section->id, [], $this->line->id)['success']);
+        $this->assertSame([], app(ClaimLineWorkspaceService::class)->get($this->contract->id, $this->line->id)['drawings']);
     }
 
     public function test_line_upload_retains_other_links_and_never_creates_work_or_claims(): void

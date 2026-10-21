@@ -222,7 +222,13 @@ class ClaimEvidenceService
                     $line->section()->lockForUpdate()->firstOrFail();
                     FieldClaimAccess::line($line->id, true);
                 }
+                if ($replay = ClaimWriteReceipt::replay($input, 'record', $line->id)) {
+                    return $replay;
+                }
                 $record?->refresh();
+                if ($record && isset($input['expectedRevision']) && (int) $input['expectedRevision'] !== (int) $record->revision) {
+                    throw new InvalidArgumentException('다른 담당자가 기록을 변경했습니다. 현재 입력은 보관됩니다. 최신 기록을 확인한 뒤 다시 수정하세요.');
+                }
                 if ($record && ($record->status !== 'pending' || $record->allocations()->exists())) {
                     throw new InvalidArgumentException('검토·청구된 기록은 수정할 수 없습니다. 미청구 기록은 검토 취소 후 수정하세요.');
                 }
@@ -263,7 +269,7 @@ class ClaimEvidenceService
                 if ($record) {
                     $history = $record->review_history ?? [];
                     $history[] = ['action' => 'edit', 'by' => auth()->id(), 'at' => now()->toIso8601String(),
-                        'previous' => ['workDate' => $record->work_date?->toDateString(), 'location' => $record->location, 'stage' => $record->stage, 'reportedQty' => $record->reported_qty, 'notes' => $record->notes],
+                        'previous' => ['workDate' => $record->work_date?->toDateString(), 'location' => $record->location, 'stage' => $record->stage, 'reportedQty' => $record->reported_qty, 'notes' => $record->notes, 'evidence' => $record->evidence, 'revision' => $record->revision],
                         'next' => ['workDate' => $date, 'location' => $location, 'stage' => $stage, 'reportedQty' => $qty],
                     ];
                     $entry->review_history = $history;
@@ -274,9 +280,10 @@ class ClaimEvidenceService
                     'stage' => $stage, 'reported_qty' => $qty, 'verified_qty' => null, 'status' => 'pending',
                     'evidence' => $evidence, 'notes' => $this->optionalText($input['notes'] ?? $record?->notes, 10000),
                     'reported_by' => $record?->reported_by ?? auth()->id(), 'source_ref' => $sourceRef,
+                    'revision' => $record ? (int) $record->revision + 1 : 1,
                 ])->save();
 
-                return ['success' => true, 'id' => $entry->id, 'record' => $this->recordRow($entry)];
+                return ClaimWriteReceipt::remember($input, 'record', $line->id, ['success' => true, 'id' => $entry->id, 'record' => $this->recordRow($entry)]);
             });
         });
     }
@@ -340,7 +347,13 @@ class ClaimEvidenceService
 
             return DB::transaction(function () use ($input, $record, $contract): array {
                 $this->lock($contract);
+                if ($replay = ClaimWriteReceipt::replay($input, 'review', $record->id)) {
+                    return $replay;
+                }
                 $record->refresh()->load('line');
+                if (isset($input['expectedRevision']) && (int) $input['expectedRevision'] !== (int) $record->revision) {
+                    throw new InvalidArgumentException('검토 중 기록이 변경되었습니다. 최신 수량·증빙을 다시 확인하세요.');
+                }
                 if ($record->allocations()->exists()) {
                     throw new InvalidArgumentException('청구에 배정된 근거는 변경할 수 없습니다.');
                 }
@@ -382,9 +395,9 @@ class ClaimEvidenceService
                 $history[] = ['action' => $action, 'from' => $record->status, 'previousVerifiedQty' => $record->verified_qty, 'verifiedQty' => $verified, 'note' => $note, 'by' => auth()->id(), 'at' => now()->toIso8601String()];
                 $record->fill(['status' => match ($action) {
                     'verify' => 'verified', 'reject' => 'rejected', default => 'pending'
-                }, 'verified_qty' => $verified, 'reviewed_by' => auth()->id(), 'reviewed_at' => now(), 'review_note' => $note, 'review_history' => $history])->save();
+                }, 'verified_qty' => $verified, 'reviewed_by' => auth()->id(), 'reviewed_at' => now(), 'review_note' => $note, 'review_history' => $history, 'revision' => (int) $record->revision + 1])->save();
 
-                return ['success' => true, 'id' => $record->id, 'record' => $this->recordRow($record)];
+                return ClaimWriteReceipt::remember($input, 'review', $record->id, ['success' => true, 'id' => $record->id, 'record' => $this->recordRow($record)]);
             });
         });
     }
@@ -1031,7 +1044,7 @@ class ClaimEvidenceService
             return $proof;
         }, $record->evidence ?? []);
 
-        return ['id' => $record->id, 'lineId' => $record->contract_boq_line_id, 'lineNo' => $record->line?->line_no, 'recordKind' => $record->record_kind, 'workDate' => $record->work_date?->toDateString(), 'location' => $record->location, 'stage' => $record->stage, 'reportedQty' => (float) $record->reported_qty, 'verifiedQty' => $record->verified_qty !== null ? (float) $record->verified_qty : null, 'status' => $record->status, 'evidence' => $evidence, 'notes' => $record->notes, 'reviewNote' => $record->review_note, 'reviewHistory' => $record->review_history ?? [], 'sourceRef' => $record->source_ref, 'allocatedQty' => $allocated, 'availableQty' => $record->status === 'verified' ? max(0, round((float) $record->verified_qty - $allocated, 4)) : 0.0, 'createdBy' => $record->reported_by, 'createdAt' => $record->created_at?->toIso8601String(), 'reviewedBy' => $record->reviewed_by, 'reviewedAt' => $record->reviewed_at?->toIso8601String()];
+        return ['id' => $record->id, 'revision' => (int) $record->revision, 'lineId' => $record->contract_boq_line_id, 'lineNo' => $record->line?->line_no, 'recordKind' => $record->record_kind, 'workDate' => $record->work_date?->toDateString(), 'location' => $record->location, 'stage' => $record->stage, 'reportedQty' => (float) $record->reported_qty, 'verifiedQty' => $record->verified_qty !== null ? (float) $record->verified_qty : null, 'status' => $record->status, 'evidence' => $evidence, 'notes' => $record->notes, 'reviewNote' => $record->review_note, 'reviewHistory' => $record->review_history ?? [], 'sourceRef' => $record->source_ref, 'allocatedQty' => $allocated, 'availableQty' => $record->status === 'verified' ? max(0, round((float) $record->verified_qty - $allocated, 4)) : 0.0, 'createdBy' => $record->reported_by, 'createdAt' => $record->created_at?->toIso8601String(), 'reviewedBy' => $record->reviewed_by, 'reviewedAt' => $record->reviewed_at?->toIso8601String()];
     }
 
     private function contractRow(ProjectContract $contract): array
