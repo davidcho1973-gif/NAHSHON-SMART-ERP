@@ -405,7 +405,7 @@
         (b.rfiPendingAmount ? ' · RFI 승인 대기 ' + money(b.rfiPendingAmount) : '')],
       ['확인된 기성', money(b.earned), pct(b.percent) + ' · 사람이 확인한 수량 × 계약 단가'],
       ['반입 자재 (미설치)', money(b.storedOnSite), '청구서에 따로 적는 칸'],
-      ['확인 대기', (b.pendingCount || 0) + '건', '기록은 됐고 아직 확인 전'],
+      ['실제 작업 검토 대기', (b.pendingCount || 0) + '건', '기록은 됐고 아직 확인 전'],
     ];
     return '<div style="border:1px solid var(--border-default);border-radius:12px;padding:14px 16px;margin-bottom:16px;background:var(--bg-surface)">' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:14px;font-weight:800;flex:1">기성 = 공정 · ' + u.esc(b.contractTitle || '') + '</span>' +

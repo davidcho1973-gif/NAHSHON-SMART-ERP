@@ -89,18 +89,21 @@ class ClaimEditingService
             if (! ($ledger['canManage'] ?? false)) {
                 throw new InvalidArgumentException('기성 편집 권한이 없습니다.');
             }
-            $content = $this->normalize((array) ($input['content'] ?? []), $ledger);
 
-            return DB::transaction(function () use ($line, $content, $input): array {
+            return DB::transaction(function () use ($line, $ledger, $input): array {
                 // Lock the parent for first-save races as well as existing drafts.
                 ContractBoqLine::whereKey($line->id)->lockForUpdate()->firstOrFail();
+                if ($replay = ClaimWriteReceipt::replay($input, 'draft', $line->id)) {
+                    return $replay;
+                }
                 $draft = ClaimEditDraft::where('contract_boq_line_id', $line->id)->where('user_id', auth()->id())->lockForUpdate()->first();
                 if ((int) ($input['revision'] ?? 0) !== (int) ($draft?->revision ?? 0)) {
-                    throw new InvalidArgumentException('다른 창에서 초안이 변경되었습니다. 다시 열어 확인하세요.');
+                    return ['success' => false, 'code' => 'draft_conflict', 'error' => '다른 창에서 초안이 변경되었습니다. 두 내용을 비교해 선택하세요.', 'currentDraft' => $draft ? $this->row($draft) : null];
                 }
                 if ($draft?->claim_work_record_id && ! ($input['newWork'] ?? false)) {
                     throw new InvalidArgumentException('이미 기록한 초안입니다. 기존 기록을 확인하세요.');
                 }
+                $content = $this->normalize((array) ($input['content'] ?? []), $ledger);
                 $history = $draft?->history ?? [];
                 if ($draft) {
                     $history[] = ['revision' => $draft->revision, 'content' => $draft->content, 'by' => auth()->id(), 'at' => now()->toIso8601String()];
@@ -108,7 +111,7 @@ class ClaimEditingService
                 $draft ??= new ClaimEditDraft(['contract_boq_line_id' => $line->id, 'user_id' => auth()->id()]);
                 $draft->fill(['content' => $content, 'history' => array_slice($history, -50), 'revision' => (int) $draft->revision + 1, 'claim_work_record_id' => null])->save();
 
-                return ['success' => true, 'draft' => $this->row($draft)];
+                return ClaimWriteReceipt::remember($input, 'draft', $line->id, ['success' => true, 'draft' => $this->row($draft)]);
             });
         });
     }
@@ -297,6 +300,18 @@ class ClaimEditingService
 
     private function normalize(array $input, array $ledger): array
     {
+        // A successful save must not silently shorten the user's evidence or explanation.
+        foreach (['workDate' => 10, 'location' => 255, 'stage' => 60, 'notes' => 10000] as $field => $limit) {
+            $this->checkLength($input[$field] ?? '', $limit, $field);
+        }
+        foreach ((array) ($input['evidence'] ?? []) as $proof) {
+            $this->checkLength($proof['locator'] ?? '', 255, '증빙 위치');
+            $this->checkLength($proof['note'] ?? '', 2000, '증빙 설명');
+        }
+        foreach ((array) ($input['marks'] ?? []) as $mark) {
+            $this->checkLength($mark['label'] ?? '', 500, '도면 설명');
+            $this->checkLength($mark['sheetNo'] ?? '', 80, '도면 번호');
+        }
         $references = $this->ledger->editableReferences((int) $ledger['contract']['id'], (array) ($input['evidence'] ?? []));
         $proof = [];
         foreach (array_slice((array) ($input['evidence'] ?? []), 0, 21) as $p) {
@@ -331,12 +346,19 @@ class ClaimEditingService
             throw new InvalidArgumentException('수량을 확인하세요.');
         }
 
-        return ['workDate' => mb_substr((string) ($input['workDate'] ?? $ledger['contract']['today']), 0, 10), 'location' => mb_substr((string) ($input['location'] ?? ''), 0, 255), 'stage' => mb_substr((string) ($input['stage'] ?? 'installed'), 0, 60), 'quantity' => round((float) $q, 4), 'notes' => mb_substr((string) ($input['notes'] ?? ''), 0, 5000), 'calculations' => $calculation['rows'], 'evidence' => $proof, 'marks' => $marks];
+        return ['workDate' => (string) ($input['workDate'] ?? $ledger['contract']['today']), 'location' => (string) ($input['location'] ?? ''), 'stage' => (string) ($input['stage'] ?? 'installed'), 'quantity' => round((float) $q, 4), 'notes' => (string) ($input['notes'] ?? ''), 'calculations' => $calculation['rows'], 'evidence' => $proof, 'marks' => $marks];
+    }
+
+    private function checkLength(mixed $value, int $limit, string $label): void
+    {
+        if (! is_scalar($value) || mb_strlen((string) $value) > $limit) {
+            throw new InvalidArgumentException("{$label}: {$limit}자 이내로 입력하세요. 내용은 잘라서 저장하지 않습니다.");
+        }
     }
 
     private function row(ClaimEditDraft $draft): array
     {
-        return ['id' => $draft->id, 'lineId' => $draft->contract_boq_line_id, 'revision' => $draft->revision, 'content' => $draft->content, 'history' => $draft->history ?? [], 'recordId' => $draft->claim_work_record_id];
+        return ['id' => $draft->id, 'lineId' => $draft->contract_boq_line_id, 'revision' => $draft->revision, 'content' => $draft->content, 'history' => $draft->history ?? [], 'recordId' => $draft->claim_work_record_id, 'savedAt' => $draft->updated_at?->toIso8601String()];
     }
 
     private function checked(array $result): array

@@ -5,6 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="save-user" content="{{ auth()->id() }}">
+  <script defer src="{{ asset('js/claim-save-safety.js') }}?v={{ filemtime(public_path('js/claim-save-safety.js')) }}"></script>
   <title>{{ \App\Support\Org::name() }} SMART ERP</title>
   {{-- 고객사 이름은 배포마다 다르다. 화면 스크립트가 이 하나만 보게 한다. --}}
   <script>window.ORG_NAME = @json(\App\Support\Org::name()); window.ORG_COLOR = @json(\App\Support\Org::color());</script>

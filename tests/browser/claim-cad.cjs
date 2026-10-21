@@ -9,12 +9,12 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   const dxf='0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0\n20\n0\n11\n100\n21\n50\n0\nENDSEC\n0\nEOF\n';
   let drawing={id:9,title:'Claim CAD',site_id:1,revision:1,dxf,canManage:true,warnings:[],sourceFormat:'dxf'},attachments=0,conflictNext=false;
   const revisions=new Map([[1,{...drawing}]]);
-  const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'').replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-editor.js"></script></body>');
+  const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'').replace('{{ csrf_token() }}','synthetic').replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
   await page.route('https://synthetic.test/**',async route=>{
    const url=new URL(route.request().url()),method=route.request().method();let json;
    if(url.pathname==='/'){return route.fulfill({contentType:'text/html',body:'<html><body></body></html>'});}
    if(url.pathname==='/cad'){return route.fulfill({contentType:'text/html',body:html});}
-   if(['/cad-core.js','/cad-editor.js'].includes(url.pathname))return route.fulfill({contentType:'text/javascript',body:fs.readFileSync('public/js'+url.pathname,'utf8')});
+   if(['/cad-core.js','/cad-markup.js','/cad-markup-tools.js','/cad-editor.js'].includes(url.pathname))return route.fulfill({contentType:'text/javascript',body:fs.readFileSync('public/js'+url.pathname,'utf8')});
    if(url.pathname==='/admin-api/cad/claim-context')json={line:{id:8,contractId:3,siteId:1,description:'Wall'},draftRevision:await page.evaluate(()=>testDraft.revision),recordId:null,canManage:true};
    else if(url.pathname==='/admin-api/cad/capabilities')json={dwgRead:false,dwgWrite:false,message:'DXF synthetic'};
    else if(url.pathname==='/admin-api/cad')json={canManage:true,sites:[{id:1,name:'Test Site'}],drawings:[drawing]};
@@ -33,7 +33,7 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
    window.testDraft={lineId:8,revision:1,content:{workDate:'2026-10-20',location:'North',stage:'installed',quantity:3,calculations:[],evidence:[],marks:[],notes:'Original'}};window.calls=[];
    window.gsRun=async(m,a)=>{calls.push([m,a]);if(m==='api_getClaimEditor')return {success:true,canManage:true,contract:{today:'2026-10-20'},lines:[{id:8,lineNo:'8',description:'Wall',unit:'EA',contractQty:10,recognitionBasis:'quantity'}],drafts:[structuredClone(testDraft)],records:[],sourceOptions:testDraft.content.evidence.map(e=>({value:e.type+':'+e.id,label:'CAD · Claim CAD · r'+e.drawingRevision,...e}))};if(m==='api_saveClaimEditDraft'){if(a[0].revision!==testDraft.revision)throw Error('Stale draft');testDraft={lineId:8,revision:testDraft.revision+1,content:structuredClone(a[0].content)};return {success:true,draft:structuredClone(testDraft)};}return {success:true};};
   });
-  await page.addScriptTag({path:path.resolve('public/js/admin-claim-editor.js')});await page.evaluate(()=>AdminClaimEditor.open(3,1,[],{lineId:8}));
+  await page.addScriptTag({path:path.resolve('public/js/claim-save-safety.js')});await page.addScriptTag({path:path.resolve('public/js/admin-claim-editor.js')});await page.evaluate(()=>AdminClaimEditor.open(3,1,[],{lineId:8}));
   await page.locator('[data-field="notes"]').fill('Unsaved notes retained');await page.locator('[data-field="quantity"]').fill('7');await page.locator('[data-cad]').click();
   const frame=page.frameLocator('[data-claim-cad]');await frame.locator('#drawings').selectOption('9');await frame.getByText('Claim CAD · 1개 객체',{exact:true}).waitFor();
   assert.equal(await page.locator('.ce-editor').evaluate(el=>el.inert),true);assert.equal(await frame.locator('#sites').isEnabled(),false);
