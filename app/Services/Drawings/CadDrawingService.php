@@ -35,6 +35,11 @@ class CadDrawingService
             && (! JobAccess::managed($user) || JobAccess::can($user, 'progress', 'edit'));
     }
 
+    public function canExport(User $user): bool
+    {
+        return ! JobAccess::managed($user) || JobAccess::can($user, 'documents', 'export');
+    }
+
     public function access(User $user, CadDrawing $drawing, bool $write = false, bool $export = false): void
     {
         $this->gate($user, $write, $export);
@@ -136,31 +141,38 @@ class CadDrawingService
         abort_unless(Storage::disk($drawing->disk)->exists($row->dxf_path), 404);
 
         return ['id' => $drawing->id, 'title' => $drawing->title, 'site_id' => $drawing->site_id, 'revision' => $row->revision,
-            'dxf' => Storage::disk($drawing->disk)->get($row->dxf_path), 'sourceFormat' => $drawing->source_format, 'warnings' => $row->warnings ?? []];
+            'dxf' => Storage::disk($drawing->disk)->get($row->dxf_path), 'sourceFormat' => $drawing->source_format, 'warnings' => $row->warnings ?? [],
+            'markups' => $row->markups ?? []];
     }
 
-    public function save(User $user, CadDrawing $drawing, int $revision, string $dxf): array
+    public function save(User $user, CadDrawing $drawing, int $revision, string $dxf, ?array $markups = null): array
     {
         $this->access($user, $drawing, true);
         $this->validateDxf($dxf);
+        if ($markups !== null) {
+            $markups = app(CadMarkupValidator::class)->validate($markups);
+        }
 
         // A parent row lock serializes revisions; immutable files prevent one editor replacing another editor's work.
-        return DB::transaction(function () use ($user, $drawing, $revision, $dxf): array {
+        return DB::transaction(function () use ($user, $drawing, $revision, $dxf, $markups): array {
             $current = CadDrawing::whereKey($drawing->id)->lockForUpdate()->firstOrFail();
             abort_if((int) $current->revision !== $revision, 409, '다른 사용자가 수정했습니다. 최신 도면을 다시 열어 주세요.');
             $next = $revision + 1;
-            $warnings = $current->revisions()->where('revision', $revision)->firstOrFail()->warnings ?? [];
+            $previous = $current->revisions()->where('revision', $revision)->firstOrFail();
+            $warnings = $previous->warnings ?? [];
+            // Older clients omit this field. Preserve the overlay unless they explicitly send [].
+            $markups ??= $previous->markups ?? [];
             $path = dirname($current->original_path).'/revisions/'.$next.'-'.Str::uuid().'.dxf';
             $this->put($current->disk, $path, $dxf);
             try {
-                $current->revisions()->create(['revision' => $next, 'dxf_path' => $path, 'sha256' => hash('sha256', $dxf), 'warnings' => $warnings, 'created_by' => $user->id]);
+                $current->revisions()->create(['revision' => $next, 'dxf_path' => $path, 'sha256' => hash('sha256', $dxf), 'warnings' => $warnings, 'markups' => $markups, 'created_by' => $user->id]);
                 $current->update(['revision' => $next]);
             } catch (\Throwable $e) {
                 Storage::disk($current->disk)->delete($path);
                 throw $e;
             }
 
-            return $this->read($current) + ['canManage' => true];
+            return $this->read($current) + ['canManage' => true, 'canExport' => $this->canExport($user)];
         });
     }
 }

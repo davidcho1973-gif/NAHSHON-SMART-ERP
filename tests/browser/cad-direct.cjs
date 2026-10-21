@@ -16,11 +16,11 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   let drawing={id:9,title:'Pointer fixture',site_id:1,revision:1,dxf,canManage:true,warnings:[]}, writes=0, saveGate=null, saveStarted=null;
   const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8')
    .replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'<link rel="stylesheet" href="/cad-editor.css">')
-   .replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-editor.js"></script></body>');
+   .replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
   await page.route('https://synthetic.test/**',async route=>{
    const u=new URL(route.request().url()),method=route.request().method();let json;
    if(u.pathname==='/cad')return route.fulfill({contentType:'text/html',body:html});
-   if(['/cad-core.js','/cad-editor.js'].includes(u.pathname))return route.fulfill({contentType:'text/javascript',body:fs.readFileSync('public/js'+u.pathname,'utf8')});
+   if(['/cad-core.js','/cad-markup.js','/cad-markup-tools.js','/cad-editor.js'].includes(u.pathname))return route.fulfill({contentType:'text/javascript',body:fs.readFileSync('public/js'+u.pathname,'utf8')});
    if(u.pathname==='/cad-editor.css')return route.fulfill({contentType:'text/css',body:fs.readFileSync('public/css/cad-editor.css','utf8')});
    if(u.pathname==='/admin-api/cad/capabilities')json={dwgRead:false,dwgWrite:false,message:'Synthetic DXF'};
    else if(u.pathname==='/admin-api/cad')json={canManage:true,sites:[{id:1,name:'Synthetic Site'}],drawings:[drawing]};
@@ -36,6 +36,7 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   await page.goto('https://synthetic.test/cad?drawing_id=9');
   await page.getByText('Pointer fixture · 2개 객체',{exact:true}).waitFor();
   await page.locator('#snap').uncheck();
+  await page.locator('[data-workspace="cad"]').click();
   const box=await page.locator('#canvas').boundingBox(),scale=.85*Math.min(box.width/200,box.height/100);
   const screen=(x,y)=>({x:box.x+box.width/2+(x-100)*scale,y:box.y+box.height/2-(y-50)*scale});
   const move=async(x,y)=>{const p=screen(x,y);await page.mouse.move(p.x,p.y,{steps:6});};
@@ -98,6 +99,7 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   await page.setViewportSize({width:760,height:900});assert.equal(await page.locator('#text-color').isVisible(),true);assert.equal(await page.locator('#apply-style').isVisible(),true);
   // Pinned proofs are read-only even when loaded from a manageable drawing.
   await page.goto(`https://synthetic.test/cad?drawing_id=9&revision=${drawing.revision}`);await page.getByText('Pointer fixture · 5개 객체',{exact:true}).waitFor();
+  await page.locator('.mode-switch [data-workspace="cad"]').click();
   assert.equal(await page.locator('#save').isDisabled(),true);
   const frozenWrites=writes;await tool('line');const readonlyBox=await page.locator('#canvas').boundingBox();
   await page.mouse.move(readonlyBox.x+30,readonlyBox.y+30);await page.mouse.down();await page.mouse.move(readonlyBox.x+150,readonlyBox.y+100,{steps:4});await page.mouse.up();
