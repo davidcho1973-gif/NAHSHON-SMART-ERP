@@ -5,10 +5,10 @@ const sandbox={window:{}};vm.runInNewContext(fs.readFileSync('public/js/cad-core
  const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const doc=C.parse('0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n');doc.entities.push(C.newEntity('LINE',{p:{x:20,y:30},q:{x:100,y:30}}));
  const drawing={id:9,title:'AI synthetic',site_id:1,revision:1,markups:[{id:'synthetic-note',kind:'pin',points:[{x:60,y:30}],color:'#38bdf8',opacity:1,width:2,size:3,text:'Private markup',locked:false}],dxf:C.exportDXF(doc),canManage:true,warnings:[]};let snapshot,queue=[],results=[],writes=0,deleted=0,failedAck=true,heartbeats=0,polls=0;
- const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'<link rel="stylesheet" href="/cad-editor.css">').replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
+ const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'<link rel="stylesheet" href="/cad-editor.css">').replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-fidelity.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
  await page.route('https://synthetic.test/**',async route=>{const u=new URL(route.request().url()),method=route.request().method();let json={};
  if(u.pathname==='/cad')return route.fulfill({contentType:'text/html',body:html});
- if(['/cad-core.js','/cad-markup.js','/cad-markup-tools.js','/cad-editor.js'].includes(u.pathname))return route.fulfill({contentType:'text/javascript',body:fs.readFileSync('public/js'+u.pathname,'utf8')});
+ if(['/cad-core.js','/cad-fidelity.js','/cad-markup.js','/cad-markup-tools.js','/cad-editor.js'].includes(u.pathname))return route.fulfill({contentType:'text/javascript',body:fs.readFileSync('public/js'+u.pathname,'utf8')});
  if(u.pathname==='/cad-editor.css')return route.fulfill({contentType:'text/css',body:fs.readFileSync('public/css/cad-editor.css','utf8')});
  if(u.pathname==='/admin-api/cad/capabilities')json={dwgRead:false,dwgWrite:false};
  else if(u.pathname==='/admin-api/cad')json={sites:[{id:1,name:'Synthetic'}],drawings:[drawing],canManage:true};

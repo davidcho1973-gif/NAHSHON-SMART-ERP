@@ -24,12 +24,12 @@ const point = (actual, x, y) => { near(actual.x, x); near(actual.y, y); };
         let drawing = { id: 9, title: 'Annotation fixture', site_id: 1, revision: 1, dxf: C.exportDXF(initial), canManage: true, warnings: [] }, writes = 0;
         const html = fs.readFileSync('resources/views/cad/index.blade.php', 'utf8')
             .replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link[^>]*>/g, '<link rel="stylesheet" href="/cad-editor.css">')
-            .replace('{{ csrf_token() }}', 'synthetic').replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP').replace('</body>', '<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
+            .replace('{{ csrf_token() }}', 'synthetic').replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP').replace('</body>', '<script src="/cad-core.js"></script><script src="/cad-fidelity.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
         await page.route('https://synthetic.test/**', async route => {
             const url = new URL(route.request().url()), method = route.request().method();
             let json;
             if (url.pathname === '/cad') return route.fulfill({ contentType: 'text/html', body: html });
-            if (['/cad-core.js', '/cad-markup.js', '/cad-markup-tools.js', '/cad-editor.js'].includes(url.pathname)) return route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync('public/js' + url.pathname, 'utf8') });
+            if (['/cad-core.js','/cad-fidelity.js', '/cad-markup.js', '/cad-markup-tools.js', '/cad-editor.js'].includes(url.pathname)) return route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync('public/js' + url.pathname, 'utf8') });
             if (url.pathname === '/cad-editor.css') return route.fulfill({ contentType: 'text/css', body: fs.readFileSync('public/css/cad-editor.css', 'utf8') });
             if (url.pathname === '/admin-api/cad/capabilities') json = { dwgRead: false, dwgWrite: false, message: 'Synthetic DXF' };
             else if (url.pathname === '/admin-api/cad') json = { canManage: true, sites: [{ id: 1, name: 'Synthetic Site' }], drawings: [drawing] };

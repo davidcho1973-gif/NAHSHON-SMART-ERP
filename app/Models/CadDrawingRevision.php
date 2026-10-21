@@ -30,6 +30,6 @@ class CadDrawingRevision extends Model
 
     protected function casts(): array
     {
-        return ['warnings' => 'array', 'markups' => 'array'];
+        return ['warnings' => 'array', 'markups' => 'array', 'workspace' => 'array'];
     }
 }

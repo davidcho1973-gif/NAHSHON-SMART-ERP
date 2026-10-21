@@ -73,6 +73,7 @@ Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::
 Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
 use App\Http\Controllers\AssistantWorkspaceController;
 use App\Http\Controllers\CadDrawingController;
+use App\Http\Controllers\CadWorkflowController;
 use App\Http\Controllers\ClaimEvidenceFileController;
 use App\Http\Controllers\ClaimRecordReportController;
 use App\Http\Controllers\DrawingStudioController;
@@ -357,12 +358,34 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/', 'drawings');
         Route::get('/capabilities', 'capabilities');
         Route::get('/claim-context', 'claimContext');
+        Route::get('/source-sheets/{sheet}', 'sourceSheet')->whereNumber('sheet');
+        Route::get('/source-sheets/{sheet}/file', 'sourceSheetFile')->whereNumber('sheet');
+        Route::post('/source-sheets/{sheet}', 'importSheet')->whereNumber('sheet')->middleware('throttle:20,1');
         Route::post('/', 'store')->middleware('throttle:20,1');
         Route::get('/{drawing}', 'show');
         Route::put('/{drawing}', 'update')->middleware('throttle:30,1');
+        Route::post('/{drawing}/copies', 'copy')->middleware('throttle:20,1');
         Route::post('/{drawing}/claim-draft', 'claimDraft')->middleware('throttle:30,1');
         Route::get('/{drawing}/history', 'history');
+        Route::get('/{drawing}/reference', 'reference');
         Route::get('/{drawing}/download', 'download')->middleware('throttle:20,1');
+    });
+    Route::prefix('admin-api/cad/{drawing}/workflow')->controller(CadWorkflowController::class)->group(function (): void {
+        Route::get('/', 'context');
+        Route::get('/targets', 'targets');
+        Route::get('/backlinks', 'backlinks');
+        Route::get('/purchase-basis', 'basis');
+        Route::post('/links', 'link')->middleware('throttle:30,1');
+        Route::delete('/links/{link}', 'retire')->whereUuid('link')->middleware('throttle:30,1');
+        Route::post('/tasks', 'task')->middleware('throttle:30,1');
+        Route::put('/tasks/{task}', 'updateTask')->whereUuid('task')->middleware('throttle:30,1');
+        Route::post('/purchase-drafts', 'savePurchase')->middleware('throttle:30,1');
+        Route::post('/purchase-drafts/{draft}/submit', 'submitPurchase')->whereUuid('draft')->middleware('throttle:10,1');
+        Route::get('/packets', 'packets');
+        Route::post('/packets', 'createPacket')->middleware('throttle:10,1');
+        Route::get('/packets/{packet}/download', 'downloadPacket')->whereUuid('packet')->middleware('throttle:20,1');
+        Route::get('/share-options', 'shareOptions');
+        Route::post('/packets/{packet}/share', 'sharePacket')->whereUuid('packet')->middleware('throttle:10,1');
     });
     // 관리자 화면의 파일 업로드(multipart) — SPA 의 JSON API 로는 파일을 실을 수 없다.
     Route::post('/admin-api/contracts/{contract}/documents', [AdminUploadController::class, 'contractDocument'])

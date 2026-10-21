@@ -1,0 +1,10 @@
+polygon-clipping 0.15.7
+Source: https://github.com/mfogel/polygon-clipping (tag v0.15.7)
+Distribution: npm polygon-clipping@0.15.7, dist/polygon-clipping.umd.min.js
+Copied without modification to polygon-clipping.js; no runtime CDN requests.
+SHA256: 7f8619e84a86ce8dd400c9b50430e9c8cf8f26027b19eeb479f109f5c1a9d688
+
+Licenses: polygon-clipping MIT (LICENSE), bundled splaytree MIT
+(SPLAYTREE-LICENSE), robust-predicates public-domain dedication
+(ROBUST-PREDICATES-LICENSE), Microsoft TypeScript helper Apache 2.0
+(APACHE-2.0; copyright notice retained in the bundle).

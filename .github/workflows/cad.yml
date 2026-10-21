@@ -7,11 +7,16 @@ on:
       - 'public/js/cad-*.js'
       - 'app/**/Cad*.php'
       - 'tests/Feature/CadDrawingTest.php'
+      - 'tests/Feature/CadWorkflowTest.php'
       - 'tests/Fixtures/cad-line.dxf'
       - 'tests/Fixtures/cad-presentation.*'
       - 'tests/cad-converter/**'
       - 'tests/js/cad-core.test.mjs'
       - 'tests/js/cad-markup.test.mjs'
+      - 'tests/js/cad-markup-geometry.test.mjs'
+      - 'tests/js/cad-print.test.mjs'
+      - 'tests/js/cad-fidelity.test.mjs'
+      - 'tests/js/cad-review.test.mjs'
       - 'scripts/test-cad-roundtrip.mjs'
       - 'scripts/build-cad-converter.sh'
       - '.github/workflows/cad.yml'
@@ -61,6 +66,10 @@ jobs:
         run: |
           node --test tests/js/cad-core.test.mjs
           node --test tests/js/cad-markup.test.mjs
+          node --test tests/js/cad-markup-geometry.test.mjs
+          node --test tests/js/cad-print.test.mjs
+          node --test tests/js/cad-fidelity.test.mjs
+          node --test tests/js/cad-review.test.mjs
           node scripts/test-cad-roundtrip.mjs "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll" "$RUNNER_TEMP/cad-roundtrip"
       - name: Real duplicate book colors and conflicting RGB rejection
         run: dotnet run --project tests/cad-converter/CadCompatibilityTests.csproj -c Release -- "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll"
@@ -73,7 +82,7 @@ jobs:
         run: |
           export CAD_TEST_CONVERTER_BINARY="$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll"
           export CAD_TEST_DOTNET_BINARY="$(command -v dotnet)"
-          php vendor/bin/phpunit --filter CadDrawingTest
+          php vendor/bin/phpunit --filter 'CadDrawingTest|CadWorkflowTest'
       - name: Publish Linux server converter
         run: bash scripts/build-cad-converter.sh
       - uses: actions/upload-artifact@v4

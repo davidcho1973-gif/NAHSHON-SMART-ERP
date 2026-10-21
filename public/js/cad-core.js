@@ -327,7 +327,7 @@
                 : 1032;
         if (doc.acadVersion < 1015)
             doc.entities.forEach((e) => (e.editable = false));
-        return restoreDimensions(doc);
+        return restoreDimensions(g.CADFidelity ? g.CADFidelity.enhance(doc,pairs) : doc);
     }
     function aci(n) {
         return (
@@ -345,7 +345,9 @@
     }
     function textBox(e){const lines=textLines(e),width=e.type==='MTEXT'&&e.width>0?e.width:Math.max(1,...lines.map(line=>Array.from(line).reduce((w,c)=>w+e.height*(c.charCodeAt(0)>255?1:.6),0))),height=e.height*lines.length*1.2,a=(e.angle||0)*Math.PI/180,u={x:Math.cos(a),y:Math.sin(a)},v={x:-Math.sin(a),y:Math.cos(a)};return {width,height,u,v,points:[[0,e.type==='MTEXT'?0:e.height],[width,e.type==='MTEXT'?0:e.height],[width,e.type==='MTEXT'?-height:-e.height*.2],[0,e.type==='MTEXT'?-height:-e.height*.2]].map(([x,y])=>({x:e.p.x+x*u.x+y*v.x,y:e.p.y+x*u.y+y*v.y}))};}
     function geometry(e) {
-        if(['TEXT','MTEXT'].includes(e.type)){const box=textBox(e);return [...box.points,box.points[0]];}
+        if(e.displayGeometry)return e.displayGeometry;
+        if(e.renderParts)return e.renderParts.flatMap(geometry);
+        if(['TEXT','MTEXT'].includes(e.type)){const box=textBox({...e,text:e.dirty?e.text:(e.displayText??e.text),p:e.textAnchor||e.p});return [...box.points,box.points[0]];}
 
         if(e.type==='ERP_DIMENSION')return dimensionParts(e).flatMap(geometry);
 
@@ -1041,7 +1043,77 @@
         });return {document:doc,affectedIds:[...affected]};
     }
 
+    // The editor and paper export use the same native CAD rendering path.
+    function renderEntities(ctx, doc, shown, screen, scale, options = {}) {
+        if(doc?.reference){g.CADReference?.draw(ctx,doc,screen);shown=shown.filter(e=>!doc.entities.some(original=>original.id===e.id));}
+        const C = g.CADCore, printing = !!options.paper, selected = options.selected || new Set();
+        for (const e of shown.flatMap(e=>e.renderParts?.length?e.renderParts.filter(part=>!part.hidden&&doc.layers[part.layer]?.visible!==false).map(part=>({...part,id:e.id})):e.type==='ERP_DIMENSION'?C.dimensionParts(e).map(part=>({...part,id:e.id})):e)) {
+            const ps = ['TEXT','MTEXT'].includes(e.type)?[]:C.geometry(e);
+            if(['TEXT','MTEXT'].includes(e.type))ps.push(e.p);
+            if (!ps.length) continue;
+            ctx.strokeStyle = e.color !== undefined && e.color !== null
+                  ? "#" + e.color.toString(16).padStart(6, "0")
+                  : e.aci > 0 && e.aci < 256
+                    ? C.aci(e.aci)
+                    : doc.layers[e.layer]?.color || "#e2e8f0";
+            if(printing && /^#(?:ffffff|e2e8f0)$/i.test(ctx.strokeStyle))ctx.strokeStyle="#334155";
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.setLineDash(
+                (
+                    doc.lineTypes?.[
+                        e.lineType === "BYLAYER"
+                            ? doc.layers[e.layer]?.lineType || "CONTINUOUS"
+                            : e.lineType
+                    ] || []
+                ).map((n) => Math.max(1, Math.abs(n) * scale)),
+            );
+            ctx.lineWidth = selected.has(e.id)
+                ? Math.max(2,(e.lineWeight>0?e.lineWeight/100:0)*3.78)
+                : Math.max(
+                      1,
+                      (e.lineWeight > 0 ? e.lineWeight / 100 : 0) * 3.78,
+                  );
+            if(printing)ctx.lineWidth=Math.max((options.pixelsPerMm||3.78)*.12,(e.lineWeight>0?e.lineWeight/100:.18)*(options.pixelsPerMm||3.78));
+            ctx.beginPath();
+            if(e.hatch){g.CADFidelity?.drawHatch(ctx,e,screen,scale,options);continue;}
+            if (e.type === "INSERT") {
+                for (const path of e.preview || [])
+                    path.forEach((p, i) => {
+                        const s = screen(p);
+                        i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y);
+                    });
+                ctx.stroke();
+                continue;
+            }
+            ps.forEach((p, i) => {
+                const s = screen(p);
+                i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y);
+            });
+            if(!["TEXT","MTEXT"].includes(e.type)){if(e.solid)ctx.fill();else ctx.stroke();}
+            if (["TEXT", "MTEXT"].includes(e.type)) {
+                const p = screen(e.textAnchor||e.p);
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                const angle=(e.angle||0)*Math.PI/180,axis=screen({x:(e.textAnchor||e.p).x+Math.cos(angle),y:(e.textAnchor||e.p).y+Math.sin(angle)});
+                ctx.rotate(Math.atan2(axis.y-p.y,axis.x-p.x));
+                if(e.widthFactor||e.oblique)ctx.transform(e.widthFactor||1,0,-Math.tan(e.oblique||0),1,0,0);
+                ctx.font = Math.max(1, e.height * scale) + "px sans-serif";
+                ctx.textAlign=e.textAlign||'left';
+                ctx.textBaseline=e.type==='MTEXT'?'top':(e.textBaseline||'alphabetic');
+                const lines=C.textLines({...e,text:e.dirty?e.text:(e.displayText??e.text)}),height=lines.length*e.height*scale*1.2;
+                const offset=e.type==='MTEXT'?(e.textBaseline==='middle'?-height/2:e.textBaseline==='bottom'?-height:0):0;
+                lines.forEach((line,i)=>ctx.fillText(line,0,offset+i*e.height*scale*1.2));
+                ctx.restore();
+            }
+            if (e.type === "POINT") {
+                const p = screen(e.p);
+                ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+            }
+        }
+    }
+
     g.CADCore = {
+        renderEntities,
         quantities, aiGeometry, aiContext, applyAIActions, utf8Size,
         uid, newDimension, dimensionLayout, dimensionParts, textLines, textBox, snapPoints,
         rectangleFrame, grips, resize, contains,
