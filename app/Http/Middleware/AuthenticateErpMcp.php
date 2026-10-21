@@ -3,7 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Models\User;
-use App\Support\Mcp\ErpMcpOAuth;
+use App\Support\Mcp\CadMcpOAuth;
+use App\Support\Mcp\McpOAuth;
 use Closure;
 use Illuminate\Http\Request;
 use Laravel\Passport\AccessToken;
@@ -25,6 +26,9 @@ class AuthenticateErpMcp
         $raw = $request->bearerToken();
         if (! is_string($raw) || $raw === '') {
             return $this->challenge();
+        }
+        if (McpOAuth::cad() && ! CadMcpOAuth::keysReady()) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503)->header('Cache-Control', 'no-store');
         }
         try {
             // Parsing is untrusted structural validation only. No claim grants access.
@@ -52,26 +56,26 @@ class AuthenticateErpMcp
             return $this->challenge('invalid_token');
         }
         $clientId = $psr->getAttribute('oauth_client_id');
-        if ($claims->get('iss') !== ErpMcpOAuth::issuer()
-            || $claims->get('aud') !== [$clientId, ErpMcpOAuth::resource()]
+        if ($claims->get('iss') !== McpOAuth::issuer()
+            || $claims->get('aud') !== [$clientId, McpOAuth::resource()]
             || ! $claims->has('exp') || ! $claims->has('iat') || ! $claims->has('nbf')
-            || ErpMcpOAuth::client($clientId) === null) {
+            || McpOAuth::client($clientId) === null) {
             return $this->challenge('invalid_token');
         }
-        if ($claims->get('scopes') !== [ErpMcpOAuth::SCOPE]) {
+        if ($claims->get('scopes') !== [McpOAuth::scope()]) {
             return $this->challenge('insufficient_scope', 403);
         }
         // Cross-check persisted subject/client/scope/expiry, not just the JWT jti.
         $stored = Passport::token()->newQuery()->whereKey($psr->getAttribute('oauth_access_token_id'))->first();
         $userId = $psr->getAttribute('oauth_user_id');
         if (! $stored || $stored->revoked || ! $stored->expires_at || $stored->expires_at->isPast()
-            || $stored->resource !== ErpMcpOAuth::resource() || $stored->issuer !== ErpMcpOAuth::issuer()
+            || $stored->resource !== McpOAuth::resource() || $stored->issuer !== McpOAuth::issuer()
             || (string) $stored->user_id !== (string) $userId
-            || (string) $stored->client_id !== $clientId || $stored->scopes !== [ErpMcpOAuth::SCOPE]) {
+            || (string) $stored->client_id !== $clientId || $stored->scopes !== [McpOAuth::scope()]) {
             return $this->challenge('invalid_token');
         }
         $user = is_string($userId) ? User::query()->find($userId) : null;
-        if (! ErpMcpOAuth::eligible($user)) {
+        if (! McpOAuth::eligible($user)) {
             return $this->challenge('invalid_token');
         }
         $user->withAccessToken(AccessToken::fromPsrRequest($psr));
@@ -80,6 +84,10 @@ class AuthenticateErpMcp
         $previousRequestResolver = $request->getUserResolver();
         $request->setUserResolver($resolver);
         $request->attributes->set('erp_mcp_client_id', $clientId);
+        if (McpOAuth::cad()) {
+            $request->attributes->set('cad_mcp_client_id', $clientId);
+            $request->attributes->set('cad_mcp_token_family', $stored->family_id);
+        }
 
         // Laravel MCP Request::user() uses this resolver directly. Restore it for
         // subsequent requests in long-lived workers; never mutate the web guard.
@@ -96,7 +104,7 @@ class AuthenticateErpMcp
 
     private function challenge(?string $error = null, int $status = 401): Response
     {
-        $header = 'Bearer resource_metadata="'.ErpMcpOAuth::issuer().'/.well-known/oauth-protected-resource/mcp/erp", scope="'.ErpMcpOAuth::SCOPE.'"';
+        $header = 'Bearer resource_metadata="'.McpOAuth::metadata().'", scope="'.McpOAuth::scope().'"';
         if ($error !== null) {
             $header .= ', error="'.$error.'"';
         }

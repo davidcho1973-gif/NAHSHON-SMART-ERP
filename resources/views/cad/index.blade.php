@@ -36,7 +36,7 @@
 <button id="dwg">CAD만 DWG</button>
 <span id="dirty">
 </span>
-</header>
+<button id="ai-toggle" type="button" aria-expanded="false" aria-controls="ai-panel">AI 연결</button></header>
 <section id="claim-context" hidden>
 <strong id="claim-context-label">
 </strong>
@@ -291,5 +291,6 @@
 <p id="cad-print-note">
 </p>
 </section>
+<section id="ai-panel" hidden aria-label="CAD AI 연결"><button id="ai-close" type="button">도면으로 돌아가기</button><h2>기존 AI 계정 연결</h2><p>사용 중인 ChatGPT·Claude·Gemini에서 지원하는 MCP 연결 설정을 확인하세요. 연결 지원 여부는 서비스와 계정에 따라 다릅니다. ERP에 AI API 키를 입력하지 않습니다.</p><p><a href="https://chatgpt.com" target="_blank" rel="noopener">ChatGPT</a> · <a href="https://claude.ai" target="_blank" rel="noopener">Claude</a> · <a href="https://gemini.google.com" target="_blank" rel="noopener">Gemini</a></p><label>MCP 서버 주소<input id="ai-server-url" readonly></label><button id="ai-copy-url" type="button">서버 주소 복사</button><p id="ai-config-reason"></p><label>공유 범위<select id="ai-share-scope"><option value="selection">선택한 객체</option><option value="visible">보이는 객체</option></select></label><label>도면 1단위의 실제 단위<select id="ai-unit"><option value="">단위를 직접 선택하세요</option><option value="drawing">실제 단위 미지정 · 도면 단위</option><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option><option value="in">inch</option><option value="ft">feet</option></select></label><label><input id="ai-allow-edits" type="checkbox">AI 편집 요청 허용 · 기본은 확인 후 적용</label><label><input id="ai-auto-apply" type="checkbox">검증된 편집 요청 자동 적용</label><p>CAD 원본 객체만 공유하며 별도 도면 표시·메모는 포함하지 않습니다. 선택 공유는 CAD 편집 모드에서 선택한 원본 객체를 기준으로 합니다. 공유를 시작한 객체만 전달합니다. 선택·범위를 바꾸려면 공유 내용 갱신을 누르세요. 수량은 선택한 도면 단위를 사용하며 기성 수량·저장은 자동 변경하지 않습니다.</p><button id="ai-start" type="button">현재 도면 공유 시작</button><button id="ai-refresh" type="button" disabled>공유 내용 갱신</button><button id="ai-stop" type="button" disabled>공유 중지</button><p id="ai-status" role="status" aria-live="polite">공유하지 않음</p><h3>대기 중인 편집 요청</h3><div id="ai-command-list"></div><h3>허용한 연결</h3><button id="ai-reload-config" type="button">연결 목록 새로고침</button><div id="ai-connections"></div></section>
 </body>
 </html>

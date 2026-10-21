@@ -7,7 +7,9 @@ use App\OAuth\ErpAccessToken;
 use App\OAuth\ErpAccessTokenRepository;
 use App\OAuth\ErpAuthCodeRepository;
 use App\OAuth\ErpRefreshTokenRepository;
+use App\Support\Mcp\CadMcpOAuth;
 use App\Support\Mcp\ErpMcpOAuth;
+use App\Support\Mcp\McpOAuth;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Http\Request;
@@ -35,11 +37,12 @@ class ErpMcpServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Passport::useAccessTokenEntity(ErpAccessToken::class);
-        Passport::tokensCan([ErpMcpOAuth::SCOPE => 'ERP read-only access, including permitted HR, payroll and business documents']);
+        Passport::tokensCan([ErpMcpOAuth::SCOPE => 'ERP read-only access, including permitted HR, payroll and business documents',
+            CadMcpOAuth::SCOPE => 'Read explicitly shared CAD browser sessions and request supported edits']);
         Passport::defaultScopes([]);
         Passport::tokensExpireIn(now()->addMinutes((int) config('erp_mcp.access_token_minutes', 15)));
         Passport::refreshTokensExpireIn(now()->addDays((int) config('erp_mcp.refresh_token_days', 7)));
-        Passport::authorizationView('oauth.erp-authorize');
+        Passport::authorizationView(fn ($parameters) => response()->view(McpOAuth::cad() ? 'oauth.cad-authorize' : 'oauth.erp-authorize', $parameters));
         RateLimiter::for('erp-mcp-ip', fn (Request $request) => Limit::perMinute(120)->by($request->ip()));
         RateLimiter::for('erp-mcp-user', fn (Request $request) => Limit::perMinute(60)->by(
             $request->user()?->getAuthIdentifier().'|'.$request->attributes->get('erp_mcp_client_id')
@@ -48,5 +51,6 @@ class ErpMcpServiceProvider extends ServiceProvider
         if (config('erp_mcp.enabled')) {
             $this->loadRoutesFrom(base_path('routes/erp_mcp.php'));
         }
+        $this->loadRoutesFrom(base_path('routes/cad_mcp.php'));
     }
 }
