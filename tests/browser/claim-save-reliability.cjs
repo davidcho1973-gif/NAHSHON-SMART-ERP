@@ -39,6 +39,11 @@ const assert=require('node:assert/strict');
   assert.equal(JSON.parse(await p.locator('#result').textContent()).formWrites,2);
   await p.getByRole('button',{name:'팀장 폼 열기',exact:true}).click();await p.getByRole('textbox',{name:'작업 내용*',exact:true}).fill('invalid');await p.getByRole('button',{name:'저장',exact:true}).click();
   await expect(p.getByRole('textbox',{name:'작업 내용*',exact:true})).toBeEnabled();await p.getByRole('textbox',{name:'작업 내용*',exact:true}).fill('Corrected validation');await p.getByRole('button',{name:'저장',exact:true}).click();await p.getByRole('dialog').waitFor({state:'detached'});
+  await p.getByRole('button',{name:'팀장 폼 열기',exact:true}).click();await p.getByRole('textbox',{name:'작업 내용*',exact:true}).fill('Keep my work after someone else edits');await p.getByRole('button',{name:'취소',exact:true}).click();
+  await p.getByRole('button',{name:'다른 담당자의 기록 수정 모의',exact:true}).click();await p.reload();await p.getByRole('button',{name:'팀장 폼 열기',exact:true}).click();
+  await expect(p.getByRole('button',{name:'저장',exact:true})).toBeDisabled();await expect(p.getByText('서버 값과 복구 입력 비교',{exact:true})).toBeVisible();
+  await p.getByRole('button',{name:'복구 입력으로 계속',exact:true}).click();await p.getByRole('button',{name:'저장',exact:true}).click();await p.getByRole('dialog').waitFor({state:'detached'});
+  assert.equal(JSON.parse(await p.locator('#result').textContent()).formWrites,4);
   await p.screenshot({path:'test-results/assistant-browser/save-recovery.png'});assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,checks:['in-flight typing','lost response retry','two-tab conflict','form reload recovery','busy close guard']}));
  } finally {if(browser)await browser.close();server.kill();}

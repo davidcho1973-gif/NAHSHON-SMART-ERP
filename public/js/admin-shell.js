@@ -474,6 +474,33 @@
             changed = true; preserve();
             if (!pendingValues) backupNotice.textContent = '이전에 제출하지 못한 입력을 복구했습니다. 내용을 확인한 뒤 저장하세요.';
             else wrap.querySelector('[data-x=save]').textContent = '저장 결과 확인 · 재시도';
+            if (!pendingValues && expectedRevision != null && opts.draftVersion != null && Number(expectedRevision) !== Number(opts.draftVersion)) {
+              var compare = document.createElement('details'), heading = document.createElement('summary'), preview = document.createElement('pre');
+              heading.textContent = '서버 값과 복구 입력 비교'; compare.open = true;
+              preview.style.cssText = 'white-space:pre-wrap;max-height:180px;overflow:auto;font:12px/1.5 system-ui';
+              preview.textContent = fields.filter(function(f){return f.type !== 'file';}).map(function(f){
+                return (f.label || f.name) + '\n서버: ' + String(f.value == null ? '' : f.value) + '\n복구 입력: ' + String(restored.values[f.name] == null ? '' : restored.values[f.name]);
+              }).join('\n\n');
+              var saveButton = wrap.querySelector('[data-x=save]'); saveButton.disabled = true;
+              backupNotice.textContent = '다른 담당자가 기록을 수정했습니다. 두 내용을 비교하고 사용할 입력을 선택하세요.';
+              compare.append(heading, preview);
+              [false, true].forEach(function(useRecovered){
+                var choice = document.createElement('button'); choice.type = 'button';
+                choice.textContent = useRecovered ? '복구 입력으로 계속' : '최신 서버 값 사용';
+                choice.onclick = function(){
+                  if (!useRecovered) fields.forEach(function(f){
+                    if (f.type === 'file') return;
+                    var el = wrap.querySelector('#af-' + CSS.escape(f.name)); if (!el) return;
+                    if (f.type === 'checkbox') el.checked = !!f.value; else el.value = f.value == null ? '' : f.value;
+                  });
+                  expectedRevision = opts.draftVersion; requestId = global.ClaimSaveSafety.key(); changed = true;
+                  preserve(); compare.remove(); saveButton.disabled = false;
+                  backupNotice.textContent = '최신 기록과 비교했습니다. 저장을 누르면 선택한 입력으로 반영됩니다.';
+                };
+                compare.appendChild(choice);
+              });
+              backupNotice.after(compare);
+            }
           }
         } catch (_) { backupNotice.textContent = '기기 임시 저장을 사용할 수 없습니다. 서버 저장 후 창을 닫으세요.'; }
       }
