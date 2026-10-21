@@ -52,7 +52,7 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   await page.locator('#default-color').fill('#ff6600');await page.locator('#default-width').fill('0.5');
   await page.locator('#ortho').check();await tool('line');await drag([20,70],[80,73]);await save();await page.locator('#ortho').uncheck();
   let line=one('LINE');point(line.p,20,70);point(line.q,80,70);assert.equal(line.color,0xff6600);assert.equal(line.lineWeight,50);
-  assert.match(await page.locator('[data-tool="select"]').getAttribute('class'),/active/);
+  assert.match(await page.locator('[data-tool="line"]').getAttribute('class'),/active/);await tool('select');await click(50,70);
   await page.locator('#undo').click();await save();assert.equal(entities().filter(e=>e.type==='LINE').length,0);
   await page.locator('#redo').click();await save();
   await drag([50,70],[60,60]);await save();line=one('LINE');point(line.p,30,60);point(line.q,90,60);
@@ -68,7 +68,7 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   // Rectangle interior selection, movement and both corner/edge grips.
   await page.locator('#ortho').check();await page.locator('#default-color').fill('#22cc77');await tool('rectangle');await drag([115,25],[155,65]);await save();await page.locator('#ortho').uncheck();
   let rect=one('LWPOLYLINE');assert.equal(rect.closed,true);assert.equal(rect.points.length,4);assert.equal(rect.color,0x22cc77);
-  await click(190,20);await drag([130,40],[140,45]);await save();rect=one('LWPOLYLINE');point(rect.points[0],125,30);point(rect.points[2],165,70);
+  await tool('select');await click(190,20);await drag([130,40],[140,45]);await save();rect=one('LWPOLYLINE');point(rect.points[0],125,30);point(rect.points[2],165,70);
   await drag([165,70],[175,80]);await save();rect=one('LWPOLYLINE');point(rect.points[0],125,30);point(rect.points[2],175,80);
   await drag([150,80],[150,90]);await save();rect=one('LWPOLYLINE');point(rect.points[0],125,30);point(rect.points[2],175,90);
   await page.locator('#undo').click();await save();point(one('LWPOLYLINE').points[2],175,80);
@@ -79,7 +79,7 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   // Text defaults are separate from selection edits, including rotation preservation.
   await page.locator('#default-text-height').fill('4');await page.locator('#default-text-color').fill('#ffee44');await page.locator('#angle').fill('15');
   await tool('text');await click(25,20);await page.locator('#text-dialog-content').fill('기성 확인');await page.locator('#text-dialog-confirm').click();await save();let text=one('MTEXT');assert.equal(text.text,'기성 확인');assert.equal(text.height,4);assert.equal(text.color,0xffee44);near(text.angle,15);
-  assert.equal(await page.locator('#text').inputValue(),'기성 확인');assert.equal(await page.locator('#height').inputValue(),'4');
+  await tool('select');await click(25,20);assert.equal(await page.locator('#text').inputValue(),'기성 확인');assert.equal(await page.locator('#height').inputValue(),'4');
   await page.locator('#text').fill('수정 완료');await page.locator('#height').fill('6');await page.locator('#text-color').fill('#00aaff');await page.locator('#apply-text').click();await save();
   text=one('MTEXT');assert.equal(text.text,'수정 완료');assert.equal(text.height,6);assert.equal(text.color,0x00aaff);near(text.angle,15);
   // Writes in flight and locked layers reject further pointer mutations.

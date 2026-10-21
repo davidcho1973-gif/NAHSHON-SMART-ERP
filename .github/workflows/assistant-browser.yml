@@ -84,6 +84,7 @@ jobs:
           timeout 90s node tests/browser/claim-save-reliability.cjs
           timeout 60s node tests/browser/claim-cad.cjs
           timeout 60s node tests/browser/cad-direct.cjs
+          timeout 90s node tests/browser/cad-repeat.cjs
           timeout 90s node tests/browser/cad-annotations.cjs
           timeout 90s node tests/browser/cad-ai.cjs
           timeout 90s node tests/browser/cad-markup.cjs
