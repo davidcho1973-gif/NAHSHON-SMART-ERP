@@ -18,6 +18,62 @@
         "MTEXT",
         "POINT",
     ]);
+
+    function uid(){return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2);}
+    function plainMText(value){let safe=!/[{}\\]/.test(value.replace(/\\(?:P|\\|{|})/g,''));return {safe,text:value.replace(/\\(P|\\|{|})/g,(_,token)=>token==='P'?'\n':token)};}
+    function encodeMText(value){return String(value).replace(/\\/g,'\\\\').replace(/{/g,'\\{').replace(/}/g,'\\}').replace(/\r?\n/g,'\\P');}
+    function textLines(e){
+        const out=[],limit=e.type==='MTEXT'&&e.width>0?e.width:Infinity;
+        for(const line of String(e.text||'').split('\n')){let current='',width=0;for(const character of line){const advance=e.height*(character.charCodeAt(0)>255?1:.6);if(width+advance>limit&&current){out.push(current);current='';width=0;}current+=character;width+=advance;}out.push(current);}
+        return out;
+    }
+    function newDimension(a,b,placement,options={}){
+        if(![a.x,a.y,b.x,b.y,placement.x,placement.y].every(Number.isFinite)||distance(a,b)<1e-10)throw Error('서로 다른 두 점을 지정하세요.');
+        const mode=options.mode||'aligned',height=options.height??2.5;if(!['aligned','horizontal','vertical'].includes(mode)||!Number.isFinite(height)||height<=0||(mode==='horizontal'&&Math.abs(a.x-b.x)<1e-10)||(mode==='vertical'&&Math.abs(a.y-b.y)<1e-10))throw Error('치수 방향·문자 크기·두 점을 확인하세요.');
+        return newEntity('ERP_DIMENSION',{p:{...a},q:{...b},placement:{...placement},textPosition:null,mode:options.mode||'aligned',height:options.height||2.5,color:options.color??0xe2e8f0,lineWeight:25,groupId:uid(),...options},options.layer||'0');
+    }
+    function dimensionLayout(e){
+        const delta={x:e.q.x-e.p.x,y:e.q.y-e.p.y},len=Math.hypot(delta.x,delta.y),u=e.axis|| (e.mode==='horizontal'?{x:1,y:0}:e.mode==='vertical'?{x:0,y:1}:{x:delta.x/len,y:delta.y/len}),n={x:-u.y,y:u.x};
+        const offset=(e.placement.x-e.p.x)*n.x+(e.placement.y-e.p.y)*n.y,value=Math.abs(delta.x*u.x+delta.y*u.y);
+        const a={x:e.p.x+n.x*offset,y:e.p.y+n.y*offset},b={x:a.x+u.x*(delta.x*u.x+delta.y*u.y),y:a.y+u.y*(delta.x*u.x+delta.y*u.y)};
+        const text=e.textPosition||{x:(a.x+b.x)/2+n.x*e.height*.5,y:(a.y+b.y)/2+n.y*e.height*.5};
+        return {a,b,text,value,label:value.toFixed(3),angle:Math.atan2(u.y,u.x)*180/Math.PI,u,n};
+    }
+    function dimensionParts(e){
+        const l=dimensionLayout(e),length=e.height*.3,tick=p=>({p:{x:p.x-(l.u.x+l.n.x)*length,y:p.y-(l.u.y+l.n.y)*length},q:{x:p.x+(l.u.x+l.n.x)*length,y:p.y+(l.u.y+l.n.y)*length}});
+        const shapes=[['LINE',{p:e.p,q:l.a}],['LINE',{p:e.q,q:l.b}],['LINE',{p:l.a,q:l.b}],['LINE',tick(l.a)],['LINE',tick(l.b)],['TEXT',{p:l.text,text:l.label,height:e.height,angle:l.angle}]];
+        return shapes.map(([type,shape],index)=>{
+            const payload=JSON.stringify({v:1,group:e.groupId,part:index,a:e.p,b:e.q,placement:e.placement,textPosition:e.textPosition||null,mode:e.mode,axis:e.axis||null,height:e.height,color:e.color,lineWeight:e.lineWeight??25,layer:e.layer});
+            let raw=e.rawParts?.[index]?clone(e.rawParts[index]):null;
+            if(raw){const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_DIM');if(at>=0){let end=at+1;while(end<raw.length&&raw[end][0]!==1001)end++;raw.splice(at,end-at);}}
+            if(!raw)raw=[[0,type],[100,'AcDbEntity'],[8,e.layer],[100,type==='LINE'?'AcDbLine':'AcDbText']];
+            raw.push([1001,'ERP_CAD_DIM']);for(let i=0;i<payload.length;i+=200)raw.push([1000,payload.slice(i,i+200)]);
+            return newEntity(type,{...shape,id:e.id+'-'+index,color:e.color,lineWeight:e.lineWeight??25,raw,dirty:true},e.layer);
+        });
+    }
+    function restoreDimensions(doc){
+        const groups=new Map();
+        for(const e of doc.entities){const at=e.raw?.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_DIM');if(at===undefined||at<0)continue;let raw='';for(let i=at+1;i<e.raw.length&&e.raw[i][0]!==1001;i++)if(e.raw[i][0]===1000)raw+=e.raw[i][1];try{const m=JSON.parse(raw.replace(/\\U\+([0-9a-f]{4})/gi,(_,h)=>String.fromCharCode(parseInt(h,16))));if(m.v!==1||typeof m.group!=='string')continue;const entries=groups.get(m.group)||[];entries.push({e,m});groups.set(m.group,entries);}catch(_){}}
+        const replace=new Map(),remove=new Set();
+        for(const [group,entries]of groups){try{
+            if(entries.length!==6||new Set(entries.map(x=>x.m.part)).size!==6||entries.some(x=>!Number.isInteger(x.m.part)||x.m.part<0||x.m.part>5))continue;
+            entries.sort((a,b)=>a.m.part-b.m.part);const m=entries[0].m;
+            if(!['aligned','horizontal','vertical'].includes(m.mode)||!Number.isFinite(m.height)||m.height<=0||entries.some(x=>JSON.stringify({...x.m,part:0})!==JSON.stringify({...m,part:0})))continue;
+            const e=newDimension(m.a,m.b,m.placement,{id:'dim-'+group,groupId:group,mode:m.mode,axis:m.axis||undefined,textPosition:m.textPosition,height:m.height,color:m.color,lineWeight:m.lineWeight,layer:m.layer});
+            const expected=dimensionParts(e),near=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=Math.max(1,Math.abs(a),Math.abs(b))*1e-8;
+            if(entries.some(({e:actual},i)=>{const wanted=expected[i];return !actual.editable||actual.type!==wanted.type||actual.layer!==wanted.layer||actual.color!==wanted.color||actual.lineWeight!==wanted.lineWeight||!near(actual.p.x,wanted.p.x)||!near(actual.p.y,wanted.p.y)||(actual.type==='LINE'? !near(actual.q.x,wanted.q.x)||!near(actual.q.y,wanted.q.y):actual.text!==wanted.text||!near(actual.height,wanted.height)||!near(actual.angle,wanted.angle));}))continue;
+            e.dirty=false;e.rawParts=entries.map(x=>x.e.raw);replace.set(entries[0].e.id,e);entries.slice(1).forEach(x=>remove.add(x.e.id));
+        }catch(_){}}
+        doc.entities=doc.entities.filter(e=>!remove.has(e.id)).map(e=>replace.get(e.id)||e);return doc;
+    }
+    function snapPoints(e){
+        if(e.type==='INSERT')return (e.preview||[]).flatMap(path=>path.length?[path[0],path.at(-1)]:[]);
+        if(e.type==='ERP_DIMENSION')return [e.p,e.q];
+        if(e.points)return e.points;
+        if(e.type==='LINE')return [e.p,e.q,{x:(e.p.x+e.q.x)/2,y:(e.p.y+e.q.y)/2}];
+        return e.p?[e.p]:[];
+    }
+
     function parse(text) {
         if (/^AutoCAD Binary DXF/.test(text))
             throw Error("바이너리 DXF는 서버에서 ASCII DXF로 변환해야 합니다.");
@@ -97,6 +153,7 @@
                     .replace(/\\U\+([0-9a-f]{4})/gi, (_, h) =>
                         String.fromCharCode(parseInt(h, 16)),
                     );
+                if(type==='MTEXT'){const decoded=plainMText(e.text);e.text=decoded.text;e.width=num(r,41);e.plainText=decoded.safe&&num(r,71)===1&&num(r,72,1)===1&&num(r,44,1)===1&&!r.some(p=>[75,76,78,79].includes(p[0]));}
                 e.height = num(r, 40, 2.5);
                 e.angle =
                     type === "MTEXT" && r.some((p) => p[0] === 11)
@@ -133,7 +190,7 @@
             }
             // Non-planar/extruded entities require a 3D engine. Keep them intact and read-only.
             if (
-                type === "MTEXT" ||
+                (type === "MTEXT" && !e.plainText) ||
                 (type === "TEXT" &&
                     (num(r, 72) !== 0 || num(r, 73) !== 0 || num(r, 71) !== 0))
             )
@@ -266,7 +323,7 @@
                 : 1032;
         if (doc.acadVersion < 1015)
             doc.entities.forEach((e) => (e.editable = false));
-        return doc;
+        return restoreDimensions(doc);
     }
     function aci(n) {
         return (
@@ -282,7 +339,12 @@
             ][n] || "#aab8cc"
         );
     }
+    function textBox(e){const lines=textLines(e),width=e.type==='MTEXT'&&e.width>0?e.width:Math.max(1,...lines.map(line=>Array.from(line).reduce((w,c)=>w+e.height*(c.charCodeAt(0)>255?1:.6),0))),height=e.height*lines.length*1.2,a=(e.angle||0)*Math.PI/180,u={x:Math.cos(a),y:Math.sin(a)},v={x:-Math.sin(a),y:Math.cos(a)};return {width,height,u,v,points:[[0,e.type==='MTEXT'?0:e.height],[width,e.type==='MTEXT'?0:e.height],[width,e.type==='MTEXT'?-height:-e.height*.2],[0,e.type==='MTEXT'?-height:-e.height*.2]].map(([x,y])=>({x:e.p.x+x*u.x+y*v.x,y:e.p.y+x*u.y+y*v.y}))};}
     function geometry(e) {
+        if(['TEXT','MTEXT'].includes(e.type)){const box=textBox(e);return [...box.points,box.points[0]];}
+
+        if(e.type==='ERP_DIMENSION')return dimensionParts(e).flatMap(geometry);
+
         let p = [];
         if (e.type === "INSERT") return (e.preview || []).flat();
         if (e.type === "POLYLINE")
@@ -372,11 +434,13 @@
                 y: c.y + x * Math.sin(a) + y * Math.cos(a) + (o.dy || 0),
             };
         }
+        if(n.type==='ERP_DIMENSION'){const l=dimensionLayout(n),axisEnd=f({x:n.p.x+l.u.x,y:n.p.y+l.u.y}),origin=f(n.p),len=Math.hypot(axisEnd.x-origin.x,axisEnd.y-origin.y);n.axis={x:(axisEnd.x-origin.x)/len,y:(axisEnd.y-origin.y)/len};n.placement=f(n.placement);if(n.textPosition)n.textPosition=f(n.textPosition);}
         n.p = f(n.p);
         if (n.q) n.q = f(n.q);
         if (n.points) n.points = n.points.map(f);
         if (n.radius) n.radius *= s;
         if (n.height) n.height *= s;
+        if(n.width)n.width*=s;
         if (n.angle !== undefined) {
             if (o.mirror) n.angle = o.mirror === "x" ? -n.angle : 180 - n.angle;
             n.angle = (n.angle + (o.angle || 0)) % 360;
@@ -395,6 +459,9 @@
         return n;
     }
     function exportDXF(d) {
+        const hasDimensions=d.entities.some(e=>e.type==='ERP_DIMENSION');
+        d={...d,entities:d.entities.flatMap(e=>e.type==='ERP_DIMENSION'?e.dirty?dimensionParts(e):e.rawParts.map((raw,i)=>({id:e.id+'-'+i,raw,dirty:false})):e)};
+
         if (d.acadVersion < 1015 && d.entities.some((e) => e.dirty))
             throw Error(
                 "R12 도면은 원래 CAD에서 최신 DXF로 저장한 뒤 편집하세요.",
@@ -588,6 +655,12 @@
                 at++;
             prefix.splice(at, 0, ...records);
         }
+        if(hasDimensions){
+            let table=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='TABLE'&&prefix[i+1]?.[1]==='APPID'),end=table;
+            if(table>=0){while(end<prefix.length&&!(prefix[end][0]===0&&prefix[end][1]==='ENDTAB'))end++;}
+            const exists=prefix.some((p,i)=>p[0]===0&&p[1]==='APPID'&&prefix.slice(i+1,i+9).some(p=>p[0]===2&&p[1]==='ERP_CAD_DIM'));
+            if(!exists){const record=[[0,'APPID'],[5,next()],[100,'AcDbSymbolTableRecord'],[100,'AcDbRegAppTableRecord'],[2,'ERP_CAD_DIM'],[70,'0']];if(table>=0){prefix.splice(end,0,...record);const count=prefix.slice(table,end).find(p=>p[0]===70);if(count)count[1]=String(Number(count[1])+1);}else{let at=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='SECTION'&&prefix[i+1]?.[1]==='TABLES');while(at<prefix.length&&!(prefix[at][0]===0&&prefix[at][1]==='ENDSEC'))at++;prefix.splice(at,0,[0,'TABLE'],[2,'APPID'],[70,'1'],...record,[0,'ENDTAB']);}}
+        }
         let out = [...prefix];
         for (const e of d.entities) {
             if (!e.dirty && e.raw) {
@@ -645,10 +718,12 @@
                 r = r.filter((p) => p[0] !== 3);
                 if (e.type === "MTEXT")
                     r = r.filter((p) => ![11, 21, 31].includes(p[0]));
-                set(1, e.text);
+                const textValue=e.type==='MTEXT'?encodeMText(e.text):e.text;
+                if(e.type==='MTEXT'){const encoded=String(encode(textValue));const chunks=encoded.match(/[\s\S]{1,200}/g)||[''];set(1,chunks.pop());const at=r.findIndex(p=>p[0]===1);r.splice(at,0,...chunks.map(chunk=>[3,chunk]));}else set(1,textValue);
                 if (!r.some((p) => p[0] === 7)) set(7, styleName);
                 set(40, e.height);
-                set(50, e.angle || 0);
+                set(50,e.type==='MTEXT'?(e.angle||0)*Math.PI/180:e.angle||0);
+                if(e.type==='MTEXT'){set(41,e.width||0);set(71,1);set(72,1);}
             }
             if (e.type === "LWPOLYLINE") {
                 r = r.filter((p) => ![10, 20, 40, 41, 42, 91].includes(p[0]));
@@ -781,6 +856,7 @@
                     for (const e of es) {
                         const n = transform(e, { dx: x * dx, dy: y * dy });
                         n.id = "array" + Math.random();
+            if(n.type==='ERP_DIMENSION'){n.groupId=uid();delete n.rawParts;}
                         if (n.raw)
                             n.raw = n.raw.filter(
                                 (p) => ![5, 330, 360].includes(p[0]),
@@ -857,6 +933,8 @@
         return {a,u,v,w,h};
     }
     function grips(e) {
+        if(e.type==='ERP_DIMENSION'){const l=dimensionLayout(e);return [{key:'dimension-line',point:{x:(l.a.x+l.b.x)/2,y:(l.a.y+l.b.y)/2}},{key:'dimension-text',point:l.text}];}
+        if(e.type==='MTEXT'&&e.editable){const b=textBox(e);return [{key:'text-width',point:{x:e.p.x+b.u.x*b.width,y:e.p.y+b.u.y*b.width}},{key:'text-size',point:{x:e.p.x-b.v.x*b.height,y:e.p.y-b.v.y*b.height}}];}
         if(e.type==='LINE')return [{key:'p',point:e.p},{key:'q',point:e.q}];
         if(!rectangleFrame(e))return [];
         return e.points.flatMap((p,i)=>[{key:'corner'+i,point:p},{key:'edge'+i,point:{x:(p.x+e.points[(i+1)%4].x)/2,y:(p.y+e.points[(i+1)%4].y)/2}}]);
@@ -864,6 +942,8 @@
     function resize(e,key,p) {
         if(!e.editable||![p.x,p.y].every(Number.isFinite))throw Error('크기를 조절할 수 없는 객체입니다.');
         const n=clone(e);
+        if(e.type==='ERP_DIMENSION'){if(key==='dimension-line')n.placement={...p};else if(key==='dimension-text')n.textPosition={...p};else throw Error('알 수 없는 치수 손잡이입니다.');n.dirty=true;return n;}
+        if(e.type==='MTEXT'){const b=textBox(e),dx=p.x-e.p.x,dy=p.y-e.p.y;if(key==='text-width')n.width=Math.max(e.height,Math.abs(dx*b.u.x+dy*b.u.y));else if(key==='text-size')n.height=Math.max(.001,Math.abs(dx*b.v.x+dy*b.v.y)/(textLines(e).length*1.2));else throw Error('알 수 없는 문자 손잡이입니다.');n.dirty=true;return n;}
         if(e.type==='LINE'&&['p','q'].includes(key)){
             if(distance(p,e[key==='p'?'q':'p'])<1e-10)throw Error('선 길이는 0보다 커야 합니다.');
             n[key]={...p};n.dirty=true;return n;
@@ -885,6 +965,7 @@
     }
 
     g.CADCore = {
+        uid, newDimension, dimensionLayout, dimensionParts, textLines, textBox, snapPoints,
         rectangleFrame, grips, resize, contains,
         renameLayer,
         offset,
