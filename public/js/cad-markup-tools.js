@@ -169,10 +169,9 @@
             }
             api.snapshot();
             api.document().markups.push(item);
-            selection = new Set([item.id]);
+            selection.clear();
             polygon = [];
             hover = null;
-            tool = "select";
             panelKey = "";
             $("properties").scrollTop = 0;
             api.render();
@@ -244,6 +243,7 @@
             button.type = "button";
             button.dataset.markupTool = key;
             button.textContent = name;
+            if(key==='select'){button.innerHTML='<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M5 3L19 13L12 14L9 21Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/></svg><span>선택</span>';button.setAttribute('aria-label','선택');}
             button.onclick = () => setTool(key);
             $("markup-tools").append(button);
         }
@@ -561,7 +561,7 @@
             if (event.buttons === 2 || event.buttons === 4) return;
             stop(event);
             if (!api.document() || api.busy()) return;
-            if (!gesture && !polygon.length && tool !== "eraser") return;
+            if (!gesture && !polygon.length && tool !== 'eraser'){const raw=api.world(event);canvas.style.cursor=space?'grab':tool==='select'&&chosen().some(item=>!isLocked(item)&&handles(item).some(h=>M.distance(h.point||h,raw)*api.scale()<8))?'nwse-resize':tool==='select'?'default':'crosshair';return;}
             const raw = api.world(event);
             hover = polygon.length ? api.snap(raw) : raw;
             if (tool === "route" && polygon.length && G)
@@ -1095,6 +1095,7 @@
             }
         }
         function render(ctx, options = {}) {
+            if(mode==='markup'&&!options.paper)canvas.style.cursor=gesture?.kind==='pan'?'grabbing':space?'grab':gesture?.kind==='move'?'move':gesture?.kind==='vertex'?'nwse-resize':tool==='select'?'default':'crosshair';
             options = {...options,doc:api.document()};
             if (visible || options.paper) {
                 const previewMap = new Map(
@@ -1250,7 +1251,7 @@
                     return;
                 if (event.code === "Space") {
                     stop(event);
-                    space = true;
+                    space = true;canvas.style.cursor="grab";
                     return;
                 }
                 if (event.key === "Escape") {
@@ -1330,7 +1331,7 @@
             true,
         );
         document.addEventListener("keyup", (event) => {
-            if (event.code === "Space") space = false;
+            if (event.code === "Space") {space = false;api.render();}
         });
         window.addEventListener("blur", () => {
             space = false;
