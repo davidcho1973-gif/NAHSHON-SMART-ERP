@@ -525,7 +525,8 @@
             doc.entities.push(...copies);
         }
         points = [];
-        if(['line','rectangle'].includes(tool)){selected.clear();selected.add(doc.entities.at(-1).id);setTool('select');}
+        // Keep the active drawing tool selected for repeated geometry creation.
+        // Users explicitly switch to Select (or press Escape) when finished.
         render();
     }
     canvas.onpointerdown = e => {
