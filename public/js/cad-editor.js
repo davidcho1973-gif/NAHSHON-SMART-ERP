@@ -16,6 +16,7 @@
         origin = { x: 0, y: 0 },
         pan = null,
         canManage = false,
+        canAnnotate = false,
         cap = {},
         busy = false;
     let activeIO=null,ioSequence=0,listSequence=0,uploadAllowed=false,capabilitiesReady=false;
@@ -47,7 +48,7 @@
         $('claim-attach').onclick=attachClaim;
     }
     async function attachClaim(){
-        if(gesture){status('드래그를 끝내거나 Esc로 취소한 뒤 연결하세요.');return;}
+        if(gesture||markup?.pending()){status('표시를 완성하거나 Esc로 취소한 뒤 연결하세요.');return;}
         if(!inClaim||!claimValid||!record||busy)return;
         if(dirty){status('CAD 도면을 먼저 저장한 뒤 저장한 개정을 연결하세요.');return;}
         if(Number(record.site_id)!==claimContext.siteId){status('이 기성 공정의 현장과 같은 현장 도면을 선택하세요.');return;}
@@ -64,6 +65,7 @@
     if(proofMode){$('sites').disabled=true;$('drawings').disabled=true;$('history').disabled=true;}
     let gesture = null, inspectorKey = "",hoverPoint=null,snapMark=null,textDraft=null;
     let measurements=[];
+    let markup=null, printing=false, cadBaseline="";
     const styleEdits=new Set(),textEdits=new Set();
     const labels = {
         select: "선택",
@@ -98,8 +100,8 @@
     function ioControls(){
         $('sites').disabled=busy||inClaim||proofMode;$('drawings').disabled=busy||proofMode;
         $('upload').disabled=busy||!uploadAllowed||proofMode||!capabilitiesReady;
-        $('save').disabled=busy||!canManage||!record;$('reload').disabled=busy||!record;
-        $('history').disabled=busy||proofMode||!record;inspector();
+        $('save').disabled=busy||!canAnnotate||!record;$('reload').disabled=busy||!record;
+        $('history').disabled=busy||proofMode||!record;$('print-markups').disabled=busy||!record?.canExport;inspector();markup?.refresh();
     }
     function startIO(kind,title){
         if(busy||gesture)return null;
@@ -130,7 +132,7 @@
         if (!r.ok||j.success===false)
             throw Error(
                 r.status === 409
-                    ? (path.endsWith("/claim-draft") ? "기성 초안이 다른 화면에서 변경되었습니다. CAD 편집은 유지됩니다. 기성으로 돌아가 최신 초안을 확인한 뒤 다시 연결하세요." : "다른 사용자가 저장했습니다. 현재 편집은 유지됩니다. DXF를 내려받아 보관한 뒤 다시 열어 병합하세요.")
+                    ? (path.endsWith("/claim-draft") ? "기성 초안이 다른 화면에서 변경되었습니다. CAD 편집은 유지됩니다. 기성으로 돌아가 최신 초안을 확인한 뒤 다시 연결하세요." : "다른 사용자가 저장했습니다. 현재 편집과 표시는 이 화면에 유지됩니다. 다시 열면 저장하지 않은 변경이 사라집니다. 현재 화면을 PDF로 보관하고 변경 내용을 확인하세요.")
                     : safeApiMessage(j,r.status),
             );
         return j.data || j;
@@ -142,6 +144,7 @@
         return [...new Set(messages)].join(' ')||'요청을 처리하지 못했습니다. (HTTP '+statusCode+')';
     }
     function guard() {
+        if(markup?.pending()){status('표시를 완성하거나 Esc로 취소하세요.');return false;}
         if($('text-dialog').open){status('문자 입력창에서 확인하거나 취소한 뒤 진행하세요.');return false;}
 
         if(gesture){status("드래그를 끝내거나 Esc로 취소하세요.");return false;}
@@ -152,7 +155,7 @@
         return (
             !dirty ||
             confirm(
-                "저장하지 않은 변경을 버릴까요? 취소하면 DXF로 내려받거나 저장할 수 있습니다.",
+                "저장하지 않은 변경을 버릴까요? 취소하면 편집을 계속하거나 저장할 수 있습니다.",
             )
         );
     }
@@ -276,13 +279,14 @@
 
     function render() {
         const r = canvas.getBoundingClientRect(),
-            dpr = window.devicePixelRatio || 1;
+            dpr = printing ? 3 : window.devicePixelRatio || 1;
         canvas.width = r.width * dpr;
         canvas.height = r.height * dpr;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, r.width, r.height);
+        if(printing){ctx.fillStyle="#ffffff";ctx.fillRect(0,0,r.width,r.height);}
         const spacing = Number($("spacing").value);
-        if ($("grid").checked && spacing > 0 && spacing * scale > 8) {
+        if (!printing && $("grid").checked && spacing > 0 && spacing * scale > 8) {
             ctx.strokeStyle = "#202c40";
             ctx.lineWidth = 1;
             const step = spacing * scale;
@@ -316,6 +320,7 @@
                   : e.aci > 0 && e.aci < 256
                     ? C.aci(e.aci)
                     : doc.layers[e.layer]?.color || "#e2e8f0";
+            if(printing)ctx.strokeStyle="#475569";
             ctx.fillStyle = ctx.strokeStyle;
             ctx.setLineDash(
                 (
@@ -367,8 +372,8 @@
             ctx.strokeStyle=$('default-color').value;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
             const a=screen(gesture.start),b=screen(gesture.end);if(['rectangle','text'].includes(gesture.tool))ctx.rect(a.x,a.y,b.x-a.x,b.y-a.y);else {ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}ctx.stroke();ctx.setLineDash([]);
         }
-        if(tool==='select'&&!busy)for(const e of [...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e)].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient))){for(const grip of C.grips(e)){const p=screen(grip.point);ctx.fillStyle='#101827';ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.fillRect(p.x-4,p.y-4,8,8);ctx.strokeRect(p.x-4,p.y-4,8,8);}}
-        if(snapMark){const marker=screen(snapMark);ctx.strokeStyle='#ffb347';ctx.lineWidth=2;ctx.setLineDash([]);ctx.strokeRect(marker.x-6,marker.y-6,12,12);ctx.beginPath();ctx.moveTo(marker.x-10,marker.y);ctx.lineTo(marker.x+10,marker.y);ctx.moveTo(marker.x,marker.y-10);ctx.lineTo(marker.x,marker.y+10);ctx.stroke();}
+        if(!printing&&tool==='select'&&!busy)for(const e of [...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e)].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient))){for(const grip of C.grips(e)){const p=screen(grip.point);ctx.fillStyle='#101827';ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.fillRect(p.x-4,p.y-4,8,8);ctx.strokeRect(p.x-4,p.y-4,8,8);}}
+        if(!printing&&snapMark){const marker=screen(snapMark);ctx.strokeStyle='#ffb347';ctx.lineWidth=2;ctx.setLineDash([]);ctx.strokeRect(marker.x-6,marker.y-6,12,12);ctx.beginPath();ctx.moveTo(marker.x-10,marker.y);ctx.lineTo(marker.x+10,marker.y);ctx.moveTo(marker.x,marker.y-10);ctx.lineTo(marker.x,marker.y+10);ctx.stroke();}
         canvas.dataset.snapActive=String(!!snapMark);if(snapMark){canvas.dataset.snapX=snapMark.x;canvas.dataset.snapY=snapMark.y;}
         const measured=annotation||measurements.find(e=>selected.has(e.id));
         $('annotation-readout').textContent=measured?'거리 '+C.dimensionLayout(measured).label+' 도면 단위 · '+(points.length===2?'치수 위치를 지정하세요':measured.transient?'화면 측정 · 저장되지 않음':'끝점/꼭지점 자동 스냅'):'';
@@ -399,12 +404,14 @@
                 move: "기준점 → 목적점",
                 copy: "기준점 → 목적점",
             }[tool] || "점을 순서대로 지정 · Esc 취소");
+        markup?.render(ctx,{paper:printing});
     }
     function fit() {
-        if(gesture||pan){status('드래그 또는 화면 이동을 끝낸 뒤 전체 보기를 사용하세요.');return;}
+        if(gesture||pan||markup?.pending()){status('표시 또는 화면 이동을 끝낸 뒤 전체 보기를 사용하세요.');return;}
         if (!doc) return;
         const b = C.bounds(entities()),
             r = canvas.getBoundingClientRect();
+        for(const item of doc.markups||[]){const m=window.CADMarkup.bounds(item);b.minX=Math.min(b.minX,m.minX);b.minY=Math.min(b.minY,m.minY);b.maxX=Math.max(b.maxX,m.maxX);b.maxY=Math.max(b.maxY,m.maxY);}
         scale =
             Math.min(
                 r.width / Math.max(1, b.maxX - b.minX),
@@ -730,8 +737,12 @@
         if(activeIO?.token!==token)return;
         if(aiSession)stopAISharing(true,'도면을 다시 열어 공유를 중지했습니다.');
         doc = parsed;aiVersion++;aiHashCache=null;
+        doc.markups = C.clone(j.markups || []);
+        cadBaseline = C.exportDXF(parsed);
+        markup?.reset();
         record = j;
         canManage = !!j.canManage && parsed.acadVersion >= 1015 && !proofMode;
+        canAnnotate = !!j.canManage && !proofMode;
         dirty = false;
         undo = [];
         redo = [];
@@ -745,11 +756,15 @@
             (j.warnings || []).join(" ") +
             " 미지원/읽기 전용 객체 " +
             doc.entities.filter((e) => !e.editable).length +
-            "개 (일부 미표시, 원본 보존). 레이어 설정은 DXF/DWG 저장에 반영됩니다. 정렬 TEXT·MTEXT·폭/특수 폴리선은 읽기 전용입니다. R12는 최신 DXF로 변환한 뒤 편집하세요.";
+            "개 (일부 미표시, 원본 보존). 레이어 설정은 DXF/DWG 저장에 반영됩니다. 특수 서식 문자·폭/곡선 폴리선은 읽기 전용입니다. R12 원본 도형은 최신 DXF로 변환한 뒤 편집하세요. 도면 위 표시는 별도로 저장됩니다.";
+        const unsupported=doc.entities.filter(e=>!e.editable).length;
+        $('drawing-fidelity').hidden=!unsupported;
+        $('drawing-fidelity').textContent='읽기 전용 / 미지원 '+unsupported+'개 · 표시 누락 가능';
+        $('drawing-fidelity').onclick=()=>{document.querySelector('.drawing-info').open=true;document.querySelector('.drawing-info').scrollIntoView({block:'nearest'});};
         layers();
         fit();
         status(j.title + " · " + doc.entities.length + "개 객체");
-        if(entities().some(e=>C.geometry(e).length))$('drawing-state').hidden=true;
+        if(doc.markups.length||entities().some(e=>C.geometry(e).length))$('drawing-state').hidden=true;
         else canvasState('notice','도면은 열렸지만 표시 가능한 2D 객체가 없습니다','원본 객체 '+doc.entities.length+'개가 보존되어 있습니다. 미지원 객체·외부 참조·숨김 레이어가 있는지 원래 CAD에서 확인하세요.');
     }
     async function open(id,discard=true,revision=null){
@@ -762,22 +777,26 @@
     }
     async function save() {
         if($('text-dialog').open){status('문자 입력창을 확인하거나 취소하세요.');return;}
-        if(gesture){status('드래그를 끝내거나 Esc로 취소한 뒤 저장하세요.');return;}
-        if (!record || !dirty || !canManage || busy) return;
+        if(gesture||markup?.pending()){status('표시를 완성하거나 Esc로 취소한 뒤 저장하세요.');return;}
+        if (!record || !dirty || !canAnnotate || busy) return;
         busy = true;
         $("save").disabled = true;
+        markup?.refresh();
         inspector();
         try {
-            const content = C.exportDXF(doc),
+            const content = dxfContent(), markupContent=JSON.stringify(doc.markups || []),
                 j = await api("/" + record.id, {
                     method: "PUT",
                     body: JSON.stringify({
                         revision: record.revision,
                         dxf: content,
+                        markups: JSON.parse(markupContent),
                     }),
                 });
             record.revision = j.revision;
-            dirty = C.exportDXF(doc) !== content;
+            record.dxf = content;
+            cadBaseline = C.exportDXF(doc);
+            dirty = JSON.stringify(doc.markups || []) !== markupContent;
             $("dirty").textContent = dirty
                 ? "● 저장 후 추가 변경 있음"
                 : "개정 " + j.revision + " 저장됨";
@@ -788,15 +807,20 @@
             );
         } finally {
             busy = false;
-            $("save").disabled = !canManage;
+            $("save").disabled = !canAnnotate;
+            markup?.refresh();
             inspector();
         }
+    }
+    function dxfContent() {
+        const exported=C.exportDXF(doc);
+        return exported===cadBaseline ? record.dxf : exported;
     }
     function download() {
         if (!doc) return;
         const a = document.createElement("a"),
             url = URL.createObjectURL(
-                new Blob([C.exportDXF(doc)], { type: "application/dxf" }),
+                new Blob([dxfContent()], { type: "application/dxf" }),
             );
         a.href = url;
         a.download = (record?.title || "drawing") + ".dxf";
@@ -911,10 +935,11 @@
     };
     $("fit").onclick = fit;
     $("undo").onclick = () => {
-        if(busy||gesture)return;
+        if(busy||gesture||markup?.pending())return;
         if (undo.length) {
             redo.push(C.clone(doc));
             doc = undo.pop();
+            markup?.changed();
             selected.clear();
             mark();
             layers();
@@ -922,10 +947,11 @@
         }
     };
     $("redo").onclick = () => {
-        if(busy||gesture)return;
+        if(busy||gesture||markup?.pending())return;
         if (redo.length) {
             undo.push(C.clone(doc));
             doc = redo.pop();
+            markup?.changed();
             selected.clear();
             mark();
             layers();
@@ -978,6 +1004,7 @@
 
         if(e.key==='Escape'&&gesture){e.preventDefault();cancelGesture();return;}
         if(gesture)return;
+        if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) && !((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s")) return;
         if (e.ctrlKey || e.metaKey) {
             if (e.key.toLowerCase() === "s") {
                 e.preventDefault();
@@ -1130,7 +1157,7 @@
             $('ai-connections').replaceChildren();for(const connection of aiConfig.connections||[]){const row=document.createElement('div'),label=document.createElement('span'),button=document.createElement('button');label.textContent=(connection.name||'연결')+' · '+(connection.createdAt||'');button.textContent='이 연결 해제';button.onclick=async()=>{button.disabled=true;try{await aiRequest('/connections/'+encodeURIComponent(connection.id),{method:'DELETE'},null);await stopAISharing(true,'연결을 해제하고 공유를 중지했습니다.');await configureAI();}catch(error){aiState(error.message);}finally{button.disabled=false;}};row.append(label,button);$('ai-connections').append(row);}
         }catch(error){aiConfig={available:false};$('ai-config-reason').textContent=error.message;}aiControls();
     }
-    function hashMaterial(source){return C.exportDXF(source)+'\n'+JSON.stringify({layers:source.layers,entities:source.entities.map(e=>({...e,raw:undefined,rawParts:undefined}))});}
+    function hashMaterial(source){return C.exportDXF(source)+'\n'+JSON.stringify({markups:source.markups||[],layers:source.layers,entities:source.entities.map(e=>({...e,raw:undefined,rawParts:undefined}))});}
     async function currentAIHash(){
         const source=doc,version=aiVersion;if(!source)throw Error('도면을 먼저 여세요.');if(aiHashCache?.source===source&&aiHashCache.version===version)return aiHashCache.hash;
         if(!crypto.subtle)throw Error('보안 연결에서만 CAD AI 공유를 사용할 수 있습니다.');
@@ -1148,7 +1175,7 @@
     }
     function aiPath(session){return '/sessions/'+encodeURIComponent(session.sessionId);}
     async function startAISharing(){
-        if(aiBusy||aiSession)return;if(busy||gesture||$('text-dialog').open){aiState('현재 편집을 끝낸 뒤 공유하세요.');return;}
+        if(aiBusy||aiSession)return;if(busy||gesture||markup?.pending()||$('markup-dialog').open||$('text-dialog').open){aiState('현재 편집을 끝낸 뒤 공유하세요.');return;}
         aiBusy=true;aiControls();try{const captured=await captureAI(),drawingId=record.id,allowEdits=canManage&&$('ai-allow-edits').checked;
             const result=await aiRequest('/sessions',{method:'POST',body:JSON.stringify({drawingId,revision:record.revision,context:captured.context,allowEdits})},null);
             if(doc!==captured.source||aiVersion!==captured.version||record.id!==drawingId){await aiRequest(aiPath(result),{method:'DELETE'},result);throw Error('공유 준비 중 도면이 변경되었습니다. 현재 도면을 다시 공유하세요.');}
@@ -1232,11 +1259,30 @@
 
     window.addEventListener('pagehide',()=>{const session=aiSession;if(session)fetch('/admin-api/cad/ai'+aiPath(session),{method:'DELETE',credentials:'same-origin',keepalive:true,headers:{'X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content,'X-CAD-Editor-Token':session.editorToken,Accept:'application/json'}}).catch(()=>{});});
     window.addEventListener("beforeunload", (e) => {
-        if (dirty||$('text-dialog').open) {
+        if (dirty||$('text-dialog').open||markup?.pending()) {
             e.preventDefault();
             e.returnValue = "";
         }
     });
+    markup=window.createCADMarkupTools({canvas,document:()=>doc,canManage:()=>canAnnotate,busy:()=>busy||!!gesture,
+        scale:()=>scale,world,screen,snap,render,snapshot,status,clearSnap:()=>{snapMark=null;},
+        boundary:p=>entities().filter(e=>e.type==='LWPOLYLINE'&&e.closed&&e.editable&&e.points.length<=512)
+            .map(e=>e.points.map(q=>({x:q.x,y:q.y})))
+            .filter(ps=>window.CADMarkup.validPolygon(ps)&&window.CADMarkup.inside(p,ps))
+            .sort((a,b)=>Math.abs(window.CADMarkup.signedArea(a))-Math.abs(window.CADMarkup.signedArea(b)))[0],
+        clearCAD:()=>{cancelGesture();selected.clear();points=[];hoverPoint=null;snapMark=null;setTool('select');},
+        pan:(dx,dy)=>{origin.x+=dx;origin.y+=dy;render();}});
+    $('print-markups').onclick=()=>{
+        if(!doc||busy||gesture||markup.pending())return;
+        if(!record.canExport){status('이 계정에는 문서 내보내기 권한이 없습니다.');return;}
+        try{
+            printing=true;render();
+            $('cad-print-image').src=canvas.toDataURL('image/png');
+            $('cad-print-title').textContent=record.title+' · 개정 '+record.revision+(dirty?' · 저장 전 작업':'');
+            $('cad-print-note').textContent='현재 화면 · 도면 위 표시 포함 · 축척 인쇄용 아님'+(doc.entities.some(e=>!e.editable)?' · 미지원 CAD 객체는 화면에서 생략될 수 있습니다.':'');
+            printing=false;render();window.print();
+        }catch(error){printing=false;render();fail(error);}
+    };
     new ResizeObserver(render).observe($("viewport"));
     Promise.all([
         inClaim ? api('/claim-context?lineId='+claimContext.lineId).then(context=>{
