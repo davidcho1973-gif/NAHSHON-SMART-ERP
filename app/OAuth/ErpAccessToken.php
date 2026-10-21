@@ -2,7 +2,7 @@
 
 namespace App\OAuth;
 
-use App\Support\Mcp\ErpMcpOAuth;
+use App\Support\Mcp\McpOAuth;
 use DateTimeImmutable;
 use Laravel\Passport\Bridge\AccessToken;
 use Lcobucci\JWT\Configuration;
@@ -24,7 +24,7 @@ class ErpAccessToken extends AccessToken
 
     public function toString(): string
     {
-        if (! ErpMcpOAuth::configured() || $this->getUserIdentifier() === null) {
+        if (! McpOAuth::configured() || $this->getUserIdentifier() === null) {
             throw new LogicException('ERP OAuth requires a canonical resource and a user.');
         }
         $jwt = Configuration::forAsymmetricSigner(
@@ -35,9 +35,9 @@ class ErpAccessToken extends AccessToken
         $now = new DateTimeImmutable;
 
         return $jwt->builder()
-            ->issuedBy(ErpMcpOAuth::issuer())
+            ->issuedBy(McpOAuth::issuer())
             // League/Passport reads aud[0] as the client ID. Keep that contract.
-            ->permittedFor($this->getClient()->getIdentifier(), ErpMcpOAuth::resource())
+            ->permittedFor($this->getClient()->getIdentifier(), McpOAuth::resource())
             ->identifiedBy($this->getIdentifier())
             ->issuedAt($now)->canOnlyBeUsedAfter($now)
             ->expiresAt($this->getExpiryDateTime())

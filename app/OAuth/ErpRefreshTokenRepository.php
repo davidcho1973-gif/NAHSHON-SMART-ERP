@@ -2,7 +2,7 @@
 
 namespace App\OAuth;
 
-use App\Support\Mcp\ErpMcpOAuth;
+use App\Support\Mcp\McpOAuth;
 use Laravel\Passport\Bridge\RefreshTokenRepository;
 use Laravel\Passport\Passport;
 
@@ -22,8 +22,8 @@ class ErpRefreshTokenRepository extends RefreshTokenRepository
 
             return true;
         }
-        if ($access->revoked || $access->resource !== ErpMcpOAuth::resource()
-            || $access->issuer !== ErpMcpOAuth::issuer()
+        if ($access->revoked || $access->resource !== McpOAuth::resource()
+            || $access->issuer !== McpOAuth::issuer()
             || ! $refresh->expires_at || $refresh->expires_at->isPast()) {
             return true;
         }

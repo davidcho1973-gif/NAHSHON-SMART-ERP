@@ -2,7 +2,7 @@
 
 namespace App\OAuth;
 
-use App\Support\Mcp\ErpMcpOAuth;
+use App\Support\Mcp\McpOAuth;
 use Laravel\Passport\Bridge\AuthCodeRepository;
 use Laravel\Passport\Passport;
 use League\OAuth2\Server\Entities\AuthCodeEntityInterface;
@@ -19,8 +19,8 @@ class ErpAuthCodeRepository extends AuthCodeRepository
             'scopes' => json_encode($authCodeEntity->getScopes()),
             'revoked' => false,
             'expires_at' => $authCodeEntity->getExpiryDateTime(),
-            'resource' => ErpMcpOAuth::resource(),
-            'issuer' => ErpMcpOAuth::issuer(),
+            'resource' => McpOAuth::resource(),
+            'issuer' => McpOAuth::issuer(),
             'family_id' => ErpTokenFamily::create(),
         ])->save();
     }
@@ -37,7 +37,7 @@ class ErpAuthCodeRepository extends AuthCodeRepository
 
             return true;
         }
-        if ($code->resource !== ErpMcpOAuth::resource() || $code->issuer !== ErpMcpOAuth::issuer()
+        if ($code->resource !== McpOAuth::resource() || $code->issuer !== McpOAuth::issuer()
             || ! $code->expires_at || $code->expires_at->isPast()) {
             return true;
         }

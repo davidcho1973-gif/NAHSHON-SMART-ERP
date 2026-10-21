@@ -3,7 +3,7 @@
 namespace App\OAuth;
 
 use App\Models\User;
-use App\Support\Mcp\ErpMcpOAuth;
+use App\Support\Mcp\McpOAuth;
 use Laravel\Passport\Bridge\AccessTokenRepository;
 use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
@@ -22,8 +22,8 @@ class ErpAccessTokenRepository extends AccessTokenRepository
             'scopes' => $accessTokenEntity->getScopes(),
             'revoked' => false,
             'expires_at' => $accessTokenEntity->getExpiryDateTime(),
-            'resource' => ErpMcpOAuth::resource(),
-            'issuer' => ErpMcpOAuth::issuer(),
+            'resource' => McpOAuth::resource(),
+            'issuer' => McpOAuth::issuer(),
             'family_id' => request()->attributes->get('erp_mcp_token_family'),
         ])->save();
         $this->events->dispatch(new AccessTokenCreated($id, $userId, $clientId));
@@ -32,15 +32,15 @@ class ErpAccessTokenRepository extends AccessTokenRepository
     public function getNewToken(ClientEntityInterface $clientEntity, array $scopes, ?string $userIdentifier = null): AccessTokenEntityInterface
     {
         // This applies to code exchange AND refresh, before anything is persisted.
-        if (! config('erp_mcp.enabled') || ! ErpMcpOAuth::configured()
+        if (! McpOAuth::enabled() || ! McpOAuth::configured()
             || request()->attributes->get('erp_mcp_oauth_request') !== true
             || ! is_string(request()->attributes->get('erp_mcp_token_family'))
-            || ErpMcpOAuth::client($clientEntity->getIdentifier()) === null
-            || ! ErpMcpOAuth::eligible($userIdentifier === null ? null : User::query()->find($userIdentifier))) {
+            || McpOAuth::client($clientEntity->getIdentifier()) === null
+            || ! McpOAuth::eligible($userIdentifier === null ? null : User::query()->find($userIdentifier))) {
             throw OAuthServerException::accessDenied('ERP access is no longer approved.');
         }
-        if (array_map(fn ($scope) => $scope->getIdentifier(), $scopes) !== [ErpMcpOAuth::SCOPE]) {
-            throw OAuthServerException::invalidScope(ErpMcpOAuth::SCOPE);
+        if (array_map(fn ($scope) => $scope->getIdentifier(), $scopes) !== [McpOAuth::scope()]) {
+            throw OAuthServerException::invalidScope(McpOAuth::scope());
         }
 
         return parent::getNewToken($clientEntity, $scopes, $userIdentifier);

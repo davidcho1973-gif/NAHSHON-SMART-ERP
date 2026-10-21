@@ -167,3 +167,12 @@ body.claim-linked main {height:calc(100dvh - 205px);}
 #text-dialog textarea {width:100%;font:inherit;background:#101827;color:#fff;border:1px solid #40516c;padding:10px;resize:vertical;}
 #text-dialog-error {color:#ffbd95;}
 #text-properties textarea {width:100%;font:inherit;background:#101827;color:#fff;}
+
+#ai-panel {position:fixed;right:12px;top:72px;bottom:40px;width:min(470px,calc(100vw - 24px));z-index:10;background:#172237;border:1px solid #6b9cbb;border-radius:10px;padding:18px;overflow:auto;box-shadow:0 8px 35px #0008;}
+#ai-panel[hidden] {display:none;}
+#ai-panel label {display:block;margin:12px 0;}
+#ai-panel input:not([type=checkbox]),#ai-panel select {display:block;width:100%;margin-top:5px;}
+#ai-panel p {color:#bfd0e5;}
+#ai-panel button {margin:4px 4px 4px 0;}
+.ai-command {border:1px solid #426080;border-radius:7px;padding:10px;margin:8px 0;}
+.ai-command pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;background:#101827;padding:8px;}

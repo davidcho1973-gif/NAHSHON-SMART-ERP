@@ -72,13 +72,16 @@ Route::get('/manager-invitation/{token}', [ManagerInvitationController::class, '
 Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::class, 'verify'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.verify');
 Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
 use App\Http\Controllers\AssistantWorkspaceController;
+use App\Http\Controllers\CadDrawingController;
 use App\Http\Controllers\ClaimEvidenceFileController;
 use App\Http\Controllers\ClaimRecordReportController;
 use App\Http\Controllers\DrawingStudioController;
 use App\Http\Controllers\FieldClaimController;
 use App\Http\Controllers\JobApprovalController;
 use App\Http\Controllers\JobWorkspaceController;
+use App\Http\Controllers\Mcp\CadConnectionController;
 use App\Http\Controllers\PersonalPayslipController;
+use App\Http\Middleware\RequireCadAiActor;
 use App\Support\Org;
 use App\Support\QueueHealth;
 use App\Support\UploadLimits;
@@ -344,8 +347,13 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/share', 'share')->middleware('throttle:10,1');
     });
 
-    Route::get('/cad', [\App\Http\Controllers\CadDrawingController::class, 'index'])->name('cad.index');
-    Route::prefix('admin-api/cad')->controller(\App\Http\Controllers\CadDrawingController::class)->group(function (): void {
+    Route::get('/cad', [CadDrawingController::class, 'index'])->name('cad.index');
+    Route::middleware(RequireCadAiActor::class)->group(function (): void {
+        Route::get('/admin-api/cad/ai/config', [CadConnectionController::class, 'config']);
+        Route::delete('/admin-api/cad/ai/connections/{connection}', [CadConnectionController::class, 'revoke'])->whereUuid('connection');
+        require __DIR__.'/cad_ai.php';
+    });
+    Route::prefix('admin-api/cad')->controller(CadDrawingController::class)->group(function (): void {
         Route::get('/', 'drawings');
         Route::get('/capabilities', 'capabilities');
         Route::get('/claim-context', 'claimContext');

@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Support\Mcp\ErpMcpOAuth;
+use App\Support\Mcp\McpOAuth;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,10 +12,10 @@ class ValidateErpMcpOAuthRequest
 {
     public function handle(Request $request, Closure $next, string $stage): Response
     {
-        if ($request->input('resource') !== ErpMcpOAuth::resource()) {
+        if ($request->input('resource') !== McpOAuth::resource()) {
             return $this->error('invalid_target', 'The exact ERP MCP resource is required.');
         }
-        $client = ErpMcpOAuth::client($request->input('client_id'));
+        $client = McpOAuth::client($request->input('client_id'));
         if (! $client || $request->has('client_secret') || $request->header('Authorization') !== null) {
             return $this->error('invalid_client', 'An approved public client is required.');
         }
@@ -24,13 +24,13 @@ class ValidateErpMcpOAuthRequest
             return $this->error('unsupported_grant_type', 'Only authorization code and refresh grants are supported.');
         }
         if (($stage === 'authorize' || $grant === 'authorization_code')
-            && ! ErpMcpOAuth::validRedirect($client, $request->input('redirect_uri'))) {
+            && ! McpOAuth::validRedirect($client, $request->input('redirect_uri'))) {
             return $this->error('invalid_request', 'The redirect URI must exactly match the registered HTTPS callback.');
         }
         $scope = $request->input('scope');
-        if (($stage === 'authorize' && $scope !== ErpMcpOAuth::SCOPE)
-            || ($stage === 'token' && $scope !== null && $scope !== ErpMcpOAuth::SCOPE)) {
-            return $this->error('invalid_scope', 'Only erp:read is supported.');
+        if (($stage === 'authorize' && $scope !== McpOAuth::scope())
+            || ($stage === 'token' && $scope !== null && $scope !== McpOAuth::scope())) {
+            return $this->error('invalid_scope', 'Only '.McpOAuth::scope().' is supported.');
         }
         if ($stage === 'authorize') {
             if ($request->input('response_type') !== 'code'
@@ -48,8 +48,8 @@ class ValidateErpMcpOAuthRequest
                     'auth_token' => $request->session()->get('authToken'),
                     'user_id' => (string) $request->user('web')->getAuthIdentifier(),
                     'client_id' => $client->getKey(),
-                    'resource' => ErpMcpOAuth::resource(),
-                    'issuer' => ErpMcpOAuth::issuer(),
+                    'resource' => McpOAuth::resource(),
+                    'issuer' => McpOAuth::issuer(),
                     'expires_at' => now()->addMinutes(10)->getTimestamp(),
                 ]);
             }

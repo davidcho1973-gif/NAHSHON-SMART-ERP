@@ -42,6 +42,13 @@ final class JobEndpointPolicy
         $route = $request->route();
         $controller = class_basename(explode('@', $route?->getActionName() ?? '')[0]);
         $action = explode('@', $route?->getActionName() ?? '')[1] ?? '__invoke';
+        if (in_array($controller, ['CadAiSessionController', 'CadConnectionController'], true)
+            || ($request->is('oauth/cad/authorize') && in_array($controller,
+                ['CadOAuthController'], true))) {
+            // These endpoints manage the actor's connection/session, not a saved drawing.
+            // CAD service checks document export and editing separately for each operation.
+            return ['progress', 'view'];
+        }
         if ($controller === 'SmartCompanyApiController') {
             return self::legacy((string) $route->parameter('method'), (array) $request->input('args', []));
         }
