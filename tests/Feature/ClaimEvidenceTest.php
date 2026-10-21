@@ -16,6 +16,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkSection;
 use App\Services\Admin\BillingAdminService;
+use App\Services\Documents\DocumentIntake;
 use App\Services\Drawings\SectionDrawingService;
 use App\Services\Finance\ClaimEditingService;
 use App\Services\Finance\ClaimEvidenceService;
@@ -24,6 +25,7 @@ use App\Services\Ocr\OcrEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -63,6 +65,91 @@ class ClaimEvidenceTest extends TestCase
     private function svc(): ClaimEvidenceService
     {
         return app(ClaimEvidenceService::class);
+    }
+
+    public function test_lost_draft_acknowledgement_can_be_retried_without_overwriting_a_newer_version(): void
+    {
+        $line = $this->line();
+        $editor = app(ClaimEditingService::class);
+        $input = ['lineId' => $line->id, 'revision' => 0, 'requestId' => (string) Str::uuid(), 'content' => ['notes' => 'Original']];
+        $first = $editor->save($input);
+        $this->assertTrue($first['success']);
+        $this->assertEquals($first, $editor->save($input));
+        $next = $editor->save(['lineId' => $line->id, 'revision' => 1, 'requestId' => (string) Str::uuid(), 'content' => ['notes' => 'Other tab']]);
+        $this->assertTrue($next['success']);
+        $this->assertEquals($first, $editor->save($input));
+        $this->assertSame('Other tab', ClaimEditDraft::first()->content['notes']);
+        $conflict = $editor->save(['lineId' => $line->id, 'revision' => 1, 'requestId' => (string) Str::uuid(), 'content' => ['notes' => 'Stale edit']]);
+        $this->assertSame('draft_conflict', $conflict['code']);
+        $this->assertSame('Other tab', $conflict['currentDraft']['content']['notes']);
+        $input['content']['notes'] = 'Changed request';
+        $this->assertFalse($editor->save($input)['success']);
+    }
+
+    public function test_all_draft_versions_survive_the_compact_history_limit_and_long_notes_are_not_cut(): void
+    {
+        $line = $this->line();
+        $editor = app(ClaimEditingService::class);
+        for ($i = 0; $i < 52; $i++) {
+            $saved = $editor->save(['lineId' => $line->id, 'revision' => $i, 'content' => ['notes' => 'Revision '.$i]]);
+            $this->assertTrue($saved['success']);
+        }
+        $this->assertCount(50, ClaimEditDraft::first()->history);
+        $this->assertDatabaseCount('claim_draft_revisions', 52);
+        $original = DB::table('claim_draft_revisions')->where('revision', 1)->value('content');
+        $this->assertSame('Revision 0', json_decode($original, true)['notes']);
+        $saved = $editor->save(['lineId' => $line->id, 'revision' => 52, 'content' => ['notes' => str_repeat('한', 6000)]]);
+        $this->assertSame(str_repeat('한', 6000), $saved['draft']['content']['notes']);
+        $bad = $editor->save(['lineId' => $line->id, 'revision' => 53, 'content' => ['notes' => str_repeat('한', 10001)]]);
+        $this->assertFalse($bad['success']);
+        $this->assertEquals(53, ClaimEditDraft::first()->revision);
+    }
+
+    public function test_record_retries_are_idempotent_and_stale_edit_and_review_do_not_replace_saved_data(): void
+    {
+        $line = $this->line();
+        $input = ['lineId' => $line->id, 'requestId' => (string) Str::uuid(), 'workDate' => '2026-09-20', 'location' => 'Grid A',
+            'stage' => 'installed', 'reportedQty' => 20, 'evidence' => [['type' => 'document', 'id' => $this->document->id, 'locator' => 'p.1']]];
+        $first = $this->svc()->saveRecord($input);
+        $this->assertTrue($first['success'], $first['error'] ?? '');
+        $this->assertEquals($first, $this->svc()->saveRecord($input));
+        $this->assertDatabaseCount('claim_work_records', 1);
+        $edited = $this->svc()->saveRecord(['id' => $first['id'], 'expectedRevision' => 1, 'notes' => 'New note', 'evidence' => []]);
+        $this->assertTrue($edited['success']);
+        $record = ClaimWorkRecord::findOrFail($first['id']);
+        $this->assertEquals($this->document->id, $record->review_history[0]['previous']['evidence'][0]['id']);
+        $this->assertFalse($this->svc()->saveRecord(['id' => $first['id'], 'expectedRevision' => 1, 'notes' => 'Stale'])['success']);
+        $this->assertFalse($this->svc()->reviewRecord(['id' => $first['id'], 'expectedRevision' => 1, 'action' => 'reject', 'reviewNote' => 'Stale review'])['success']);
+        $review = ['id' => $first['id'], 'expectedRevision' => 2, 'requestId' => (string) Str::uuid(), 'action' => 'reject', 'reviewNote' => 'Need proof'];
+        $result = $this->svc()->reviewRecord($review);
+        $this->assertTrue($result['success']);
+        $this->assertEquals($result, $this->svc()->reviewRecord($review));
+        $this->assertCount(2, $record->fresh()->review_history);
+    }
+
+    public function test_evidence_upload_is_not_acknowledged_when_the_saved_bytes_are_different(): void
+    {
+        config(['document-intelligence.disk' => 'local']);
+        Queue::fake();
+        $disk = \Mockery::mock(Storage::disk('local'));
+        $disk->shouldReceive('readStream')->once()->andReturnUsing(function () {
+            $stream = fopen('php://temp', 'r+');
+            fwrite($stream, 'corrupt bytes');
+            rewind($stream);
+
+            return $stream;
+        });
+        Storage::shouldReceive('disk')->with('local')->andReturn($disk);
+        $before = IntelligentDocument::count();
+        $result = app(DocumentIntake::class)->ingest(
+            UploadedFile::fake()->createWithContent('proof.pdf', '%PDF Original proof'),
+            ['company_id' => $this->contract->company_id, 'site_id' => $this->contract->site_id, 'project_id' => $this->contract->project_id],
+            ['source' => 'claim_evidence', 'uploaded_by' => $this->actor->id, 'project_contract_id' => $this->contract->id]
+        );
+        $this->assertSame('failed', $result['status']);
+        $this->assertNull($result['document']);
+        $this->assertSame($before, IntelligentDocument::count());
+        Queue::assertNothingPushed();
     }
 
     public function test_child_process_drawing_selection_is_independent_and_scoped(): void

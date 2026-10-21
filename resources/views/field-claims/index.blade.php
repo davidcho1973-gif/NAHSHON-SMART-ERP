@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="save-user" content="{{ auth()->id() }}">
+    <script defer src="{{ asset('js/claim-save-safety.js') }}?v={{ filemtime(public_path('js/claim-save-safety.js')) }}"></script>
     <title>담당 공정 작업 · {{ \App\Support\Org::name() }}</title>
     <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
     <link rel="stylesheet" href="{{ asset('css/field-claims.css') }}?v={{ filemtime(public_path('css/field-claims.css')) }}">
