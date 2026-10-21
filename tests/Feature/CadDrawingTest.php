@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Drawings\CadConverter;
+use App\Support\Org;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -38,6 +39,64 @@ class CadDrawingTest extends TestCase
     private function upload(string $bytes = self::DXF, string $name = 'plan.dxf')
     {
         return $this->postJson('/admin-api/cad', ['site_id' => $this->site->id, 'title' => 'Plan', 'file' => UploadedFile::fake()->createWithContent($name, $bytes)]);
+    }
+
+    private function markup(): array
+    {
+        return ['id' => 'area-1', 'kind' => 'area', 'points' => [['x' => 1, 'y' => 2], ['x' => 30, 'y' => 2], ['x' => 30, 'y' => 20]],
+            'color' => '#38bdf8', 'opacity' => 0.35, 'width' => 2, 'size' => 8, 'pattern' => 'diagonal', 'text' => '', 'locked' => false];
+    }
+
+    public function test_cad_workspace_uses_the_current_organization_name(): void
+    {
+        config(['org.name' => 'SYNTHETIC WORKS']);
+        Org::forget();
+        $this->get('/cad')->assertOk()->assertSee('SYNTHETIC WORKS · CAD 도면 편집', false)
+            ->assertSee('title="SYNTHETIC WORKS"', false);
+        Org::forget();
+    }
+
+    public function test_markups_share_immutable_revisions_without_changing_original_or_dxf(): void
+    {
+        $id = $this->upload()->assertJsonPath('markups', [])->json('id');
+        $url = '/admin-api/cad/'.$id;
+        $marks = [$this->markup()];
+        $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'markups' => $marks])->assertOk()
+            ->assertJsonPath('markups.0.color', '#38bdf8')->assertJsonPath('dxf', self::DXF)->assertJsonPath('canExport', true);
+        $this->getJson($url.'/history?revision=1')->assertJsonPath('markups', []);
+        $this->getJson($url.'/history?revision=2')->assertJsonPath('markups.0.pattern', 'diagonal')->assertJsonPath('canManage', false);
+        // A stale write cannot replace either the drawing or its annotations.
+        $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'markups' => []])->assertConflict();
+        // A pre-markup client preserves the previous overlay by omitting the new field.
+        $this->putJson($url, ['revision' => 2, 'dxf' => self::DXF])->assertOk()->assertJsonPath('markups.0.id', 'area-1');
+        $this->get($url.'/download?format=original')->assertStreamedContent(self::DXF);
+        $this->get($url.'/download?format=dxf')->assertContent(self::DXF);
+        $this->putJson($url, ['revision' => 3, 'dxf' => self::DXF, 'markups' => []])->assertOk()->assertJsonPath('markups', []);
+        $this->getJson($url.'/history?revision=2')->assertJsonPath('markups.0.id', 'area-1');
+    }
+
+    public function test_invalid_overlay_payloads_never_create_a_revision(): void
+    {
+        $id = $this->upload()->json('id');
+        $mark = $this->markup();
+        $invalid = [
+            [array_replace($mark, ['kind' => 'script'])],
+            [array_replace($mark, ['color' => 'url(https://example.test)'])],
+            [array_replace($mark, ['points' => [['x' => 1e20, 'y' => 0]]])],
+            [array_replace($mark, ['size' => 0])],
+            [array_replace($mark, ['kind' => 'cloud', 'points' => array_fill(0, 3, ['x' => 0, 'y' => 0])])],
+            [array_replace($mark, ['opacity' => 2])],
+            [array_replace($mark, ['text' => str_repeat('x', 501)])],
+            [$mark, $mark],
+            [array_replace($mark, ['html' => '<script>bad</script>'])],
+            ['not-a-list' => $mark],
+        ];
+        foreach ($invalid as $marks) {
+            $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF, 'markups' => $marks])->assertUnprocessable();
+        }
+        $this->assertDatabaseCount('cad_drawing_revisions', 1);
+        $viewer = User::factory()->create(['access_role' => 'payroll', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($viewer)->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$mark]])->assertForbidden();
     }
 
     public function test_import_save_history_conflict_and_private_downloads_preserve_original(): void

@@ -62,22 +62,22 @@ class CadDrawingController extends Controller
         $data = $request->validate(['file' => 'required|file|max:20480', 'site_id' => 'required|integer', 'title' => 'required|string|max:255']);
         $drawing = $this->cad->import($request->user(), Site::findOrFail($data['site_id']), $request->file('file'), $data['title']);
 
-        return response()->json($this->cad->read($drawing) + ['canManage' => true], 201);
+        return response()->json($this->cad->read($drawing) + ['canManage' => true, 'canExport' => $this->cad->canExport($request->user())], 201);
     }
 
     public function show(Request $request, CadDrawing $drawing)
     {
         $this->cad->access($request->user(), $drawing);
 
-        return response()->json($this->cad->read($drawing) + ['canManage' => $this->cad->canManage($request->user())]);
+        return response()->json($this->cad->read($drawing) + ['canManage' => $this->cad->canManage($request->user()), 'canExport' => $this->cad->canExport($request->user())]);
     }
 
     public function update(Request $request, CadDrawing $drawing)
     {
         $this->cad->access($request->user(), $drawing, true);
-        $data = $request->validate(['revision' => 'required|integer|min:1', 'dxf' => 'required|string']);
+        $data = $request->validate(['revision' => 'required|integer|min:1', 'dxf' => 'required|string', 'markups' => 'sometimes|present|array|max:1000']);
 
-        return response()->json($this->cad->save($request->user(), $drawing, $data['revision'], $data['dxf']));
+        return response()->json($this->cad->save($request->user(), $drawing, $data['revision'], $data['dxf'], $data['markups'] ?? null));
     }
 
     public function history(Request $request, CadDrawing $drawing)
@@ -85,7 +85,7 @@ class CadDrawingController extends Controller
         $this->cad->access($request->user(), $drawing);
         $data = $request->validate(['revision' => 'nullable|integer|min:1']);
         if (isset($data['revision'])) {
-            return response()->json($this->cad->read($drawing, $data['revision']) + ['canManage' => false]);
+            return response()->json($this->cad->read($drawing, $data['revision']) + ['canManage' => false, 'canExport' => $this->cad->canExport($request->user())]);
         }
 
         return response()->json(['revisions' => $drawing->revisions()->orderByDesc('revision')->get(['revision', 'created_by', 'created_at', 'warnings'])]);

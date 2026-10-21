@@ -167,3 +167,74 @@ body.claim-linked main {height:calc(100dvh - 205px);}
 #text-dialog textarea {width:100%;font:inherit;background:#101827;color:#fff;border:1px solid #40516c;padding:10px;resize:vertical;}
 #text-dialog-error {color:#ffbd95;}
 #text-properties textarea {width:100%;font:inherit;background:#101827;color:#fff;}
+
+/* Drawing Studio: one task surface, with an explicit original-CAD workspace. */
+body {height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:#0d1625;}
+header {padding:10px 16px;gap:8px;border-bottom:1px solid #2d3b50;background:#172336;flex:none;}
+.brand {font-size:14px;letter-spacing:.08em;white-space:nowrap;margin-right:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;}
+.brand span {display:block;font-size:10px;color:#9baec7;letter-spacing:.04em;font-weight:400;}
+header button,header .button {font-size:12px;}
+#save {background:#167e97;border-color:#259bb4;font-weight:600;}
+#drawings {max-width:260px;}
+#capability {padding:4px 16px;color:#91a6bf;font-size:11px;background:#111d2e;flex:none;}
+.workspace-bar {display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:9px 16px;background:#101b2c;border-bottom:1px solid #2a3a50;flex:none;}
+.workspace-bar label {margin-left:auto;white-space:nowrap;font-size:12px;}
+.mode-switch {display:flex;padding:3px;background:#0b1422;border:1px solid #2a3a50;border-radius:8px;gap:3px;}
+.mode-switch button {border:0;background:transparent;padding:7px 14px;color:#9fb0c7;}
+.mode-switch button[aria-pressed=true] {background:#263c52;color:#d6f6ff;box-shadow:inset 0 0 0 1px #3d677d;}
+main,body.claim-linked main {height:auto;min-height:0;flex:1;grid-template-columns:186px minmax(180px,1fr) 254px;grid-template-rows:minmax(0,1fr);}
+aside {padding:16px 12px;background:#142033;scrollbar-width:thin;scrollbar-color:#40526b transparent;}
+#tools {border-right:1px solid #2a3a50;}
+#properties {border-left:1px solid #2a3a50;}
+.panel-eyebrow {font-size:9px;letter-spacing:.14em;color:#758ba5;margin-bottom:6px;}
+h2 {font-size:13px;color:#d1e4f5;margin:6px 0 12px;font-weight:600;}
+#markup-tools {display:grid;gap:5px;margin-bottom:16px;}
+#markup-tools button {text-align:left;padding:10px 12px;background:#1b2c43;border:1px solid #304259;border-radius:7px;}
+#markup-tools button[aria-pressed=true] {color:#b4f2ff;background:#17445a;border-color:#2b95ae;box-shadow:inset 3px 0 #67d5ed;}
+button:hover:not(:disabled) {filter:brightness(1.17);}
+.markup-palette {display:flex;gap:8px;margin:12px 0 16px;}
+.markup-palette button {width:30px;height:30px;border-radius:50%;border:3px solid #22344a;box-shadow:0 0 0 1px #40536c;padding:0;}
+[data-markup-color="#38bdf8"] {background:#38bdf8;}[data-markup-color="#34d399"] {background:#34d399;}[data-markup-color="#fbbf24"] {background:#fbbf24;}[data-markup-color="#fb7185"] {background:#fb7185;}[data-markup-color="#a78bfa"] {background:#a78bfa;}
+#properties label {font-size:12px;color:#b3c3d8;margin:12px 0;}
+#properties select,#properties input[type=range] {display:block;width:100%;margin-top:5px;}
+.property-row {display:flex;align-items:center;justify-content:space-between;}
+input[type=color] {width:48px;height:30px;padding:3px;cursor:pointer;}
+input[type=range] {accent-color:#4dbbd3;padding:0;}
+output {float:right;color:#e0f7ff;font-variant-numeric:tabular-nums;}
+.action-grid {display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:14px 0;}
+.action-grid button {font-size:12px;min-height:34px;}
+.danger {color:#fda4af;}
+.preset-panel,.drawing-info {border-top:1px solid #304057;margin-top:18px;padding:14px 0;font-size:12px;}
+summary {cursor:pointer;color:#a8c3da;}
+#markup-preset-name {margin-top:8px;width:100%;}
+#markup-list {display:grid;gap:4px;max-height:280px;overflow:auto;margin-bottom:16px;}
+.markup-list-item {display:flex;gap:8px;align-items:center;text-align:left;font-size:11px;background:#18283c;padding:8px;min-width:0;}
+.markup-list-item span:last-child {white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.markup-list-item[aria-pressed=true] {border-color:#59b8cf;background:#234157;}
+.markup-swatch {width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+#markup-count {color:#9bb0c8;font-size:11px;}
+#tools>.note {font-size:11px;}
+#tools>button {margin-bottom:5px;font-size:11px;}
+#hint {font-size:11px;line-height:1.6;max-width:calc(100% - 24px);left:12px;bottom:12px;border:1px solid #35475e;border-radius:6px;padding:8px 12px;background:#142033e8;}
+footer {font-size:12px;min-height:32px;flex:none;border-top:1px solid #2d3d53;}
+body[data-workspace=markup] .cad-only,body[data-workspace=cad] .markup-only {display:none;}
+#markup-dialog {width:min(520px,94vw);padding:24px;border:1px solid #4c7892;border-radius:12px;color:#e2e8f0;background:#17263a;}
+#markup-dialog::backdrop {background:#050c18aa;}
+#markup-dialog-text {display:block;width:100%;margin:12px 0;padding:12px;resize:vertical;font:inherit;line-height:1.6;background:#0f1b2c;color:#fff;border:1px solid #48617b;border-radius:6px;}
+#markup-dialog-error {color:#fda4af;}
+.dialog-actions {display:flex;gap:10px;justify-content:flex-end;}
+#markup-dialog-confirm {background:#157c93;}
+#cad-print {display:none;}
+#drawing-fidelity {position:absolute;top:12px;right:12px;max-width:75%;font-size:11px;padding:5px 8px;color:#f6cf76;background:#302c22e8;border-color:#6d6040;}
+#drawing-fidelity[hidden] {display:none;}
+@media(max-width:1100px){main,body.claim-linked main{grid-template-columns:152px minmax(180px,1fr) 220px;}header{padding:8px;}header .brand{margin-right:0;}header button{font-size:11px;}#drawings{max-width:200px;}.workspace-bar>.note{display:none;}.markup-palette{gap:7px;}.markup-palette button{width:27px;height:27px;}}
+@media(max-width:720px){body{height:auto;min-height:100dvh;overflow:auto;}main,body.claim-linked main{min-height:700px;grid-template-columns:120px minmax(160px,1fr);grid-template-rows:440px auto;}main>#properties{grid-column:1/-1;max-height:none;overflow:visible;border-top:1px solid #304259;}#markup-list{max-height:180px;}.workspace-bar{padding:8px;gap:8px;}header{gap:5px;}.brand span{display:none;}#tools{padding:12px 7px;}#markup-tools button{padding:9px 6px;font-size:11px;}#hint{font-size:10px;padding:5px;}header select{max-width:140px;}#properties .markup-only{max-width:520px;margin:auto;}}
+@media print {
+    @page {size:landscape;margin:12mm;}
+    body{display:block;height:auto;overflow:visible;background:#fff;color:#111;}
+    body>*{display:none!important;}
+    body>#cad-print{display:block!important;}
+    #cad-print h1{font-size:14pt;margin:0 0 6mm;}
+    #cad-print img{display:block;max-width:100%;max-height:160mm;object-fit:contain;margin:auto;}
+    #cad-print p{font-size:9pt;color:#475569;}
+}

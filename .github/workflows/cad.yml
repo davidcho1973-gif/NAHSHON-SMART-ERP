@@ -11,6 +11,7 @@ on:
       - 'tests/Fixtures/cad-presentation.*'
       - 'tests/cad-converter/**'
       - 'tests/js/cad-core.test.mjs'
+      - 'tests/js/cad-markup.test.mjs'
       - 'scripts/test-cad-roundtrip.mjs'
       - 'scripts/build-cad-converter.sh'
       - '.github/workflows/cad.yml'
@@ -59,6 +60,7 @@ jobs:
       - name: Browser geometry and DWG bytes roundtrip
         run: |
           node --test tests/js/cad-core.test.mjs
+          node --test tests/js/cad-markup.test.mjs
           node scripts/test-cad-roundtrip.mjs "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll" "$RUNNER_TEMP/cad-roundtrip"
       - name: Real duplicate book colors and conflicting RGB rejection
         run: dotnet run --project tests/cad-converter/CadCompatibilityTests.csproj -c Release -- "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll"
