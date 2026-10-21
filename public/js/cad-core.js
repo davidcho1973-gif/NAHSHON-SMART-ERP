@@ -19,6 +19,8 @@
         "POINT",
     ]);
 
+    function canonicalLineType(value){const upper=String(value).toUpperCase();return ['BYLAYER','BYBLOCK','CONTINUOUS'].includes(upper)?upper:String(value);}
+    function decodeUnicode(value){return String(value).replace(/\\U\+([0-9a-f]{4})/gi,(_,h)=>String.fromCharCode(parseInt(h,16)));}
     function uid(){return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2);}
     function plainMText(value){let safe=!/[{}\\]/.test(value.replace(/\\(?:P|\\|{|})/g,''));return {safe,text:value.replace(/\\(P|\\|{|})/g,(_,token)=>token==='P'?'\n':token)};}
     function encodeMText(value){return String(value).replace(/\\/g,'\\\\').replace(/{/g,'\\{').replace(/}/g,'\\}').replace(/\r?\n/g,'\\P');}
@@ -43,7 +45,7 @@
         const l=dimensionLayout(e),length=e.height*.3,tick=p=>({p:{x:p.x-(l.u.x+l.n.x)*length,y:p.y-(l.u.y+l.n.y)*length},q:{x:p.x+(l.u.x+l.n.x)*length,y:p.y+(l.u.y+l.n.y)*length}});
         const shapes=[['LINE',{p:e.p,q:l.a}],['LINE',{p:e.q,q:l.b}],['LINE',{p:l.a,q:l.b}],['LINE',tick(l.a)],['LINE',tick(l.b)],['TEXT',{p:l.text,text:l.label,height:e.height,angle:l.angle}]];
         return shapes.map(([type,shape],index)=>{
-            const payload=JSON.stringify({v:1,group:e.groupId,part:index,a:e.p,b:e.q,placement:e.placement,textPosition:e.textPosition||null,mode:e.mode,axis:e.axis||null,height:e.height,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',layer:e.layer});
+            const payload=JSON.stringify({v:1,group:e.groupId,part:index,a:e.p,b:e.q,placement:e.placement,textPosition:e.textPosition||null,mode:e.mode,axis:e.axis||null,height:e.height,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',layer:e.layer}).replace(/[^\x00-\x7f]/g,character=>'\\u'+character.charCodeAt(0).toString(16).padStart(4,'0'));
             let raw=e.rawParts?.[index]?clone(e.rawParts[index]):null;
             if(raw){const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_DIM');if(at>=0){let end=at+1;while(end<raw.length&&raw[end][0]!==1001)end++;raw.splice(at,end-at);}}
             if(!raw)raw=[[0,type],[100,'AcDbEntity'],[8,e.layer],[100,type==='LINE'?'AcDbLine':'AcDbText']];
@@ -61,7 +63,7 @@
             if(!['aligned','horizontal','vertical'].includes(m.mode)||!Number.isFinite(m.height)||m.height<=0||entries.some(x=>JSON.stringify({...x.m,part:0})!==JSON.stringify({...m,part:0})))continue;
             const e=newDimension(m.a,m.b,m.placement,{id:'dim-'+group,groupId:group,mode:m.mode,axis:m.axis||undefined,textPosition:m.textPosition,height:m.height,color:m.color,lineWeight:m.lineWeight,lineType:m.lineType||'BYLAYER',layer:m.layer});
             const expected=dimensionParts(e),near=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=Math.max(1,Math.abs(a),Math.abs(b))*1e-8;
-            if(entries.some(({e:actual},i)=>{const wanted=expected[i];return !actual.editable||actual.type!==wanted.type||actual.layer!==wanted.layer||actual.color!==wanted.color||actual.lineWeight!==wanted.lineWeight||actual.lineType!==wanted.lineType||!near(actual.p.x,wanted.p.x)||!near(actual.p.y,wanted.p.y)||(actual.type==='LINE'? !near(actual.q.x,wanted.q.x)||!near(actual.q.y,wanted.q.y):actual.text!==wanted.text||!near(actual.height,wanted.height)||Math.abs(((actual.angle-wanted.angle+180)%360+360)%360-180)>1e-8);}))continue;
+            if(entries.some(({e:actual},i)=>{const wanted=expected[i];return !actual.editable||actual.type!==wanted.type||actual.layer!==wanted.layer||actual.color!==wanted.color||actual.lineWeight!==wanted.lineWeight||canonicalLineType(actual.lineType)!==canonicalLineType(wanted.lineType)||!near(actual.p.x,wanted.p.x)||!near(actual.p.y,wanted.p.y)||(actual.type==='LINE'? !near(actual.q.x,wanted.q.x)||!near(actual.q.y,wanted.q.y):actual.text!==wanted.text||!near(actual.height,wanted.height)||Math.abs(((actual.angle-wanted.angle+180)%360+360)%360-180)>1e-8);}))continue;
             e.dirty=false;e.rawParts=entries.map(x=>x.e.raw);replace.set(entries[0].e.id,e);entries.slice(1).forEach(x=>remove.add(x.e.id));
         }catch(_){}}
         doc.entities=doc.entities.filter(e=>!remove.has(e.id)).map(e=>replace.get(e.id)||e);return doc;
@@ -122,7 +124,7 @@
                 e = {
                     id: "e" + doc.entities.length,
                     type,
-                    layer: val(r, 8, "0"),
+                    layer: decodeUnicode(val(r, 8, "0")),
                     raw: r,
                     dirty: false,
                     editable: supported.has(type) && num(r, 67) === 0,
@@ -229,7 +231,7 @@
                 let j = k + 1;
                 while (j < pairs.length && pairs[j][0] !== 0) j++;
                 const r = pairs.slice(k, j),
-                    name = val(r, 2),
+                    name = decodeUnicode(val(r, 2)),
                     color = num(r, 62, 7);
                 if (name)
                     doc.layers[name] = {
@@ -532,7 +534,7 @@
                     if (prefix[i][0] === 0 && prefix[i][1] === "LAYER") {
                         let j = i + 1;
                         while (j < end && prefix[j][0] !== 0) j++;
-                        if (val(prefix.slice(i, j), 2) === name) {
+                        if (decodeUnicode(val(prefix.slice(i, j), 2)) === name) {
                             r = clone(prefix.slice(i, j));
                             break;
                         }
@@ -898,6 +900,7 @@
         for (const entity of doc.entities)
             if (entity.layer === old) {
                 entity.layer = name;
+                if(entity.type==='ERP_DIMENSION')entity.dirty=true;
                 const pair = entity.raw?.find((p) => p[0] === 8);
                 if (pair) pair[1] = name;
             }
@@ -907,7 +910,7 @@
                 pair[0] === 9 &&
                 pair[1] === "$CLAYER" &&
                 doc.prefix[i + 1]?.[0] === 8 &&
-                doc.prefix[i + 1][1] === old
+                decodeUnicode(doc.prefix[i + 1][1]) === old
             )
                 doc.prefix[i + 1][1] = name;
             if (pair[0] === 0 && pair[1] === "LAYER") {
@@ -916,7 +919,7 @@
                     j < doc.prefix.length && doc.prefix[j][0] !== 0;
                     j++
                 )
-                    if (doc.prefix[j][0] === 2 && doc.prefix[j][1] === old)
+                    if (doc.prefix[j][0] === 2 && decodeUnicode(doc.prefix[j][1]) === old)
                         doc.prefix[j][1] = name;
             }
         }

@@ -76,7 +76,7 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   await page.locator('#entity-color').fill('#8844ee');await page.locator('#entity-width').fill('0.7');await page.locator('#apply-style').click();await save();
   rect=one('LWPOLYLINE');assert.equal(rect.color,0x8844ee);assert.equal(rect.lineWeight,70);assert.equal(one('LINE').color,0xff6600);
   // Text defaults are separate from selection edits, including rotation preservation.
-  await page.locator('#default-text').fill('기성 확인');await page.locator('#default-text-height').fill('4');await page.locator('#default-text-color').fill('#ffee44');await page.locator('#angle').fill('15');
+  await page.locator('#default-text-height').fill('4');await page.locator('#default-text-color').fill('#ffee44');await page.locator('#angle').fill('15');
   await tool('text');await click(25,20);await page.locator('#text-dialog-content').fill('기성 확인');await page.locator('#text-dialog-confirm').click();await save();let text=one('MTEXT');assert.equal(text.text,'기성 확인');assert.equal(text.height,4);assert.equal(text.color,0xffee44);near(text.angle,15);
   assert.equal(await page.locator('#text').inputValue(),'기성 확인');assert.equal(await page.locator('#height').inputValue(),'4');
   await page.locator('#text').fill('수정 완료');await page.locator('#height').fill('6');await page.locator('#text-color').fill('#00aaff');await page.locator('#apply-text').click();await save();

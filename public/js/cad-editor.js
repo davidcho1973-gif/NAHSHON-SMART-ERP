@@ -496,9 +496,6 @@
             rectangle: 2,
             circle: 2,
             arc: 3,
-            text: 1,
-            dimension: 2,
-            measure: 2,
             move: 2,
             copy: 2,
             rotate: 1,
@@ -510,23 +507,8 @@
             return;
         }
         const [a, b, c] = points;
-        if (tool === "measure") {
-            status(
-                "거리 " +
-                    C.distance(a, b).toFixed(6) +
-                    " 도면 단위 · ΔX " +
-                    (b.x - a.x).toFixed(6) +
-                    " · ΔY " +
-                    (b.y - a.y).toFixed(6),
-            );
-            points = [];
-            render();
-            return;
-        }
-        const h = Number($("default-text-height").value),
-            angle = Number($("angle").value),
-            factor = Number($("factor").value);
-        if((['text','dimension'].includes(tool)&&(!Number.isFinite(h)||h<=0))||(['rotate','text'].includes(tool)&&!Number.isFinite(angle))||(tool==='scale'&&(!Number.isFinite(factor)||factor<=0))){points=[];status('글자 크기·각도·배율 값을 확인하세요.');render();return;}
+        const angle=Number($('angle').value),factor=Number($('factor').value);
+        if((tool==='rotate'&&!Number.isFinite(angle))||(tool==='scale'&&(!Number.isFinite(factor)||factor<=0))){points=[];status('각도·배율 값을 확인하세요.');render();return;}
         if(['line','rectangle'].includes(tool)&&(C.distance(a,b)<1e-10||(tool==='rectangle'&&(Math.abs(a.x-b.x)<1e-10||Math.abs(a.y-b.y)<1e-10)))){points=[];status('길이·폭·높이는 0보다 커야 합니다.');render();return;}
         snapshot();
         if (tool === "line") add("LINE", { p: a, q: b });
@@ -545,20 +527,6 @@
                 start: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
                 end: (Math.atan2(c.y - a.y, c.x - a.x) * 180) / Math.PI,
             });
-        if (tool === "text")
-            add("TEXT", { p: a, text: $("default-text").value, height: h, angle });
-        if (tool === "dimension") {
-            add("LINE", { p: a, q: b });
-            add("TEXT", {
-                p: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-                text: C.distance(a, b).toFixed(3),
-                height: h,
-                angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
-            });
-            status(
-                "거리 치수는 선과 문자로 작성되었습니다. 자동 연동 치수는 아닙니다.",
-            );
-        }
         if (["move", "copy", "rotate", "scale", "mirror"].includes(tool)) {
             const o =
                 tool === "move" || tool === "copy"
@@ -587,7 +555,7 @@
             doc.entities.push(...copies);
         }
         points = [];
-        if(['line','rectangle','text'].includes(tool)){selected.clear();selected.add(doc.entities.at(-1).id);setTool('select');}
+        if(['line','rectangle'].includes(tool)){selected.clear();selected.add(doc.entities.at(-1).id);setTool('select');}
         render();
     }
     canvas.onpointerdown = e => {
