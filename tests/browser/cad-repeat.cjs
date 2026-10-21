@@ -66,7 +66,13 @@ const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:a
             ['arc', 'ARC', async x => {await click(x, 25); await click(x + 10, 25); await click(x, 35);}],
             ['polyline', 'LWPOLYLINE', async x => {await click(x, 105); await click(x + 10, 110); await click(x + 20, 105); await page.keyboard.press('Enter');}],
             ['dimension', 'ERP_DIMENSION', async x => {await click(x, 55); await click(x + 30, 55); await click(x + 15, 65);}],
-            ['text', 'MTEXT', async x => {await click(x, 90); await expect(page.locator('#text-dialog')).toBeVisible(); await page.locator('#text-dialog-content').fill(`반복 문자 ${x}`); await page.locator('#text-dialog-confirm').click();}],
+            ['text', 'MTEXT', async x => {
+                await click(x, 90); await expect(page.locator('#text-dialog')).toBeVisible();
+                // A prior dialog's asynchronous close event can arrive after reopening.
+                if (x === 110) await page.locator('#text-dialog').evaluate(dialog => dialog.dispatchEvent(new Event('close')));
+                await page.locator('#text-dialog-content').fill(`반복 문자 ${x}`); await page.locator('#text-dialog-confirm').click();
+                await expect(page.locator('#text-dialog')).not.toBeVisible();
+            }],
         ];
         for (const [name, type, draw] of nativeTools) {
             const before = nativeCount(type);

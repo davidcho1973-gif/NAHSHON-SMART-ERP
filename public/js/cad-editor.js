@@ -274,7 +274,11 @@
     }
     $('text-dialog-confirm').onclick=commitText;
     $('text-dialog-cancel').onclick=()=>{$('text-dialog').close();textDraft=null;};
-    $('text-dialog').addEventListener('close',()=>{textDraft=null;render();});
+    $('text-dialog').addEventListener('close',()=>{
+        // A queued close event can arrive after the next drawing has reopened this dialog.
+        if($('text-dialog').open)return;
+        textDraft=null;render();
+    });
     $('edit-text-dialog').onclick=()=>{const entity=doc?.entities.find(e=>selected.has(e.id)&&['TEXT','MTEXT'].includes(e.type));if(entity)openTextEditor(entity);};
     function annotationPreview(){
         if(!['measure','dimension'].includes(tool)||!points.length||!hoverPoint)return null;
