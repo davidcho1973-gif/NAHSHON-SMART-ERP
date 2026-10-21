@@ -1152,7 +1152,7 @@
         aiBusy=true;aiControls();try{const captured=await captureAI(),drawingId=record.id,allowEdits=canManage&&$('ai-allow-edits').checked;
             const result=await aiRequest('/sessions',{method:'POST',body:JSON.stringify({drawingId,revision:record.revision,context:captured.context,allowEdits})},null);
             if(doc!==captured.source||aiVersion!==captured.version||record.id!==drawingId){await aiRequest(aiPath(result),{method:'DELETE'},result);throw Error('공유 준비 중 도면이 변경되었습니다. 현재 도면을 다시 공유하세요.');}
-            aiSession={...captured,...result,drawingId:record.id};aiCommands.clear();aiProcessed.clear();aiState('공유 중 · '+captured.context.entities.length+'개 객체 · '+captured.unit+' · 편집은 저장 버튼으로 저장');renderAICommands();scheduleAI(0);
+            aiSession={...captured,...result,drawingId:record.id,lastPublished:Date.now(),lastAllowEdits:allowEdits};aiCommands.clear();aiProcessed.clear();aiState('공유 중 · '+captured.context.entities.length+'개 객체 · '+captured.unit+' · 편집은 저장 버튼으로 저장');renderAICommands();scheduleAI(0);
         }catch(error){aiState(error.message);}finally{aiBusy=false;aiControls();}
     }
     async function stopAISharing(remote=true,message='공유를 중지했습니다.'){
@@ -1161,7 +1161,7 @@
     }
     function scheduleAI(delay=2000){if(aiTimer)clearTimeout(aiTimer);if(aiSession)aiTimer=setTimeout(tickAI,delay);}
     async function refreshAI(){
-        if(!aiSession||aiBusy||aiApplying.size)return;const session=aiSession;aiBusy=true;aiControls();try{if(!await flushAIAcks(session))return;const capture=await captureAI(session,true);await aiRequest(aiPath(session),{method:'PUT',body:JSON.stringify({context:capture.context,allowEdits:canManage&&$('ai-allow-edits').checked})},session);if(aiSession===session){Object.assign(session,capture);aiPreview=null;aiState('공유 범위를 갱신했습니다 · '+capture.context.entities.length+'개 객체');render();}}
+        if(!aiSession||aiBusy||aiApplying.size)return;const session=aiSession;aiBusy=true;aiControls();try{if(!await flushAIAcks(session))return;const capture=await captureAI(session,true);await aiRequest(aiPath(session),{method:'PUT',body:JSON.stringify({context:capture.context,allowEdits:canManage&&$('ai-allow-edits').checked})},session);if(aiSession===session){Object.assign(session,capture,{lastPublished:Date.now(),lastAllowEdits:canManage&&$('ai-allow-edits').checked});aiPreview=null;aiState('공유 범위를 갱신했습니다 · '+capture.context.entities.length+'개 객체');render();}}
         catch(error){aiState(error.message);}finally{aiBusy=false;aiControls();}
     }
     async function tickAI(){
@@ -1171,8 +1171,11 @@
         aiBusy=true;aiControls();
         try{
             if(!await flushAIAcks(session))return;
-            const captured=await captureAI(session);const renewed=await aiRequest(aiPath(session),{method:'PUT',body:JSON.stringify({context:captured.context,allowEdits:canManage&&$('ai-allow-edits').checked})},session);
-            if(aiSession!==session)return;session.context=captured.context;if(renewed.expiresAt)session.expiresAt=renewed.expiresAt;
+            const captured=await captureAI(session),allowEdits=canManage&&$('ai-allow-edits').checked;
+            if(captured.context.documentHash!==session.context.documentHash||allowEdits!==session.lastAllowEdits||Date.now()-session.lastPublished>=60000){
+                const renewed=await aiRequest(aiPath(session),{method:'PUT',body:JSON.stringify({context:captured.context,allowEdits})},session);
+                if(aiSession!==session)return;session.context=captured.context;session.lastPublished=Date.now();session.lastAllowEdits=allowEdits;if(renewed.expiresAt)session.expiresAt=renewed.expiresAt;
+            }
             const result=await aiRequest(aiPath(session)+'/commands',{},session);if(aiSession!==session)return;
             const pendingIds=new Set((result.commands||[]).filter(c=>c.status==='pending').map(c=>c.id));for(const id of aiCommands.keys())if(!pendingIds.has(id))aiCommands.delete(id);
             for(const command of result.commands||[]){if(aiProcessed.has(command.id)){await acknowledgeAI(command.id,aiProcessed.get(command.id),session);continue;}if(command.status==='pending')aiCommands.set(command.id,command);}
@@ -1194,7 +1197,7 @@
         if(aiSession!==session)return false;
         if(result.acknowledged)return true;
         try{if(result.status==='applied'&&!result.context)result.context=(await captureAI(session)).context;if(aiSession!==session)return false;
-            const {acknowledged,...payload}=result;await aiRequest(aiPath(session)+'/commands/'+encodeURIComponent(id)+'/result',{method:'POST',body:JSON.stringify(payload)},session);result.acknowledged=true;return true;
+            const {acknowledged,...payload}=result;await aiRequest(aiPath(session)+'/commands/'+encodeURIComponent(id)+'/result',{method:'POST',body:JSON.stringify(payload)},session);result.acknowledged=true;if(result.status==='applied'){session.context=result.context;session.lastPublished=Date.now();}return true;
         }catch(error){const applied=result.status==='applied';
             if([401,403,404,409,410].includes(error.status)){await stopAISharing(false,applied?'AI 결과 확인이 종료되었습니다. 로컬 변경은 이미 적용되어 유지됩니다. 저장 또는 실행 취소를 선택하세요.':'AI 요청 권한이 종료되어 공유를 중지했습니다.');return false;}
             aiState(applied?'로컬 편집은 적용됨 · 서버 확인 대기. 저장 또는 실행 취소할 수 있습니다.':'AI 결과 전송 재시도 대기 · '+error.message);return false;

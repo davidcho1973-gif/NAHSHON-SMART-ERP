@@ -4,7 +4,7 @@ const sandbox={window:{}};vm.runInNewContext(fs.readFileSync('public/js/cad-core
 (async()=>{const browser=await chromium.launch({headless:true,channel:process.env.ERP_TEST_BROWSER_CHANNEL||undefined});try{
  const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const doc=C.parse('0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n');doc.entities.push(C.newEntity('LINE',{p:{x:20,y:30},q:{x:100,y:30}}));
- const drawing={id:9,title:'AI synthetic',site_id:1,revision:1,dxf:C.exportDXF(doc),canManage:true,warnings:[]};let snapshot,queue=[],results=[],writes=0,deleted=0,failedAck=true;
+ const drawing={id:9,title:'AI synthetic',site_id:1,revision:1,dxf:C.exportDXF(doc),canManage:true,warnings:[]};let snapshot,queue=[],results=[],writes=0,deleted=0,failedAck=true,heartbeats=0,polls=0;
  const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'<link rel="stylesheet" href="/cad-editor.css">').replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-editor.js"></script></body>');
  await page.route('https://synthetic.test/**',async route=>{const u=new URL(route.request().url()),method=route.request().method();let json={};
  if(u.pathname==='/cad')return route.fulfill({contentType:'text/html',body:html});
@@ -16,8 +16,8 @@ const sandbox={window:{}};vm.runInNewContext(fs.readFileSync('public/js/cad-core
  else if(u.pathname==='/admin-api/cad/ai/config')json={available:true,serverUrl:'https://synthetic.test/mcp/cad',connections:[{id:'c1',name:'Synthetic client'}]};
  else if(u.pathname==='/admin-api/cad/ai/connections/c1'){deleted++;}
  else if(u.pathname==='/admin-api/cad/ai/sessions'&&method==='POST'){snapshot=route.request().postDataJSON();json={sessionId:'s1',editorToken:'synthetic-secret',expiresAt:new Date(Date.now()+900000).toISOString()};}
- else if(u.pathname==='/admin-api/cad/ai/sessions/s1'){if(method==='DELETE')deleted++;else {const next=route.request().postDataJSON();if(snapshot?.context.documentHash!==next.context.documentHash&&queue.length){queue=[];throw Error('Heartbeat invalidated pending command before ACK');}snapshot={...snapshot,...next};}json={expiresAt:new Date(Date.now()+900000).toISOString()};}
- else if(u.pathname.endsWith('/commands'))json={commands:queue};
+ else if(u.pathname==='/admin-api/cad/ai/sessions/s1'){if(method==='DELETE')deleted++;else {heartbeats++;const next=route.request().postDataJSON();if(snapshot?.context.documentHash!==next.context.documentHash&&queue.length){queue=[];throw Error('Heartbeat invalidated pending command before ACK');}snapshot={...snapshot,...next};}json={expiresAt:new Date(Date.now()+900000).toISOString()};}
+ else if(u.pathname.endsWith('/commands')){polls++;json={commands:queue};}
  else if(u.pathname.endsWith('/result')){const data=route.request().postDataJSON();results.push(data);if(failedAck&&data.status==='applied'){failedAck=false;return route.fulfill({status:503,json:{message:'Synthetic retry'}});}queue=[];}
  else return route.fulfill({status:404,json:{message:'not found'}});
  return route.fulfill({json});});
@@ -25,6 +25,7 @@ const sandbox={window:{}};vm.runInNewContext(fs.readFileSync('public/js/cad-core
  assert.equal(await page.locator('#ai-auto-apply').isChecked(),false);assert.equal(await page.locator('#ai-unit').inputValue(),'');
  await page.locator('#ai-share-scope').selectOption('visible');await page.locator('#ai-unit').selectOption('mm');await page.locator('#ai-allow-edits').check();await page.locator('#ai-start').click();await expect(page.locator('#ai-status')).toContainText('공유 중');
  assert.equal(snapshot.context.entities.length,1);assert.equal(snapshot.context.unit,'mm');assert.ok(!JSON.stringify(snapshot.context).includes('raw'));assert.equal(snapshot.context.documentHash.length,64);
+ await expect.poll(()=>polls).toBeGreaterThanOrEqual(2);assert.equal(heartbeats,0,'Unchanged snapshots must not PUT at every poll');
  const entity=snapshot.context.entities[0];queue=[{id:'cmd1',status:'pending',documentHash:snapshot.context.documentHash,actions:[{type:'move',entityIds:[entity.id],dx:10,dy:5}]}];
  await expect(page.locator('.ai-command')).toHaveCount(1,{timeout:10000});await page.locator('.ai-command button').filter({hasText:'미리보기'}).click();assert.equal(writes,0);assert.doesNotMatch(await page.locator('#dirty').innerText(),/저장 안 됨/);
  await page.locator('.ai-command button').filter({hasText:'이 요청 적용'}).click();await expect(page.locator('#dirty')).toContainText('저장 안 됨');await expect.poll(()=>results.length).toBeGreaterThan(1);assert.equal(writes,0);
