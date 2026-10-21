@@ -34,7 +34,7 @@ d.entities.push(
 );
 const input = path.resolve(directory, "frontend.dxf");
 writeFileSync(input, C.exportDXF(d));
-function convert(from, to) {
+function convert(from, to, expectedEntities = 3) {
     const output = path.resolve(directory, to);
     const metadata = JSON.parse(
         execFileSync(
@@ -50,7 +50,7 @@ function convert(from, to) {
             { encoding: "utf8" },
         ),
     );
-    assert.equal(metadata.entities, 3);
+    assert.equal(metadata.entities, expectedEntities);
     return output;
 }
 const dwg = convert("frontend.dxf", "original.dwg");
@@ -100,3 +100,54 @@ assert.equal(
 console.log(
     "PASS: browser DXF → real DWG → reopen → edit → DWG → reopen; coordinates, circle, modern and legacy Korean text verified.",
 );
+
+// Editable annotations must survive the actual native serializer, including
+// its XDATA, MTEXT chunking, Unicode and angle representation changes.
+const annotations = C.parse('0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n');
+const annotationLayer = '천장_배관_기성치수_'.repeat(10);
+annotations.layers[annotationLayer] = {color:'#22bb88', visible:true, locked:false};
+for (const mode of ['aligned', 'horizontal', 'vertical']) {
+    annotations.entities.push(C.newDimension({x:10,y:20}, {x:40,y:60}, {x:-15,y:90}, {mode,height:3,color:0x22bb88,layer:annotationLayer}));
+}
+const note = '한글 여러 줄\nsecond \\P {literal}\n' + '현장 메모 '.repeat(80);
+annotations.entities.push(C.newEntity('MTEXT', {p:{x:80,y:100},text:note,height:3,width:36,angle:30,color:0x40aaee,plainText:true}));
+writeFileSync(path.resolve(directory, 'annotations.dxf'), C.exportDXF(annotations));
+convert('annotations.dxf', 'annotations.dwg', 19);
+convert('annotations.dwg', 'annotations-reopened.dxf', 19);
+const reopenedAnnotations = C.parse(readFileSync(path.resolve(directory, 'annotations-reopened.dxf'), 'utf8'));
+const dimensions = reopenedAnnotations.entities.filter(e => e.type === 'ERP_DIMENSION');
+assert.equal(dimensions.length, 3, 'Complete annotations remain editable after real DWG roundtrip');
+for (const dim of dimensions) {
+    assert.equal(dim.layer, annotationLayer);
+    assert.ok(Math.abs(C.dimensionLayout(dim).value - {aligned:50,horizontal:30,vertical:40}[dim.mode]) < 1e-8);
+}
+const reopenedNote = reopenedAnnotations.entities.find(e => e.type === 'MTEXT');
+assert.equal(reopenedNote.text, note);
+assert.equal(reopenedNote.editable, true);
+assert.equal(reopenedNote.width, 36);
+assert.equal(reopenedNote.height, 3);
+assert.ok(Math.abs(reopenedNote.angle - 30) < 1e-8, `Expected 30 degrees, got ${reopenedNote.angle}`);
+reopenedAnnotations.entities = reopenedAnnotations.entities.map(e => {
+    if (e.type === 'ERP_DIMENSION') return C.resize(C.resize(e, 'dimension-line', {x:-25,y:105}), 'dimension-text', {x:65,y:110});
+    // Native DXF also carries read-only layout records. Edit the selected note,
+    // exactly as the browser does, and retain every unrelated entity unchanged.
+    if (e.id === reopenedNote.id) return {...C.transform(e, {dx:7,dy:-5}), text:note+'\n수정 완료', width:48, dirty:true};
+    return e;
+});
+writeFileSync(path.resolve(directory, 'annotations-edited.dxf'), C.exportDXF(reopenedAnnotations));
+convert('annotations-edited.dxf', 'annotations-edited.dwg', 19);
+convert('annotations-edited.dwg', 'annotations-verified.dxf', 19);
+const finalAnnotations = C.parse(readFileSync(path.resolve(directory, 'annotations-verified.dxf'), 'utf8'));
+assert.equal(finalAnnotations.entities.filter(e => e.type === 'ERP_DIMENSION').length, 3);
+for (const dim of finalAnnotations.entities.filter(e => e.type === 'ERP_DIMENSION')) {
+    assert.equal(dim.placement.y, 105);
+    assert.equal(dim.textPosition.x, 65);
+    assert.equal(dim.textPosition.y, 110);
+}
+const finalNote = finalAnnotations.entities.find(e => e.type === 'MTEXT');
+assert.equal(finalNote.text, note+'\n수정 완료');
+assert.equal(finalNote.width, 48);
+assert.equal(finalNote.p.x, 87);
+assert.equal(finalNote.p.y, 95);
+assert.equal(finalNote.editable, true);
+console.log('PASS: aligned/horizontal/vertical dimensions, repositioned labels and long multiline Unicode text remain editable through DWG re-save.');
