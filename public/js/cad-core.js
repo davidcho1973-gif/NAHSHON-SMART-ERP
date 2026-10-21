@@ -968,7 +968,81 @@
         return x>=0&&x<=f.w&&y>=0&&y<=f.h;
     }
 
+
+    function quantities(e){
+        const unavailable=reason=>({length:null,area:null,available:false,reason});
+        if(e.raw&&([30,31,38,39,210,220].some(code=>num(e.raw,code)!==0)||num(e.raw,230,1)!==1))return unavailable('nonplanar_entity');
+        if(e.type==='LINE')return {length:distance(e.p,e.q),area:null,available:true,reason:null};
+        if(e.type==='CIRCLE'&&e.radius>=0)return {length:2*Math.PI*e.radius,area:Math.PI*e.radius*e.radius,available:true,reason:null};
+        if(e.type==='ARC'&&e.radius>=0){const sweep=((e.end-e.start)%360+360)%360;if(!sweep)return unavailable('zero_sweep_arc');return {length:e.radius*sweep*Math.PI/180,area:null,available:true,reason:null};}
+        if(e.type==='LWPOLYLINE'){
+            if(e.points.some(p=>p.bulge))return unavailable('curved_polyline');
+            let length=0,area=0;for(let i=1;i<e.points.length;i++)length+=distance(e.points[i-1],e.points[i]);
+            if(e.closed&&e.points.length>=2)length+=distance(e.points.at(-1),e.points[0]);
+            if(e.closed&&e.points.length>2){for(let i=0;i<e.points.length;i++){const a=e.points[i],b=e.points[(i+1)%e.points.length];area+=a.x*b.y-b.x*a.y;}area=Math.abs(area)/2;}
+            return {length,area:e.closed?area:null,available:true,reason:null};
+        }
+        return unavailable(['TEXT','MTEXT','ERP_DIMENSION','POINT'].includes(e.type)?'annotation_or_point':'unsupported_entity');
+    }
+    function aiGeometry(e){
+        if(e.raw&&([30,31,38,39,210,220].some(code=>num(e.raw,code)!==0)||num(e.raw,230,1)!==1))return null;
+        const point=p=>({x:p.x,y:p.y});let result=null;
+        if(e.type==='POINT')result={p:point(e.p)};
+        if(e.type==='LINE')result={p:point(e.p),q:point(e.q)};
+        if(e.type==='LWPOLYLINE')result={points:e.points.map(p=>({...point(p),...(p.bulge?{bulge:p.bulge}:{})})),closed:!!e.closed};
+        if(e.type==='CIRCLE'||e.type==='ARC')result={center:point(e.p),radius:e.radius,...(e.type==='ARC'?{start:e.start,end:e.end}:{})};
+        if(e.type==='TEXT'||e.type==='MTEXT'){if(e.text.length>2000)throw Error('공유할 문자 내용은 객체당 2,000자 이내여야 합니다. 해당 문자를 제외하고 선택해 주세요.');result={p:point(e.p),text:e.text,height:e.height,width:e.width||0,angle:e.angle||0};}
+        if(e.type==='ERP_DIMENSION')result={p:point(e.p),q:point(e.q),placement:point(e.placement),mode:e.mode,height:e.height,...(e.axis?{axis:point(e.axis)}:{}),textPosition:e.textPosition?point(e.textPosition):null};
+        function finite(value){if(typeof value==='number'&&(!Number.isFinite(value)||Math.abs(value)>1e12))throw Error('AI 공유/편집 좌표와 수치는 유한한 ±1조 범위여야 합니다.');if(Array.isArray(value))value.forEach(finite);else if(value&&typeof value==='object')Object.values(value).forEach(finite);}finite(result);return result;
+    }
+    function utf8Size(value){let bytes=0;for(const character of JSON.stringify(value)){const n=character.codePointAt(0);bytes+=n<=127?1:n<=2047?2:n<=65535?3:4;}return bytes;}
+    function aiContext(doc,options){
+        if(!['drawing','mm','cm','m','in','ft'].includes(options.unit)||!['selection','visible'].includes(options.scope)||!/^([a-f0-9]{64})$/.test(options.documentHash))throw Error('공유 범위·도면 단위·문서 해시를 확인하세요.');
+        const selection=new Set(options.selection||[]),visible=doc.entities.filter(e=>!e.hidden&&!e.paper&&doc.layers[e.layer]?.visible!==false),es=options.scope==='selection'?visible.filter(e=>selection.has(e.id)):visible;
+        if(options.scope==='selection'&&!es.length&&!options.allowEmpty)throw Error('공유할 객체를 먼저 선택하세요.');if(es.length>2000)throw Error('공유 객체가 2,000개를 넘습니다. 선택 범위를 줄이세요.');
+        const layers=[...new Set(es.map(e=>e.layer))].map(name=>({name,color:doc.layers[name]?.color||'#e2e8f0',visible:true,locked:!!doc.layers[name]?.locked}));
+        const entities=es.map(e=>({id:e.id,type:e.type,layer:e.layer,editable:!!e.editable&&!doc.layers[e.layer]?.locked&&aiGeometry(e)!==null,geometry:aiGeometry(e),style:{color:e.color===null||e.color===undefined?null:'#'+e.color.toString(16).padStart(6,'0'),lineType:e.lineType||'BYLAYER',lineWeight:e.lineWeight??-1},quantities:quantities(e)}));
+        const totals=entities.reduce((t,e)=>({length:t.length+(e.quantities.length||0),area:t.area+(e.quantities.area||0),unavailableCount:t.unavailableCount+(!e.quantities.available?1:0)}),{length:0,area:0,unavailableCount:0});
+        const context={version:1,documentHash:options.documentHash,unit:options.unit,scope:options.scope,selection:es.filter(e=>selection.has(e.id)).map(e=>e.id),entities,layers,totals};
+        if(utf8Size(context)>512*1024)throw Error('공유 데이터가 512KB를 넘습니다. 선택 범위를 줄이세요.');return context;
+    }
+    function applyAIActions(source,actions,options){
+        if(!options.canManage)throw Error('현재 도면은 읽기 전용입니다.');
+        if(!/^[a-f0-9]{64}$/.test(options.expectedHash||'')||!/^[a-f0-9]{64}$/.test(options.currentHash||'')||options.expectedHash!==options.currentHash)throw Error('AI 요청 이후 도면이 변경되었습니다. 다시 공유한 뒤 요청하세요.');
+        if(!Array.isArray(actions)||!actions.length||actions.length>100)throw Error('편집 요청은 1~100개 동작이어야 합니다.');
+        const ids=new Set(options.sharedIds||[]),layers=new Set(options.sharedLayers||[]),doc=clone(source),affected=new Set();let targets=0;
+        const point=p=>{if(!p||Object.keys(p).some(k=>!['x','y'].includes(k))||!Number.isFinite(p.x)||!Number.isFinite(p.y)||Math.abs(p.x)>1e12||Math.abs(p.y)>1e12)throw Error('올바른 좌표가 필요합니다.');return {x:p.x,y:p.y};};
+        const finite=n=>{if(!Number.isFinite(n)||Math.abs(n)>1e12)throw Error('올바른 수치가 필요합니다.');return n;};
+        const color=c=>{if(typeof c!=='string'||!/^#[a-f0-9]{6}$/i.test(c))throw Error('색상은 #RRGGBB 형식이어야 합니다.');return parseInt(c.slice(1),16);};
+        const text=t=>{if(typeof t!=='string'||!t.trim()||t.length>2000)throw Error('문자는 1~2,000자로 입력하세요.');return t;};
+        const schema={move:['entityIds','dx','dy'],rotate:['entityIds','angle','center'],scale:['entityIds','factor','center'],style:['entityIds','color','lineWeight'],text:['entityIds','text','height','width','color'],delete:['entityIds'],add_line:['p','q','layer','color'],add_rectangle:['p','q','layer','color'],add_text:['p','text','height','width','color','layer'],add_dimension:['p','q','placement','mode','height','color','layer']};
+        actions.forEach((action,index)=>{
+            if(!action||!schema[action.type]||Object.keys(action).some(k=>k!=='type'&&!schema[action.type].includes(k)))throw Error('지원하지 않는 AI 편집 동작 또는 매개변수입니다.');
+            if(action.type.startsWith('add_')){
+                if(!layers.has(action.layer)||!Object.hasOwn(doc.layers,action.layer)||doc.layers[action.layer].locked||doc.layers[action.layer].visible===false)throw Error('공유한 편집 가능 레이어에만 새 객체를 추가할 수 있습니다.');
+                const p=point(action.p),base={color:action.color===undefined?0xe2e8f0:color(action.color),lineWeight:25};let e;
+                if(action.type==='add_line'){const q=point(action.q);if(distance(p,q)<1e-10)throw Error('선 길이는 0보다 커야 합니다.');e=newEntity('LINE',{...base,p,q},action.layer);}
+                if(action.type==='add_rectangle'){const q=point(action.q);if(p.x===q.x||p.y===q.y)throw Error('사각형 폭과 높이는 0보다 커야 합니다.');e=newEntity('LWPOLYLINE',{...base,p,points:[p,{x:q.x,y:p.y},q,{x:p.x,y:q.y}],closed:true},action.layer);}
+                if(action.type==='add_text'){const h=finite(action.height),w=finite(action.width??0);if(h<=0||w<0)throw Error('문자 크기·폭을 확인하세요.');e=newEntity('MTEXT',{...base,p,text:text(action.text),height:h,width:w,angle:0,plainText:true},action.layer);}
+                if(action.type==='add_dimension'&&!['aligned','horizontal','vertical'].includes(action.mode))throw Error('치수 방향을 지정하세요.');
+                if(action.type==='add_dimension')e=newDimension(p,point(action.q),point(action.placement),{...base,mode:action.mode,height:finite(action.height),layer:action.layer});
+                const prefix='ai-'+String(options.transactionId||source.entities.length).replace(/[^a-z0-9_-]/gi,'')+'-'+index;let id=prefix,suffix=0;while(doc.entities.some(n=>n.id===id))id=prefix+'-'+(++suffix);e.id=id;if(e.type==='ERP_DIMENSION')e.groupId=id;aiGeometry(e);doc.entities.push(e);affected.add(id);return;
+            }
+            if(!Array.isArray(action.entityIds)||!action.entityIds.length||new Set(action.entityIds).size!==action.entityIds.length)throw Error('대상 객체 목록을 확인하세요.');targets+=action.entityIds.length;if(targets>1000)throw Error('한 요청의 대상은 최대 1,000개입니다.');
+            for(const id of action.entityIds){const index=doc.entities.findIndex(e=>e.id===id),e=doc.entities[index];if(!ids.has(id)||!e||!e.editable||e.hidden||e.paper||doc.layers[e.layer]?.locked||doc.layers[e.layer]?.visible===false)throw Error('공유 범위 밖·읽기 전용·숨김·잠금 객체는 편집할 수 없습니다.');let n;
+                if(action.type==='delete'){doc.entities.splice(index,1);affected.add(id);continue;}
+                if(action.type==='move')n=transform(e,{dx:finite(action.dx),dy:finite(action.dy)});
+                if(action.type==='rotate')n=transform(e,{angle:finite(action.angle),center:point(action.center)});
+                if(action.type==='scale'){const factor=finite(action.factor);if(factor<=0)throw Error('배율은 양수여야 합니다.');n=transform(e,{scale:factor,center:point(action.center)});}
+                if(action.type==='style'){n=clone(e);if(action.color!==undefined)n.color=color(action.color);if(action.lineWeight!==undefined){if(![-3,-2,-1,0,5,9,13,15,18,20,25,30,35,40,50,53,60,70,80,90,100,106,120,140,158,200,211].includes(action.lineWeight))throw Error('지원하지 않는 선 굵기입니다.');n.lineWeight=action.lineWeight;}if(action.color===undefined&&action.lineWeight===undefined)throw Error('변경할 스타일을 지정하세요.');n.dirty=true;}
+                if(action.type==='text'){if(!['text','height','width','color'].some(k=>action[k]!==undefined))throw Error('변경할 문자 속성을 지정하세요.');if(!['TEXT','MTEXT'].includes(e.type))throw Error('문자 객체만 수정할 수 있습니다.');n=clone(e);if(action.text!==undefined){n.text=text(action.text);if(e.type==='TEXT'&&n.text.includes('\n'))throw Error('한 줄 문자는 줄바꿈을 지원하지 않습니다.');}if(action.height!==undefined){n.height=finite(action.height);if(n.height<=0)throw Error('문자 크기는 양수여야 합니다.');}if(action.width!==undefined){if(e.type!=='MTEXT')throw Error('박스 폭은 여러 줄 문자에서만 지원합니다.');n.width=finite(action.width);if(n.width<0)throw Error('문자 폭은 0 이상이어야 합니다.');}if(action.color!==undefined)n.color=color(action.color);n.dirty=true;}
+                aiGeometry(n);doc.entities[index]=n;affected.add(id);
+            }
+        });return {document:doc,affectedIds:[...affected]};
+    }
+
     g.CADCore = {
+        quantities, aiGeometry, aiContext, applyAIActions, utf8Size,
         uid, newDimension, dimensionLayout, dimensionParts, textLines, textBox, snapPoints,
         rectangleFrame, grips, resize, contains,
         renameLayer,

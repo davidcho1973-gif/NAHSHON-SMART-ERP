@@ -20,6 +20,8 @@
         cap = {},
         busy = false;
     let activeIO=null,ioSequence=0,listSequence=0,uploadAllowed=false,capabilitiesReady=false;
+    let aiVersion=0,aiHashCache=null,aiSession=null,aiTimer=null,aiBusy=false,aiConfig=null,aiPreview=null;
+    const aiCommands=new Map(),aiProcessed=new Map(),aiApplying=new Set();
     const query = new URLSearchParams(location.search);
     const claimContext = {
         lineId: Number(query.get('claim_line_id')),
@@ -158,6 +160,7 @@
         );
     }
     function mark() {
+        aiVersion++;aiPreview=null;
         dirty = true;
         $("dirty").textContent = "● 저장 안 됨";
     }
@@ -374,7 +377,9 @@
         canvas.dataset.snapActive=String(!!snapMark);if(snapMark){canvas.dataset.snapX=snapMark.x;canvas.dataset.snapY=snapMark.y;}
         const measured=annotation||measurements.find(e=>selected.has(e.id));
         $('annotation-readout').textContent=measured?'거리 '+C.dimensionLayout(measured).label+' 도면 단위 · '+(points.length===2?'치수 위치를 지정하세요':measured.transient?'화면 측정 · 저장되지 않음':'끝점/꼭지점 자동 스냅'):'';
-        inspector();
+
+        if(aiPreview){ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='#77ffb3';ctx.lineWidth=2;for(const id of aiPreview.affectedIds){const entity=aiPreview.document.entities.find(e=>e.id===id);if(!entity)continue;const paths=entity.type==='ERP_DIMENSION'?C.dimensionParts(entity).map(C.geometry):[C.geometry(entity)];for(const path of paths){ctx.beginPath();path.forEach((p,i)=>{const s=screen(p);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y);});ctx.stroke();}}ctx.restore();}
+        inspector();aiControls();
         ctx.fillStyle = "#5eead4";
         points.forEach((p) => {
             const s = screen(p);
@@ -730,7 +735,8 @@
         );
         const parsed = C.parse(j.dxf);
         if(activeIO?.token!==token)return;
-        doc = parsed;
+        if(aiSession)stopAISharing(true,'도면을 다시 열어 공유를 중지했습니다.');
+        doc = parsed;aiVersion++;aiHashCache=null;
         doc.markups = C.clone(j.markups || []);
         cadBaseline = C.exportDXF(parsed);
         markup?.reset();
@@ -1130,6 +1136,128 @@
     };
     for(const id of ['entity-color','entity-width','entity-linetype'])for(const event of ['input','change'])$(id).addEventListener(event,()=>styleEdits.add(id));
     for(const id of ['text','height','text-color'])for(const event of ['input','change'])$(id).addEventListener(event,()=>textEdits.add(id));
+
+    // This bridge sends bounded snapshots only after explicit sharing. Editor tokens
+    // stay in this closure and commands never invoke provider APIs or save the DWG.
+    function aiState(message){$('ai-status').textContent=message;}
+    function aiControls(){
+        $('ai-start').disabled=aiBusy||!!aiSession||!doc||!record||!aiConfig?.available;
+        $('ai-stop').disabled=!aiSession;$('ai-refresh').disabled=aiBusy||!aiSession;
+        $('ai-allow-edits').disabled=!canManage||proofMode;
+        $('ai-auto-apply').disabled=!canManage||!$('ai-allow-edits').checked||proofMode;
+        if($('ai-auto-apply').disabled)$('ai-auto-apply').checked=false;
+    }
+    async function aiRequest(path,options={},session=aiSession){
+        const response=await fetch('/admin-api/cad/ai'+path,{credentials:'same-origin',...options,headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content,...(session?{'X-CAD-Editor-Token':session.editorToken}:{}),...options.headers}});
+        const json=response.status===204?{}:await response.json().catch(()=>({}));
+        if(!response.ok||json.success===false){const error=Error(safeApiMessage(json,response.status));error.status=response.status;throw error;}return json.data||json;
+    }
+    async function configureAI(){
+        try{aiConfig=await aiRequest('/config',{},null);$('ai-server-url').value=aiConfig.serverUrl||'';$('ai-config-reason').textContent=aiConfig.available?'MCP 연결 승인 후 현재 도면 공유를 시작하세요.':aiConfig.reason||'현재 서버에서 CAD AI 연결을 사용할 수 없습니다.';
+            $('ai-connections').replaceChildren();for(const connection of aiConfig.connections||[]){const row=document.createElement('div'),label=document.createElement('span'),button=document.createElement('button');label.textContent=(connection.name||'연결')+' · '+(connection.createdAt||'');button.textContent='이 연결 해제';button.onclick=async()=>{button.disabled=true;try{await aiRequest('/connections/'+encodeURIComponent(connection.id),{method:'DELETE'},null);await stopAISharing(true,'연결을 해제하고 공유를 중지했습니다.');await configureAI();}catch(error){aiState(error.message);}finally{button.disabled=false;}};row.append(label,button);$('ai-connections').append(row);}
+        }catch(error){aiConfig={available:false};$('ai-config-reason').textContent=error.message;}aiControls();
+    }
+    function hashMaterial(source){return C.exportDXF(source)+'\n'+JSON.stringify({markups:source.markups||[],layers:source.layers,entities:source.entities.map(e=>({...e,raw:undefined,rawParts:undefined}))});}
+    async function currentAIHash(){
+        const source=doc,version=aiVersion;if(!source)throw Error('도면을 먼저 여세요.');if(aiHashCache?.source===source&&aiHashCache.version===version)return aiHashCache.hash;
+        if(!crypto.subtle)throw Error('보안 연결에서만 CAD AI 공유를 사용할 수 있습니다.');
+        const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(hashMaterial(source))),hash=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+        if(doc!==source||version!==aiVersion)throw Error('도면이 변경 중입니다. 잠시 후 다시 시도하세요.');aiHashCache={source,version,hash};return hash;
+    }
+    async function captureAI(session=null,recapture=false){
+        if(!doc||!record)throw Error('도면을 먼저 여세요.');const hash=await currentAIHash(),version=aiVersion,source=doc;
+        const scope=recapture||!session?$('ai-share-scope').value:session.scope,unit=recapture||!session?$('ai-unit').value:session.unit;
+        const ids=recapture||!session?null:session.scopeIds;
+        const subset=ids?{...doc,entities:doc.entities.filter(e=>ids.has(e.id))}:doc;
+        const selection=ids?[...ids]:[...selected];
+        const context=C.aiContext(subset,{scope,unit,selection,documentHash:hash,allowEmpty:!!session&&!recapture});
+        return {context,version,source,scope,unit,scopeIds:new Set(context.entities.map(e=>e.id))};
+    }
+    function aiPath(session){return '/sessions/'+encodeURIComponent(session.sessionId);}
+    async function startAISharing(){
+        if(aiBusy||aiSession)return;if(busy||gesture||markup?.pending()||$('markup-dialog').open||$('text-dialog').open){aiState('현재 편집을 끝낸 뒤 공유하세요.');return;}
+        aiBusy=true;aiControls();try{const captured=await captureAI(),drawingId=record.id,allowEdits=canManage&&$('ai-allow-edits').checked;
+            const result=await aiRequest('/sessions',{method:'POST',body:JSON.stringify({drawingId,revision:record.revision,context:captured.context,allowEdits})},null);
+            if(doc!==captured.source||aiVersion!==captured.version||record.id!==drawingId){await aiRequest(aiPath(result),{method:'DELETE'},result);throw Error('공유 준비 중 도면이 변경되었습니다. 현재 도면을 다시 공유하세요.');}
+            aiSession={...captured,...result,drawingId:record.id,lastPublished:Date.now(),lastAllowEdits:allowEdits};aiCommands.clear();aiProcessed.clear();aiState('공유 중 · '+captured.context.entities.length+'개 객체 · '+captured.unit+' · 편집은 저장 버튼으로 저장');renderAICommands();scheduleAI(0);
+        }catch(error){aiState(error.message);}finally{aiBusy=false;aiControls();}
+    }
+    async function stopAISharing(remote=true,message='공유를 중지했습니다.'){
+        const session=aiSession;aiSession=null;if(aiTimer)clearTimeout(aiTimer);aiTimer=null;aiPreview=null;aiCommands.clear();aiProcessed.clear();$('ai-auto-apply').checked=false;renderAICommands();aiState(message);aiControls();render();
+        if(remote&&session)try{await aiRequest(aiPath(session),{method:'DELETE'},session);}catch(_){aiState(message+' 서버 세션이 남아 있으면 만료 시 종료됩니다.');}
+    }
+    function scheduleAI(delay=2000){if(aiTimer)clearTimeout(aiTimer);if(aiSession)aiTimer=setTimeout(tickAI,delay);}
+    async function refreshAI(){
+        if(!aiSession||aiBusy||aiApplying.size)return;const session=aiSession;aiBusy=true;aiControls();try{if(!await flushAIAcks(session))return;const capture=await captureAI(session,true);await aiRequest(aiPath(session),{method:'PUT',body:JSON.stringify({context:capture.context,allowEdits:canManage&&$('ai-allow-edits').checked})},session);if(aiSession===session){Object.assign(session,capture,{lastPublished:Date.now(),lastAllowEdits:canManage&&$('ai-allow-edits').checked});aiPreview=null;aiState('공유 범위를 갱신했습니다 · '+capture.context.entities.length+'개 객체');render();}}
+        catch(error){aiState(error.message);}finally{aiBusy=false;aiControls();}
+    }
+    async function tickAI(){
+        const session=aiSession;if(!session)return;if(aiBusy||aiApplying.size){scheduleAI();return;}
+        if(record?.id!==session.drawingId){await stopAISharing(true,'다른 도면으로 변경되어 공유를 중지했습니다.');return;}
+        if(session.expiresAt&&Date.parse(session.expiresAt)<=Date.now()){await stopAISharing(false,'공유 세션이 만료되었습니다. 다시 공유를 시작하세요.');return;}
+        aiBusy=true;aiControls();
+        try{
+            if(!await flushAIAcks(session))return;
+            const captured=await captureAI(session),allowEdits=canManage&&$('ai-allow-edits').checked;
+            if(captured.context.documentHash!==session.context.documentHash||allowEdits!==session.lastAllowEdits||Date.now()-session.lastPublished>=60000){
+                const renewed=await aiRequest(aiPath(session),{method:'PUT',body:JSON.stringify({context:captured.context,allowEdits})},session);
+                if(aiSession!==session)return;session.context=captured.context;session.lastPublished=Date.now();session.lastAllowEdits=allowEdits;if(renewed.expiresAt)session.expiresAt=renewed.expiresAt;
+            }
+            const result=await aiRequest(aiPath(session)+'/commands',{},session);if(aiSession!==session)return;
+            const pendingIds=new Set((result.commands||[]).filter(c=>c.status==='pending').map(c=>c.id));for(const id of aiCommands.keys())if(!pendingIds.has(id))aiCommands.delete(id);
+            for(const command of result.commands||[]){if(aiProcessed.has(command.id)){await acknowledgeAI(command.id,aiProcessed.get(command.id),session);continue;}if(command.status==='pending')aiCommands.set(command.id,command);}
+            renderAICommands();
+            if($('ai-auto-apply').checked&&$('ai-allow-edits').checked&&!busy&&!gesture&&!$('text-dialog').open)for(const command of [...aiCommands.values()]){if(!$('ai-auto-apply').checked||!$('ai-allow-edits').checked||busy||gesture||$('text-dialog').open)break;await applyAICommand(command,true);if(!aiSession)break;}
+        }catch(error){if([401,403,404,410].includes(error.status)){await stopAISharing(false,'공유 권한이 해제되었거나 세션이 만료되었습니다.');return;}aiState('연결 확인 필요 · '+error.message);}
+        finally{aiBusy=false;aiControls();if(aiSession===session)scheduleAI();}
+    }
+    async function prepareAICommand(command){
+        if(!aiSession)throw Error('공유 세션이 없습니다.');if(busy||gesture||$('text-dialog').open)throw Error('현재 편집을 끝낸 뒤 AI 요청을 적용하세요.');
+        if(!$('ai-allow-edits').checked)throw Error('AI 편집 요청 허용을 먼저 켜세요.');
+        const currentHash=await currentAIHash(),session=aiSession;
+        const result=C.applyAIActions(doc,command.actions,{canManage,expectedHash:command.documentHash,currentHash,sharedIds:session.context.entities.map(e=>e.id),sharedLayers:session.context.layers.map(l=>l.name),transactionId:command.id});
+        const nextIds=new Set([...session.scopeIds,...result.affectedIds]),subset={...result.document,entities:result.document.entities.filter(e=>nextIds.has(e.id))};const source=doc,version=aiVersion;const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(hashMaterial(result.document))),nextHash=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');const resultContext=C.aiContext(subset,{scope:session.scope,unit:session.unit,selection:[...nextIds],documentHash:nextHash,allowEmpty:true});
+        return {...result,resultContext,currentHash,source,version,session};
+    }
+    async function previewAICommand(command){if(aiBusy||aiApplying.size)return;try{const result=await prepareAICommand(command);if(aiBusy||aiApplying.size||result.session!==aiSession||result.source!==doc||result.version!==aiVersion)return;aiPreview=result;aiState('초록 점선은 AI 편집 미리보기입니다. 아직 적용·저장하지 않았습니다.');render();}catch(error){aiState(error.message);}}
+    async function acknowledgeAI(id,result,session){
+        if(aiSession!==session)return false;
+        if(result.acknowledged)return true;
+        try{if(result.status==='applied'&&!result.context)result.context=(await captureAI(session)).context;if(aiSession!==session)return false;
+            const {acknowledged,...payload}=result;await aiRequest(aiPath(session)+'/commands/'+encodeURIComponent(id)+'/result',{method:'POST',body:JSON.stringify(payload)},session);result.acknowledged=true;if(result.status==='applied'){session.context=result.context;session.lastPublished=Date.now();}return true;
+        }catch(error){const applied=result.status==='applied';
+            if([401,403,404,409,410].includes(error.status)){await stopAISharing(false,applied?'AI 결과 확인이 종료되었습니다. 로컬 변경은 이미 적용되어 유지됩니다. 저장 또는 실행 취소를 선택하세요.':'AI 요청 권한이 종료되어 공유를 중지했습니다.');return false;}
+            aiState(applied?'로컬 편집은 적용됨 · 서버 확인 대기. 저장 또는 실행 취소할 수 있습니다.':'AI 결과 전송 재시도 대기 · '+error.message);return false;
+        }
+    }
+    async function flushAIAcks(session){for(const [id,result] of aiProcessed)if(!result.acknowledged&&!await acknowledgeAI(id,result,session))return false;return aiSession===session;}
+    async function applyAICommand(command,fromPoll=false){
+        if(aiBusy&&!fromPoll)return;
+        if(aiProcessed.has(command.id)||aiApplying.has(command.id))return;
+        aiApplying.add(command.id);let committed=false,session=aiSession;
+        try{
+            const pending=await aiRequest(aiPath(session)+'/commands',{},session);
+            const fresh=(pending.commands||[]).find(item=>item.id===command.id&&item.status==='pending');
+            if(!fresh||fresh.documentHash!==command.documentHash||JSON.stringify(fresh.actions)!==JSON.stringify(command.actions))throw Error('AI 요청이 만료되었거나 변경되었습니다. 새 요청을 받아 주세요.');
+            const result=await prepareAICommand(command);session=result.session;if(session!==aiSession||doc!==result.source||aiVersion!==result.version)throw Error('도면이 변경되었습니다. 새 요청을 받아 주세요.');
+            snapshot();doc=result.document;committed=true;const ack={status:'applied',context:result.resultContext,message:'현재 편집기에 적용했습니다. DWG/DXF 저장은 사용자가 진행합니다.'};aiProcessed.set(command.id,ack);aiCommands.delete(command.id);
+            for(const id of result.affectedIds)session.scopeIds.add(id);selected=new Set(result.affectedIds);points=[];layers();render();
+            await acknowledgeAI(command.id,ack,session);if(aiSession===session)aiState(ack.acknowledged?'AI 편집 적용됨 · 저장하지 않은 변경입니다.':'AI 편집은 적용되었습니다. 결과 동기화 대기 중입니다.');renderAICommands();
+        }catch(error){
+            aiState(error.message);if(!committed&&aiSession===session){const ack={status:'failed',message:String(error.message).slice(0,1000)};aiProcessed.set(command.id,ack);aiCommands.delete(command.id);await acknowledgeAI(command.id,ack,session);renderAICommands();}
+        }finally{aiApplying.delete(command.id);}
+    }
+    async function rejectAICommand(command){if(aiApplying.has(command.id)||aiProcessed.has(command.id))return;const ack={status:'rejected',message:'사용자가 편집 요청을 거절했습니다.'};aiProcessed.set(command.id,ack);aiCommands.delete(command.id);aiPreview=null;if(aiSession)await acknowledgeAI(command.id,ack,aiSession);renderAICommands();render();}
+    function renderAICommands(){
+        $('ai-command-list').replaceChildren();for(const command of aiCommands.values()){const card=document.createElement('div');card.className='ai-command';const title=document.createElement('strong'),preview=document.createElement('button'),apply=document.createElement('button'),dismiss=document.createElement('button'),detail=document.createElement('pre');title.textContent='편집 요청 '+command.id;detail.textContent=JSON.stringify(command.actions,null,2);preview.textContent='미리보기';apply.textContent='이 요청 적용';dismiss.textContent='거절';preview.onclick=()=>previewAICommand(command);apply.onclick=()=>applyAICommand(command);dismiss.onclick=()=>rejectAICommand(command);card.append(title,detail,preview,apply,dismiss);$('ai-command-list').append(card);}
+    }
+    $('ai-toggle').onclick=()=>{$('ai-panel').hidden=!$('ai-panel').hidden;$('ai-toggle').setAttribute('aria-expanded',String(!$('ai-panel').hidden));if(!$('ai-panel').hidden)configureAI();};
+    $('ai-close').onclick=()=>{$('ai-panel').hidden=true;$('ai-toggle').setAttribute('aria-expanded','false');};
+    $('ai-copy-url').onclick=()=>navigator.clipboard.writeText($('ai-server-url').value).then(()=>aiState('서버 주소를 복사했습니다.')).catch(()=>aiState('위 서버 주소를 직접 복사해 주세요.'));
+    $('ai-start').onclick=startAISharing;$('ai-refresh').onclick=refreshAI;$('ai-stop').onclick=()=>stopAISharing();$('ai-reload-config').onclick=configureAI;
+    $('ai-allow-edits').onchange=aiControls;$('ai-auto-apply').onchange=aiControls;
+
+    window.addEventListener('pagehide',()=>{const session=aiSession;if(session)fetch('/admin-api/cad/ai'+aiPath(session),{method:'DELETE',credentials:'same-origin',keepalive:true,headers:{'X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content,'X-CAD-Editor-Token':session.editorToken,Accept:'application/json'}}).catch(()=>{});});
     window.addEventListener("beforeunload", (e) => {
         if (dirty||$('text-dialog').open||markup?.pending()) {
             e.preventDefault();
