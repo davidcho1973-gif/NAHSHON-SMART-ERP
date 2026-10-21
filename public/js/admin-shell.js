@@ -257,6 +257,8 @@
   function formModal(opts) {
     return new Promise(function (resolve) {
       var fields = opts.fields || [];
+      var busy = false, changed = false, backup = null, backupOk = false, backupNotice = null;
+      var requestId = null, expectedRevision = opts.draftVersion, pendingValues = null, pendingControls = [];
       var groups = [];
       fields.forEach(function (f) {
         var name = f.group || '';
@@ -372,15 +374,39 @@
         if (first) first.focus();
       }
 
-      function close(v) { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); }
-      function onKey(e) { if (e.key === 'Escape') close(null); }
+      function preserve() {
+        if (!backup) return;
+        var values = collect();
+        fields.filter(function(f){return f.type === 'file';}).forEach(function(f){delete values[f.name];});
+        try {
+          backup.write({values:values, requestId:requestId, expectedRevision:expectedRevision, pendingValues:pendingValues}); backupOk = true;
+          backupNotice.textContent = pendingValues ? '저장 결과 확인 중 · 다시 저장을 누르면 같은 요청을 확인합니다. 확인 후 수정할 수 있습니다.' : '이 기기에 임시 저장됨 · 아직 서버에 제출하지 않았습니다.';
+        } catch (_) {
+          backupOk = false; backupNotice.textContent = '기기 임시 저장 실패 · 창을 닫지 말고 서버 저장을 완료하세요.';
+        }
+      }
+      function unload(e) { if (busy || changed) { preserve(); e.preventDefault(); e.returnValue = ''; } }
+      function close(v) {
+        if (busy) { toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return; }
+        if (v === null && changed) {
+          preserve();
+          var hasFiles = Array.from(wrap.querySelectorAll('input[type=file]')).some(function(el){return el.files && el.files.length;});
+          if ((!backupOk || hasFiles) && !global.confirm('아직 서버에 저장되지 않은 입력 또는 파일이 있습니다. 창을 닫을까요?')) return;
+        }
+        wrap.remove(); document.removeEventListener('keydown', onKey); global.removeEventListener('beforeunload', unload); resolve(v);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape' && Array.from(document.querySelectorAll('[role=dialog]')).at(-1) === wrap.querySelector('[role=dialog]')) close(null);
+      }
+      wrap.addEventListener('input', function () { changed = true; preserve(); });
+      wrap.addEventListener('change', function () { changed = true; preserve(); });
 
       wrap.addEventListener('click', function (e) {
         var a = e.target.getAttribute && e.target.getAttribute('data-x');
         if (a === 'no' || e.target === wrap) return close(null);
-        if (a !== 'save') return;
+        if (a !== 'save' || busy) return;
 
-        var values = collect();
+        var values = pendingValues ? JSON.parse(JSON.stringify(pendingValues)) : collect();
         // 필수값은 서버에 보내기 전에 여기서 먼저 잡는다 — 왕복 한 번을 아끼고,
         // 어느 칸이 비었는지 그 자리에서 보여준다.
         var errs = {};
@@ -398,30 +424,60 @@
         if (Object.keys(errs).length) { showErrors(errs); return; }
 
         var btn = e.target;
-        btn.disabled = true;
+        if (requestId) { values.requestId = requestId; if (expectedRevision != null) values.expectedRevision = expectedRevision; pendingValues = JSON.parse(JSON.stringify(values)); }
+        preserve(); busy = true;
+        var controls = Array.from(new Set(Array.from(wrap.querySelectorAll('input,select,textarea,button')).filter(function(el){return !el.disabled;}).concat(pendingControls)));
+        controls.forEach(function(el){el.disabled = true;});
         btn.textContent = '저장 중...';
 
-        Promise.resolve(opts.onSave ? opts.onSave(values) : { success: true })
+        Promise.resolve().then(function(){return opts.onSave ? opts.onSave(values) : { success: true };})
           .then(function (res) {
             if (res && res.success === false) {
+              pendingValues = null; preserve();
               btn.disabled = false;
               btn.textContent = opts.saveLabel || '저장';
               if (res.errors) showErrors(res.errors);
               else toast(res.error || '저장하지 못했습니다.', 'error');
               return;
             }
-            close(values);
+            if (backup) { try { backup.clear(); } catch (_) { /* Server acknowledged; stale backup is safe to retry. */ } }
+            busy = false; changed = false; close(values);
           })
           .catch(function (err) {
+            if ((err && err.status >= 400 && err.status < 500) || (err && err.result && err.result.success === false)) pendingValues = null;
+            preserve();
             btn.disabled = false;
             btn.textContent = opts.saveLabel || '저장';
             toast((err && err.message) || '저장 중 오류가 발생했습니다.', 'error');
-          });
+          }).finally(function(){busy = false; pendingControls = pendingValues ? controls.filter(function(el){return el.tagName !== 'BUTTON';}) : []; controls.forEach(function(el){el.disabled = pendingControls.includes(el);}); btn.textContent = pendingValues ? '저장 결과 확인 · 재시도' : (opts.saveLabel || '저장');});
       });
 
       document.addEventListener('keydown', onKey);
       document.body.appendChild(wrap);
       if (opts.onReady) opts.onReady(wrap);
+      if (opts.draftKey && global.ClaimSaveSafety) {
+        requestId = global.ClaimSaveSafety.key();
+        backupNotice = document.createElement('p'); backupNotice.setAttribute('role', 'status');
+        wrap.querySelector('[role=dialog]').appendChild(backupNotice);
+        try {
+          backup = global.ClaimSaveSafety.recovery(opts.draftKey);
+          var restored = backup.latest();
+          if (restored) {
+            requestId = restored.requestId || requestId; expectedRevision = restored.expectedRevision;
+            pendingValues = restored.pendingValues || null;
+            fields.forEach(function(f){
+              if (f.type === 'file' || !Object.prototype.hasOwnProperty.call(restored.values, f.name)) return;
+              var el = wrap.querySelector('#af-' + CSS.escape(f.name));
+              if (f.type === 'checkbox') el.checked = restored.values[f.name]; else el.value = restored.values[f.name];
+              if (pendingValues && !el.disabled) { el.disabled = true; pendingControls.push(el); }
+            });
+            changed = true; preserve();
+            if (!pendingValues) backupNotice.textContent = '이전에 제출하지 못한 입력을 복구했습니다. 내용을 확인한 뒤 저장하세요.';
+            else wrap.querySelector('[data-x=save]').textContent = '저장 결과 확인 · 재시도';
+          }
+        } catch (_) { backupNotice.textContent = '기기 임시 저장을 사용할 수 없습니다. 서버 저장 후 창을 닫으세요.'; }
+      }
+      global.addEventListener('beforeunload', unload);
       var firstInput = wrap.querySelector('input,select,textarea');
       if (firstInput) firstInput.focus();
     });

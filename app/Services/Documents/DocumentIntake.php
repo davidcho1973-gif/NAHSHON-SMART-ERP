@@ -215,6 +215,22 @@ class DocumentIntake
         try {
             $path = Storage::disk($diskName)->putFileAs($dir, $file, $safeName, ['visibility' => 'private']);
             if ($path) {
+                if ($strict) {
+                    $stream = Storage::disk($diskName)->readStream($path);
+                    if (! is_resource($stream)) {
+                        return [null, $diskName, '원본 저장 확인에 실패했습니다. 파일을 보관하고 다시 시도하세요.'];
+                    }
+                    try {
+                        $hash = hash_init('sha256');
+                        $bytes = hash_update_stream($hash, $stream);
+                        if ($bytes !== $file->getSize() || ! hash_equals(hash_file('sha256', $file->getRealPath()), hash_final($hash))) {
+                            return [null, $diskName, '저장된 원본이 업로드 파일과 일치하지 않습니다. 접수 완료 처리하지 않았습니다.'];
+                        }
+                    } finally {
+                        fclose($stream);
+                    }
+                }
+
                 return [$path, $diskName, null];
             }
             $reason = "저장소('{$diskName}')가 파일을 받지 못했습니다.";

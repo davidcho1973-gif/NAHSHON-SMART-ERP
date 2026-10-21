@@ -25,9 +25,10 @@ class ClaimLineWorkspaceService
         $service = app(SectionDrawingService::class);
         $canViewDrawings = $service->canView(auth()->user()) && (! JobAccess::managed(auth()->user()) || (JobAccess::can(auth()->user(), 'progress') && JobAccess::can(auth()->user(), 'documents')));
         if ($section && $canViewDrawings) {
-            foreach ($section->sheets as $pick) {
+            $sheetNos = $contract->payload['lineDrawingSheets'][$line->id] ?? $section->sheets->pluck('sheet_no')->all();
+            foreach ($sheetNos as $sheetNo) {
                 $sheet = DrawingSheet::where('site_id', $contract->site_id)
-                    ->whereRaw('upper(sheet_no) = ?', [DrawingSheet::normalizeNo($pick->sheet_no)])
+                    ->whereRaw('upper(sheet_no) = ?', [DrawingSheet::normalizeNo($sheetNo)])
                     ->whereHas('document', fn ($q) => $q->visibleTo(auth()->user()))
                     ->with('document')->orderByDesc('intelligent_document_id')->orderByDesc('id')->first();
                 if ($sheet && $service->findDocument(auth()->user(), $sheet->intelligent_document_id)) {

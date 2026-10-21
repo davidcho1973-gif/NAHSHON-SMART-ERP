@@ -22,6 +22,11 @@
   function mount(host){
     const {wrap,world,stage}=host,base='/admin-api/drawing-sheets/'+host.sheetId+'/studio';
     let doc=null,revision=0,canManage=false,active=false,mode='edit',tool='select',layer='default',selected=[],draft=[],hover=null,gesture=null,dirty=false,saving=false,dead=false,undo=[],redo=[],snap=true,ortho=false,grid=false,preview=null,previewUrl=null,options=null,sendId=null,sent=false,sending=false,conflict=false,newText='';
+    let recovery=null,saveTimer;
+    try{recovery=global.ClaimSaveSafety?.recovery('drawing-overlay:'+host.sheetId);}catch(_){host.hint('기기 복구 저장을 사용할 수 없습니다. 서버 저장을 확인하세요.');}
+    const writer=global.ClaimSaveSafety?new global.ClaimSaveSafety.Writer(request=>{preserve();return api(base,'PUT',request);}):null;
+    function preserve(){if(!recovery||!doc)return false;try{recovery.write({document:doc,revision,pending:writer?.pending});return true;}catch(_){host.hint('기기 저장 공간 부족 · 서버 저장 전 창을 닫지 마세요.');return false;}}
+    function scheduleSave(){preserve();clearTimeout(saveTimer);if(!conflict)saveTimer=setTimeout(save,1200);}
     let style={color:'#ef4444',fill:'none',width:1.5,opacity:1,dash:'solid',fontSize:12},snapLabel='';
     const panelSections={};
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('ds-overlay');svg.style.pointerEvents='none';world.appendChild(svg);
@@ -33,9 +38,9 @@
     const editable=e=>canManage&&!layers().find(l=>l.id===e.layer)?.locked;
     const chosen=()=>objects().filter(e=>selected.includes(e.id));
     function status(text,error=false){const el=$('[data-status]');if(el){el.textContent=text;el.classList.toggle('error',error);}}
-    function changed(before){if(before){undo.push(before);if(undo.length>60)undo.shift();redo=[];}dirty=true;preview=null;sent=false;sendId=null;render();renderPanel();}
+    function changed(before){if(before){undo.push(before);if(undo.length>60)undo.shift();redo=[];}dirty=true;preview=null;sent=false;sendId=null;scheduleSave();render();renderPanel();}
     function mutate(fn){if(!canManage||conflict)return;const before=C.clone(doc);fn();if(JSON.stringify(before)!==JSON.stringify(doc))changed(before);}
-    function history(back){if(!canManage||conflict)return;const from=back?undo:redo,to=back?redo:undo;if(!from.length)return;to.push(C.clone(doc));doc=from.pop();selected=[];draft=[];dirty=true;preview=null;render();renderPanel();}
+    function history(back){if(!canManage||conflict)return;const from=back?undo:redo,to=back?redo:undo;if(!from.length)return;to.push(C.clone(doc));doc=from.pop();selected=[];draft=[];dirty=true;preview=null;scheduleSave();render();renderPanel();}
     function setTool(t){if(tool!==t)newText='';tool=t;draft=[];hover=null;gesture=null;if(!['select','hand'].includes(t))selected=[];renderToolbar();renderPanel();render();if(['dimension','polygon'].includes(t)&&!v().fpp)host.hint('먼저 위의 축척 맞추기로 실제 치수를 설정하세요.');}
     function activate(next='edit'){if(sending)return;if(!doc){host.hint('편집 자료를 불러오는 중입니다.');return;}active=true;mode=next;panel.style.display='block';toolbar.style.display=next==='edit'?'grid':'none';footer.style.display=next==='edit'?'block':'none';
       host.side.style.display='none';host.tools.style.display='none';host.setHand();renderToolbar();renderPanel();render();}
@@ -133,9 +138,14 @@
       if(transformed.some(e=>e.points.some(p=>p.some(n=>!Number.isFinite(n)||n<0||n>1)))){status('변경하면 도형이 도면 밖으로 나갑니다.',true);return;}mutate(()=>transformed.forEach(e=>Object.assign(objects().find(x=>x.id===e.id),e)));}
     function remove(){mutate(()=>{doc.entities=objects().filter(e=>!selected.includes(e.id)||!editable(e));selected=[];});}
     function duplicate(){mutate(()=>{const copies=C.translate(chosen().filter(editable),.012,.012).map(e=>({...e,id:id()}));doc.entities.push(...copies);selected=copies.map(e=>e.id);});}
-    async function save(){if(!dirty||saving||conflict||!canManage)return;saving=true;const snapshot=C.clone(doc),token=JSON.stringify(snapshot);if(mode==='edit')renderPanel();
-      try{const r=await api(base,'PUT',{revision,document:snapshot});revision=r.revision;dirty=JSON.stringify(doc)!==token;saving=false;if(mode==='edit')renderPanel();if(mode==='edit')status(dirty?'새 변경이 남아 있습니다.':'저장됨 · 버전 '+revision);}
-      catch(e){saving=false;conflict=e.status===409;if(mode==='edit'){renderPanel();status(e.message,true);}} }
+    async function save(){if(!dirty||saving||conflict||!canManage||dead)return;clearTimeout(saveTimer);saving=true;let message='',failed=false;
+      if(mode==='edit'){const button=$('[data-save]');if(button){button.disabled=true;button.textContent='저장 중…';}status('서버에 저장 중…');}
+      try{while(dirty&&!dead){const request=()=>({revision,document:C.clone(doc)}),ack=writer?await writer.run(request):{sent:request()};
+        const r=writer?ack.response:await api(base,'PUT',ack.sent);revision=r.revision;dirty=JSON.stringify(doc)!==JSON.stringify(ack.sent.document);
+        if(dirty)preserve();else if(recovery)recovery.clear();}
+        message='서버 저장 완료 · 버전 '+revision;}
+      catch(e){conflict=e.status===409;if(e.status&&e.status<500)writer?.restore(null);preserve();message='도면 입력은 유지됩니다. '+e.message;failed=true;host.hint(message);}
+      finally{saving=false;if(mode==='edit'){const button=$('[data-save]');if(button){button.disabled=!dirty||!canManage||conflict;button.textContent='저장';}status(message,failed);}} }
     function point(ev){const p=host.toWorld(ev.clientX,ev.clientY),view=v();p[0]=Math.max(0,Math.min(1,p[0]));p[1]=Math.max(0,Math.min(1,p[1]));snapLabel='';
       let q=C.drawingPoint(tool,draft.at(-1),p,view.W,view.H,ortho,ev.shiftKey);
       if(snap&&!ev.altKey&&!['pen','highlight'].includes(tool)){const hit=C.snap(q,shown().filter(e=>!selected.includes(e.id)),view.W,view.H,view.k);if(hit){q=hit.point;snapLabel=hit.label;}}
@@ -212,10 +222,13 @@
       const f=new FormData();sendId=sendId||id();f.set('requestId',sendId);f.set('channel',channel);if(channel==='mail')f.set('to',to);else f.set('room',room);f.set('subject',subject);f.set('body',$('[data-body]').value);f.set('attachment',preview.blob,preview.name);
       sending=true;panel.querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=true);status('전송 중…');try{const r=await api(base+'/share','POST',f);sent=true;status(channel==='chat'?'메신저에 전송했습니다.':'메일 서버에 발송을 요청했습니다.');if(channel==='chat')loadMessages();}catch(e){status(e.message+' 전송 결과를 확인하고 미리보기를 다시 만드세요.',true);}finally{sending=false;panel.querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=false);if($('[data-send]'))$('[data-send]').disabled=true;if($('[data-native]'))$('[data-native]').disabled=!(navigator.canShare&&preview&&navigator.canShare({files:[new File([preview.blob],preview.name,{type:preview.blob.type})]}));}}
     stage.addEventListener('pointerdown',down,true);stage.addEventListener('pointermove',move,true);stage.addEventListener('pointerup',up,true);stage.addEventListener('pointercancel',up,true);document.addEventListener('keydown',key,true);
-    const unload=ev=>{if(dirty||sending){ev.preventDefault();ev.returnValue='';}};global.addEventListener('beforeunload',unload);
-    api(base).then(r=>{if(dead)return;doc=r.document;revision=r.revision;canManage=r.canManage;layer=doc.layers[0].id;render();}).catch(e=>host.hint('편집 자료 로드 실패: '+e.message));
-    return {activate,render,useFeet:()=>mutate(()=>doc.unit='ft'),pauseForCalibration:deactivate,beforeClose:()=>!sending&&(!dirty||global.confirm('저장하지 않은 편집 내용이 있습니다. 닫을까요?')),
-      exportSvg:()=>doc?shown().map(e=>C.render(e,v(),doc)).join(''):'',destroy(){dead=true;if(previewUrl)URL.revokeObjectURL(previewUrl);stage.removeEventListener('pointerdown',down,true);stage.removeEventListener('pointermove',move,true);stage.removeEventListener('pointerup',up,true);stage.removeEventListener('pointercancel',up,true);document.removeEventListener('keydown',key,true);global.removeEventListener('beforeunload',unload);}};
+    const unload=ev=>{if(dirty||sending||saving){preserve();ev.preventDefault();ev.returnValue='';}};global.addEventListener('beforeunload',unload);
+    const online=()=>{if(dirty&&!conflict)save();};global.addEventListener('online',online);
+    api(base).then(r=>{if(dead)return;doc=r.document;revision=r.revision;canManage=r.canManage;
+      try{const restored=recovery?.latest();if(canManage&&restored&&global.confirm('서버 저장을 마치지 못한 도면 표시가 있습니다. 복구할까요?')){doc=restored.document;revision=restored.revision;writer?.restore(restored.pending);dirty=true;preserve();host.hint('도면 표시를 복구했습니다. 확인 후 저장하세요.');}}catch(_){host.hint('도면 복구본을 읽지 못했습니다. 서버 내용을 표시합니다.');}
+      layer=doc.layers[0].id;render();}).catch(e=>host.hint('편집 자료 로드 실패: '+e.message));
+    return {activate,render,useFeet:()=>mutate(()=>doc.unit='ft'),pauseForCalibration:deactivate,beforeClose:()=>!sending&&!saving&&(!dirty||(preserve()&&global.confirm('서버 저장을 마치지 못한 도면 표시가 있습니다. 기기 복구본을 남기고 닫을까요?'))),
+      exportSvg:()=>doc?shown().map(e=>C.render(e,v(),doc)).join(''):'',destroy(){if(dirty)preserve();dead=true;clearTimeout(saveTimer);if(previewUrl)URL.revokeObjectURL(previewUrl);stage.removeEventListener('pointerdown',down,true);stage.removeEventListener('pointermove',move,true);stage.removeEventListener('pointerup',up,true);stage.removeEventListener('pointercancel',up,true);document.removeEventListener('keydown',key,true);global.removeEventListener('beforeunload',unload);global.removeEventListener('online',online);}};
   }
   global.DrawingStudio={mount,pdfBlob};
 })(window);
