@@ -104,7 +104,7 @@
       }
       global.apiCache = {};
       ui().toast(message);
-      return refresh().then(function () { return { success: true }; });
+      return refresh().catch(function(){ui().toast('서버에 저장됐습니다. 목록을 다시 불러와 주세요.');}).then(function () { return { success: true }; });
     });
   }
   function summary() {
@@ -113,7 +113,7 @@
       ['원문 항목 계산합 (행별 반올림)', money(s.sourceClaimAmount), '가져온 항목수량 × 단가의 계산합 · 원본 요약 청구액과 구분'],
       ['확인된 작업 금액', money(s.verifiedAmount), '확정 계약 조건과 검토된 실제 작업 기준'],
       ['초안 편입 가능 금액', money(s.availableAmount), '기존 회차 배정분 제외 · 선급금/유보금 별도'],
-      ['검토 대기 기록', (s.unverifiedCount || 0) + '건', '예상 작업과 원본 청구는 확인 실적에 미포함']
+      ['미검토 기록 · 원본·예상 포함', (s.unverifiedCount || 0) + '건', '예상 작업과 원본 청구는 확인 실적에 미포함']
     ];
     return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:18px">' + cells.map(function (c) {
       return '<div style="padding:15px;border:1px solid var(--border-default);border-radius:12px;background:var(--bg-surface)"><div style="font-size:12px;color:var(--text-secondary)">' + esc(c[0]) + '</div><div style="font-size:22px;font-weight:700;margin:6px 0">' + esc(c[1]) + '</div>' + hint(c[2]) + '</div>';
@@ -408,10 +408,10 @@
       fields.push(field('evidenceSource' + i, '근거 ' + (i + 1), e.id ? e.type + ':' + e.id : '', { type: 'select', options: opts, group: '기존 ERP 자료 연결', hint: i === 0 ? '문서함·현장 접수·공정 사진에서 같은 현장의 자료를 연결합니다.' : '' }));
       fields.push(field('evidenceLocator' + i, '근거 ' + (i + 1) + '의 정확한 위치', e.locator, { group: '기존 ERP 자료 연결', hint: '문서 쪽수, 도면 번호/개정번호, 사진 속 해당 위치' }));
     }
-    ui().formModal({ title: 'BOQ ' + l.lineNo + ' — 현장 기록 연결', subtitle: '자료 연결은 수량 확인과 별개입니다. 사람이 검토하기 전까지 기성 초안에 반영되지 않습니다.', saveLabel: '검토 대기로 저장', fields: fields, onSave: function (v) {
+    ui().formModal({ draftKey:'record:'+state.contractId+':'+lineId+':'+(id||'new'), draftVersion:r.revision, title: 'BOQ ' + l.lineNo + ' — 현장 기록 연결', subtitle: '자료 연결은 수량 확인과 별개입니다. 사람이 검토하기 전까지 기성 초안에 반영되지 않습니다.', saveLabel: '검토 대기로 저장', fields: fields, onSave: function (v) {
       if (v.recordKind === 'actual' && v.workDate > today()) return { success: false, errors: { workDate: '미래 날짜는 예상 작업으로 기록해 주세요.' } };
       if (id) v.id = id;
-      v.lineId = lineId; v.sourceRef = sourceRef; v.evidence = [];
+      v.lineId = lineId; v.sourceRef = r.sourceRef || (v.requestId ? 'field-ui:'+v.requestId : sourceRef); v.evidence = [];
       for (var j = 0; j < n; j++) {
         var selection = v['evidenceSource' + j];
         if (selection) {
@@ -430,7 +430,7 @@
     var fields = [];
     if (action === 'verify') fields.push(field('verifiedQty', '실제로 확인한 수량', r.reportedQty, { required: true, hint: '보고수량 ' + qty(r.reportedQty) + ' 이하로 입력하세요. 일부만 확인했다면 차이 사유를 남기세요.' }));
     fields.push(field('reviewNote', action === 'verify' ? '검토 내용 / 수량 차이 사유' : '사유', '', { required: true, type: 'textarea', colSpan: 2 }));
-    ui().formModal({ title: action === 'verify' ? '근거를 검토하고 수량 확인' : action === 'reopen' ? '검토 재개' : '작업 기록 반려', subtitle: action === 'verify' ? '연결된 원본과 작업 위치·날짜·단계를 대조한 결과를 기록합니다. 원청 승인이나 입금 처리는 아닙니다.' : '변경 사유와 담당자가 기록됩니다. 회차에 배정된 기록은 수정할 수 없습니다.', saveLabel: action === 'verify' ? '확인수량 기록' : action === 'reopen' ? '검토 대기로 되돌리기' : '반려 기록', fields: fields, onSave: function (v) { v.id = id; v.action = action; return save('api_reviewClaimRecord', v, '검토 결과를 기록했습니다.'); } });
+    ui().formModal({ draftKey:'review:'+id+':'+action, draftVersion:r.revision, title: action === 'verify' ? '근거를 검토하고 수량 확인' : action === 'reopen' ? '검토 재개' : '작업 기록 반려', subtitle: action === 'verify' ? '연결된 원본과 작업 위치·날짜·단계를 대조한 결과를 기록합니다. 원청 승인이나 입금 처리는 아닙니다.' : '변경 사유와 담당자가 기록됩니다. 회차에 배정된 기록은 수정할 수 없습니다.', saveLabel: action === 'verify' ? '확인수량 기록' : action === 'reopen' ? '검토 대기로 되돌리기' : '반려 기록', fields: fields, onSave: function (v) { v.id = id; v.action = action; return save('api_reviewClaimRecord', v, '검토 결과를 기록했습니다.'); } });
   }
   function draft() {
     if (!manage()) return;

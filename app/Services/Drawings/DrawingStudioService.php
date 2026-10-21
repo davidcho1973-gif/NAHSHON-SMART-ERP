@@ -4,6 +4,7 @@ namespace App\Services\Drawings;
 
 use App\Models\DrawingSheet;
 use App\Models\User;
+use App\Services\Finance\ClaimWriteReceipt;
 use App\Support\AiInformationAccess;
 use App\Support\JobAccess;
 use Illuminate\Support\Facades\DB;
@@ -85,14 +86,18 @@ class DrawingStudioService
         return $v;
     }
 
-    public function save(User $user, DrawingSheet $sheet, int $revision, array $document): array
+    public function save(User $user, DrawingSheet $sheet, int $revision, array $document, ?string $requestId = null): array
     {
         $this->access($user, $sheet, true);
         $document = $this->validateDocument($document);
 
-        return DB::transaction(function () use ($user, $sheet, $revision, $document): array {
+        return DB::transaction(function () use ($user, $sheet, $revision, $document, $requestId): array {
             // Lock the parent even before the first overlay exists: two initial saves cannot both win.
             DrawingSheet::whereKey($sheet->id)->lockForUpdate()->firstOrFail();
+            $input = compact('revision', 'document', 'requestId');
+            if ($replay = ClaimWriteReceipt::replay($input, 'drawing-overlay', $sheet->id)) {
+                return $replay;
+            }
             $current = $this->read($sheet);
             abort_if($current['revision'] !== $revision, 409, '다른 창에서 도면을 수정했습니다. 작업 파일을 내려받고 최신 내용을 다시 여세요.');
             $next = $revision + 1;
@@ -105,7 +110,7 @@ class DrawingStudioService
             DB::table('drawing_studio_revisions')->insert(['drawing_studio_id' => $id, 'revision' => $next,
                 'document' => $json, 'created_by' => $user->id, 'created_at' => now()]);
 
-            return ['success' => true, 'revision' => $next];
+            return ClaimWriteReceipt::remember($input, 'drawing-overlay', $sheet->id, ['success' => true, 'revision' => $next]);
         });
     }
 }

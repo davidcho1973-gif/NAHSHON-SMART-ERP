@@ -30,9 +30,9 @@ class DrawingStudioController extends Controller
 
     public function save(Request $request, DrawingSheet $sheet): JsonResponse
     {
-        $data = $request->validate(['revision' => 'required|integer|min:0', 'document' => 'required|array']);
+        $data = $request->validate(['revision' => 'required|integer|min:0', 'document' => 'required|array', 'requestId' => 'nullable|uuid']);
 
-        return response()->json($this->studio->save($request->user(), $sheet, $data['revision'], $data['document']));
+        return response()->json($this->studio->save($request->user(), $sheet, $data['revision'], $data['document'], $data['requestId'] ?? null));
     }
 
     /** Read only the selected printed label; the user identifies its dimension endpoints and confirms scale. */

@@ -9,7 +9,7 @@
     var r = await fetch('/field-claims' + path, {credentials: 'same-origin', method: body ? 'POST' : 'GET', headers: headers,
       body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : undefined});
     var data = await r.json().catch(function () { return {}; });
-    if (!r.ok || data.success === false) throw new Error(data.error || data.message || '요청하지 못했습니다. 로그인과 권한을 확인하세요.');
+    if (!r.ok || data.success === false) { var error = new Error(data.error || data.message || '요청하지 못했습니다. 로그인과 권한을 확인하세요.'); error.status = r.status; error.result = data; throw error; }
     return data;
   }
   async function load() {
@@ -22,21 +22,30 @@
           '<p>내 증빙 ' + l.attachments.length + '개 · 원본은 검토 담당자가 열람합니다.</p>' +
           l.records.map(function (r) { return '<div class="record"><strong>' + u.esc(statuses[r.status] || r.status) + '</strong> · ' +
             u.esc(r.workDate + ' / ' + r.location + ' / ' + (stages[r.stage] || r.stage) + ' / ' + r.reportedQty + ' ' + l.unit) +
-            '<p>' + u.esc(r.notes || '') + '</p><span class="' + (r.evidenceCount ? '' : 'missing') + '">' +
+            '<p>' + u.esc(r.notes || '') + '</p>' + (r.verifiedQty != null ? '<p>확인 수량 '+u.esc(r.verifiedQty+' '+l.unit)+'</p>' : '') +
+            (r.reviewNote ? '<p>검토 내용: '+u.esc(r.reviewNote)+'</p>' : '') + '<span class="' + (r.evidenceCount ? '' : 'missing') + '">' +
             (r.evidenceCount ? '증빙 ' + r.evidenceCount + '개' : '증빙 미첨부') + '</span>' +
             (r.status === 'pending' ? '<button data-record="' + l.id + '" data-id="' + r.id + '">수정 · 증빙 추가</button>' : '') + '</div>'; }).join('') + '</article>';
       }).join('') + '</section>';
     }).join('') : '<article><h2>담당 공정 배정을 기다리고 있습니다.</h2><p>관리자에게 현장과 담당 공종 배정을 요청하세요. 배정 후 이 화면에 공정이 나타납니다.</p></article>';
   }
   function upload(l) {
-    var input;
+    var input, completed = new Set(), progress;
     u.formModal({title: '증빙 한 번에 올리기', subtitle: l.description + ' · 파일당 최대 20MB. 원본을 보존하여 검토자에게 전달합니다.', saveLabel: '업로드',
       fields: [{name: 'files', label: '사진 · PDF · Word · Excel', type: 'file', accept: '.pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx', required: true, colSpan: 2}],
-      onReady: function (el) { input = el.querySelector('input[type=file]'); input.multiple = true; },
+      onReady: function (el) { input = el.querySelector('input[type=file]'); input.multiple = true; progress=document.createElement('p');progress.setAttribute('role','status');input.after(progress); },
       onSave: async function () {
         var files = Array.from(input.files); if (files.length > 20) return {success: false, error: '한 번에 20개까지 올려주세요.'};
-        for (var f of files) { var form = new FormData(); form.append('file', f); await request('/lines/' + l.id + '/attachments', form); }
-        await load(); u.toast('접수했습니다. 작업 기록에서 증빙을 선택해 검토 요청하세요.'); return {success: true};
+        var failures=[];
+        for (var f of files) {
+          if(completed.has(f))continue;
+          try { var form = new FormData(); form.append('file', f); await request('/lines/' + l.id + '/attachments', form); completed.add(f); }
+          catch(e){failures.push(f.name+': '+e.message);}
+          progress.textContent='서버 저장 완료 '+completed.size+'/'+files.length+' · 원본 보존';
+        }
+        await load().catch(function(){u.toast('파일은 저장됐습니다. 목록은 새로고침해 주세요.');});
+        if(failures.length)return {success:false,error:failures.join('\n')+' · 업로드를 다시 누르면 실패한 파일만 재시도합니다.'};
+        u.toast('접수했습니다. 작업 기록에서 증빙을 선택해 검토 요청하세요.'); return {success: true};
       }
     });
   }
@@ -51,13 +60,13 @@
     ];
     l.attachments.forEach(function (a) { fields.push({name: 'proof_' + a.id, label: a.name, type: 'checkbox', checkboxLabel: '이 기록에 첨부',
       value: (r.evidence || []).some(function (e) { return e.attachmentId === a.id; }), colSpan: 2}); });
-    u.formModal({title: (id ? '작업 기록 수정' : '작업 기록 작성') + ' · #' + l.lineNo,
+    u.formModal({draftKey:'field-record:'+l.id+':'+(id||'new'), draftVersion:r.revision, title: (id ? '작업 기록 수정' : '작업 기록 작성') + ' · #' + l.lineNo,
       subtitle: '제출하면 확인 대기로 저장됩니다. 증빙이 없으면 미첨부로 표시됩니다.', saveLabel: '검토 요청', fields: fields,
       onSave: async function (v) {
-        var body = {workDate: v.workDate, stage: v.stage, location: v.location, reportedQty: v.reportedQty, notes: v.notes,
+        var body = {requestId:v.requestId, expectedRevision:v.expectedRevision, workDate: v.workDate, stage: v.stage, location: v.location, reportedQty: v.reportedQty, notes: v.notes,
           evidence: l.attachments.filter(function (a) { return v['proof_' + a.id]; }).map(function (a) { return {attachmentId: a.id, locator: '문서 전체'}; })};
         if (id) body.id = id;
-        await request('/lines/' + l.id + '/records', body); await load(); u.toast('검토 요청을 저장했습니다.'); return {success: true};
+        await request('/lines/' + l.id + '/records', body); await load().catch(function(){u.toast('검토 요청은 저장됐습니다. 목록은 새로고침해 주세요.');}); u.toast('검토 요청을 저장했습니다.'); return {success: true};
       }
     });
   }

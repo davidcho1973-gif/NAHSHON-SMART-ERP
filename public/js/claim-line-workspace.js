@@ -112,6 +112,6 @@
   }
   w.AdminClaimLineWorkspace={cad:function(){var c=context;if(!c||!c.canManage)return;w.AdminClaimEditor.open(c.contractId,c.siteId||data.siteId,data.drawings||[],{lineId:c.line.id,openCAD:true,onClose:function(){if(sameLine(c))context.reload();}});},mount:mount,row:row,preview:preview,drawing:drawing,editDocument:editDocument,upload:upload,reload:load,
     reloadAll:function(){w.apiCache={};return context.reload();},
-    inbox:function(){w.AdminClaimEvidence.openInbox();},
+    inbox:function(){w.AdminClaimEvidence.openInbox(context.line.id);},
     page:function(n){page=n;return load();},_gaps:gaps};
 })(window);

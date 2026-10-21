@@ -64,6 +64,18 @@ class DrawingStudioTest extends TestCase
         $this->assertDatabaseCount('drawing_studio_revisions', 1);
     }
 
+    public function test_lost_overlay_response_retries_the_saved_revision_without_duplicates(): void
+    {
+        $payload = ['revision' => 0, 'requestId' => (string) Str::uuid(), 'document' => $this->drawing()];
+        $this->putJson($this->url, $payload)->assertOk()->assertJsonPath('revision', 1);
+        $this->putJson($this->url, $payload)->assertOk()->assertJsonPath('revision', 1);
+        $this->assertDatabaseCount('drawing_studio_revisions', 1);
+        $other = $payload;
+        $other['requestId'] = (string) Str::uuid();
+        $this->putJson($this->url, $other)->assertStatus(409);
+        $this->getJson($this->url)->assertOk()->assertJsonPath('revision', 1);
+    }
+
     public function test_scope_and_read_only_permissions_apply_to_every_route(): void
     {
         $otherSite = Site::create(['company_id' => $this->sheet->site->company_id, 'code' => 'OTHER', 'name' => 'Other', 'status' => 'active']);

@@ -2,7 +2,7 @@
   'use strict';
   function call(name, args) {
     return global.gsRun(name, args, null).then(function (r) {
-      if (!r || r.success === false) throw new Error(r && r.error || '처리하지 못했습니다.');
+      if (!r || r.success === false) { var e = new Error(r && r.error || '처리하지 못했습니다.'); e.result = r; throw e; }
       return r;
     });
   }
@@ -12,7 +12,23 @@
     var u = global.AdminUI, esc = u.esc, box, data, line, content, revision = 0, timer, saving = Promise.resolve(), closed = false;
     var undo = [], redo = [], dirty = false, newWork = false, searchTimer, searchVersion = 0, activeSheetId = null;
     var embedded = null, embeddedSheet = null, uploading = false, committing = false, modal, cadActive = false;
-    function error(e) { if (dirty) state('저장되지 않음 · 다시 시도하세요'); u.toast(e.message || '처리하지 못했습니다.', 'error'); }
+    var backup = null, backupOk = false, navigating = false, conflict = null, pendingFiles = [];
+    var writer = new global.ClaimSaveSafety.Writer(function(request){ preserve(); return call('api_saveClaimEditDraft', [request]); });
+    function preserve() {
+      if (!backup || !line) return;
+      try { backup.write({content:content, revision:revision, newWork:newWork, pending:writer.pending, pendingFiles:pendingFiles}); backupOk=true; }
+      catch (_) { backupOk=false; state('기기 임시 저장 실패 · 서버 저장 전 창을 닫지 마세요'); }
+    }
+    function error(e) {
+      if(e.result && e.result.success===false){writer.restore(null);preserve();}
+      if (e.result?.code === 'draft_conflict') { conflict=e.result.currentDraft; writer.restore(null); preserve(); }
+      if (dirty) state(conflict ? '다른 창과 충돌 · 내용 비교 필요' : '서버 저장 실패 · 입력 유지 · 다시 저장하세요');
+      var button=box?.querySelector('[data-resolve]'); if(button)button.hidden=!conflict;
+      u.toast(e.message || '처리하지 못했습니다.', 'error');
+    }
+    function unload(e) { if(dirty || uploading || committing || navigating || writer.pending || pendingFiles.length){preserve();e.preventDefault();e.returnValue='';} }
+    function online() { if(dirty && !conflict && !closed)save().catch(error); }
+    function visibility() { if(document.visibilityState==='hidden' && dirty)preserve(); }
     function money(v) { return Number(v || 0).toLocaleString('en-US', { style: 'currency', currency: data.contract.currency || 'USD' }); }
     function snapshot() { undo.push(JSON.stringify(content)); redo = []; }
     function total() {
@@ -23,32 +39,37 @@
     function queueSave() {
       if (locked()) return;
       dirty = true; clearTimeout(timer); state('저장 대기');
-      timer = setTimeout(function () { save().catch(error); }, 1200);
+      preserve();
+      if(!conflict)timer = setTimeout(function () { save().catch(error); }, 1200);
     }
     function save() {
       clearTimeout(timer);
-      saving = saving.catch(function () {}).then(function () {
-        if (!dirty || !line || closed) return;
-        var sent = JSON.stringify(content), id = line.id;
-        state('저장 중…');
-        return call('api_saveClaimEditDraft', [{ lineId: id, revision: revision, content: JSON.parse(sent), newWork: newWork }]).then(function (r) {
-          if (!line || line.id !== id) return;
+      saving = saving.catch(function () {}).then(async function () {
+        if(conflict)throw new Error('두 초안을 비교한 뒤 저장하세요.');
+        // Drain all edits, including keystrokes made while the previous request was in flight.
+        while ((dirty || writer.pending) && line && !closed) {
+          state('서버 저장 중…');
+          var ack=await writer.run(function(){return {lineId:line.id,revision:revision,content:content,newWork:newWork};});
+          var r=ack.response, sent=JSON.stringify(ack.sent.content), id=ack.sent.lineId;
+          if (!line || line.id !== id) throw new Error('공정이 변경되었습니다. 저장 내용을 다시 확인하세요.');
           revision = r.draft.revision; newWork = false;
           var index = data.drafts.findIndex(function (d) { return d.lineId === id; });
           if (index < 0) data.drafts.push(r.draft); else data.drafts[index] = r.draft;
           dirty = JSON.stringify(content) !== sent;
           if (!dirty) content = JSON.parse(JSON.stringify(r.draft.content));
           else content.evidence.forEach(function (e) { var saved = r.draft.content.evidence.find(function (p) { return p.type === e.type && p.id === e.id; }); if (saved) e.sha256 = saved.sha256; });
-          state(dirty ? '저장 대기' : '저장됨');
-        });
+          if(dirty || pendingFiles.length)preserve(); else if(backup){try{backup.clear();}catch(_){}}
+          state(dirty ? '추가 입력 저장 중…' : '서버 저장 완료 · '+new Date(r.draft.savedAt || Date.now()).toLocaleTimeString()+' · 아직 검토 요청 전');
+        }
       });
       return saving;
     }
     function choose(id) {
-      if (uploading || committing || cadActive) return Promise.resolve();
+      if (uploading || committing || cadActive || navigating) return Promise.resolve();
       if (embedded && !embedded.beforeClose()) return Promise.resolve();
       if (embedded) { embedded.close(true); embedded = null; embeddedSheet = null; }
-      return save().then(function () { if (dirty) return save(); }).then(function () {
+      navigating=true;box.inert=true;
+      return save().then(function () {
         searchVersion++; clearTimeout(searchTimer);
         line = data.lines.find(function (l) { return l.id === Number(id); });
         var draft = data.drafts.find(function (d) { return d.lineId === line.id; });
@@ -56,15 +77,39 @@
         content = draft ? JSON.parse(JSON.stringify(draft.content)) : { workDate: data.contract.today, location: '', stage: line.recognitionBasis === 'milestone' ? (Object.keys(line.stageWeights || {}).includes('installation') ? 'installation' : Object.keys(line.stageWeights || {})[0]) : 'installed', quantity: 0, calculations: [], evidence: [], marks: [], notes: '' };
         var preferred = (sheets || []).find(function (s) { return (s.sectionIds || []).includes(line.workSectionId); }) || (sheets || [])[0]; activeSheetId = preferred ? preferred.id : null;
         undo = []; redo = []; dirty = false; newWork = false;
+        conflict=null;pendingFiles=[];writer.restore(null);
+        backup=null;
         // A submitted work record stays immutable. Further attachments start a new draft.
         if (options.fullscreen && draft && draft.recordId) {
           newWork = true;
           content = {workDate:data.contract.today,location:'',stage:content.stage,quantity:0,calculations:[],evidence:[],marks:[],notes:''};
         }
+        try {
+          backup=global.ClaimSaveSafety.recovery('editor:'+contractId+':'+line.id);
+          var recovered=backup.latest();
+          if(recovered && global.confirm('이 공정에 서버 저장을 마치지 못한 입력이 있습니다. 복구할까요?')){
+            content=recovered.content;revision=recovered.revision;newWork=recovered.newWork;writer.restore(recovered.pending);pendingFiles=recovered.pendingFiles||[];dirty=true;preserve();
+          }
+        }catch(_){state('기기 복구본을 읽지 못했습니다. 서버 초안을 사용합니다.');}
         render();
+        if(dirty)state('복구한 입력 · 확인 후 저장하세요'+(pendingFiles.length?' · 미완료 파일 '+pendingFiles.join(', ')+' 다시 선택 필요':''));
         if (draft && draft.recordId && !options.fullscreen) state('기록 완료 #' + draft.recordId);
         if(options.openCAD){options.openCAD=false;openCAD();}
-      }).catch(error);
+      }).catch(error).finally(function(){navigating=false;box.inert=cadActive||committing;});
+    }
+    function resolveConflict() {
+      if(!conflict)return;
+      var latest=conflict;
+      function summary(c){return '<p>'+esc(c.workDate)+' · '+esc(c.stage)+' · 수량 '+esc(c.quantity)+' · '+esc(c.location)+'</p><p>증빙 '+(c.evidence||[]).length+'개 · 산출 '+(c.calculations||[]).length+'행 · 표시 '+(c.marks||[]).length+'개</p><pre style="white-space:pre-wrap">'+esc(c.notes)+'</pre><details><summary>모든 입력·증빙 연결 상세 보기</summary><pre style="white-space:pre-wrap">'+esc(JSON.stringify(c,null,2))+'</pre></details>';}
+      var compare=u.modal({title:'두 초안 비교',body:'<h3>현재 입력</h3>'+summary(content)+'<h3>서버의 최신 초안</h3>'+summary(latest.content),actions:[{label:'돌아가기',value:null},{label:'서버 내용 사용',value:'server'},{label:'내 입력으로 새 버전 저장',value:'mine'}]}); compare.result.then(function(action){
+        if(action!=='server'&&action!=='mine')return;
+        if(action==='mine'&&latest.recordId){u.toast('서버 초안은 이미 검토 요청됐습니다. 서버 내용을 열고 새 작업을 시작하세요.','error');return;}
+        revision=latest.revision;newWork=false;writer.restore(null);conflict=null;
+        var i=data.drafts.findIndex(function(d){return d.lineId===line.id;});if(i<0)data.drafts.push(latest);else data.drafts[i]=latest;
+        if(action==='server'){content=JSON.parse(JSON.stringify(latest.content));dirty=false;render();state('서버 초안을 불러왔습니다. 이전 입력은 기기 복구본에 보관됩니다.');}
+        else {dirty=true;preserve();save().then(render).catch(error);}
+        box.querySelector('[data-resolve]').hidden=true;
+      });
     }
     function render() {
       if (options.fullscreen) { renderEvidence(); return; }
@@ -81,7 +126,7 @@
         '<div data-panel="evidence"><label>증빙 바로 올리기<input data-upload type="file" multiple accept="image/*,.pdf,.docx,.xlsx,.csv"></label><div data-upload-state></div></div><p>' + esc((line.blockers || []).join(' · ')) + '</p><details><summary>공정 필수자료 설정</summary><div data-requirements></div><button type="button" data-rule-add>+ 필수자료</button><button type="button" data-rule-save>조건 저장</button></details><h4>기존 자료 연결</h4><input data-search placeholder="자료 검색"><div data-sources style="max-height:200px;overflow:auto"></div><div data-linked></div>' +
         '<div><button type="button" data-template>작업 보고서 양식 넣기</button><button type="button" data-paste-table>Excel 표 붙여넣기</button></div><label>작업 설명 · 보고서<textarea data-field="notes" rows="8">' + esc(content.notes) + '</textarea></label><p><button type="button" data-undo>되돌리기</button> <button type="button" data-redo>다시 실행</button></p><button type="button" data-commit>확인 대기로 기록</button><button type="button" data-review>기존 기록 · 확인</button><button type="button" data-new>새 작업</button>' +
         '<details><summary>초안 수정 이력</summary><div data-history></div></details><details data-record-history><summary>작업 이력 ' + records.length + '건</summary>' + records.map(function (r) { return '<p>' + (r.status === 'pending' && r.recordKind === 'actual' ? '<input type="checkbox" data-record-select value="' + r.id + '"> ' : '') + esc(r.workDate + ' · ' + r.location + ' · ' + r.reportedQty + ' ' + line.unit + ' · ' + r.status) + (r.status === 'pending' && r.recordKind === 'actual' ? ' <button data-edit-record="'+r.id+'">수정</button>' : '') + '</p>'; }).join('') + '<button type="button" data-bulk>선택 기록에 위 작업일·위치 적용</button></details></section></div>';
-      box.querySelectorAll('[data-edit-record]').forEach(function(b){b.onclick=function(){var record=data.records.find(function(r){return r.id===Number(b.dataset.editRecord);});u.formModal({title:'작업 기록 #'+record.id+' 수정',subtitle:'검토 대기 기록의 수정 이력이 남습니다.',fields:[{name:'workDate',label:'작업일',type:'date',value:record.workDate,required:true},{name:'location',label:'작업 위치',value:record.location,required:true},{name:'reportedQty',label:'보고 수량 ('+line.unit+')',type:'number',value:record.reportedQty,required:true},{name:'notes',label:'작업 설명',type:'textarea',value:record.notes||'',colSpan:2}],onSave:function(v){return call('api_saveClaimRecord',[Object.assign({id:record.id},v)]).then(function(){return call('api_getClaimEditor',[contractId]);}).then(function(r){data=r;render();return {success:true};}).catch(function(e){return {success:false,error:e.message};});}});};});
+      box.querySelectorAll('[data-edit-record]').forEach(function(b){b.onclick=function(){var record=data.records.find(function(r){return r.id===Number(b.dataset.editRecord);});u.formModal({draftKey:'record:'+contractId+':'+line.id+':'+record.id,draftVersion:record.revision,title:'작업 기록 #'+record.id+' 수정',subtitle:'검토 대기 기록의 수정 이력이 남습니다.',fields:[{name:'workDate',label:'작업일',type:'date',value:record.workDate,required:true},{name:'location',label:'작업 위치',value:record.location,required:true},{name:'reportedQty',label:'보고 수량 ('+line.unit+')',type:'number',value:record.reportedQty,required:true},{name:'notes',label:'작업 설명',type:'textarea',value:record.notes||'',colSpan:2}],onSave:function(v){return call('api_saveClaimRecord',[Object.assign({id:record.id},v)]).then(function(){return call('api_getClaimEditor',[contractId]).then(function(r){data=r;render();}).catch(function(){u.toast('기록은 서버에 저장됐습니다. 목록을 다시 불러와 주세요.');}).then(function(){return {success:true};});});}});};});
       box.querySelector('[data-upload]').onchange = uploadFiles;
       if(box.querySelector('[data-cad]'))box.querySelector('[data-cad]').onclick=openCAD;
       box.querySelector('[data-template]').onclick=function(){snapshot();content.notes+=(content.notes?'\n\n':'')+'작업 내용\n• \n\n시공 위치 및 범위\n• \n\n자재 · 장비\n• \n\n검측 및 보완사항\n• \n\n다음 작업 계획\n• ';box.querySelector('[data-field="notes"]').value=content.notes;queueSave();};
@@ -95,7 +140,7 @@
       box.querySelector('[data-redo]').onclick = function () { if (!redo.length) return; undo.push(JSON.stringify(content)); content = JSON.parse(redo.pop()); render(); queueSave(); };
       box.querySelector('[data-new]').onclick = function () { if(uploading || committing)return; if (!global.confirm('새 작업 초안을 시작할까요? 기존 시공 기록은 보존됩니다.')) return; newWork = true; snapshot(); content = { workDate: data.contract.today, location: '', stage: line.recognitionBasis === 'milestone' ? (Object.keys(line.stageWeights || {}).includes('installation') ? 'installation' : Object.keys(line.stageWeights || {})[0]) : 'installed', quantity: 0, calculations: [], evidence: [], marks: [], notes: '' }; render(); queueSave(); };
       box.querySelector('[data-review]').onclick = function () { if(options.fullscreen){var history=box.querySelector('[data-record-history]');history.open=true;history.scrollIntoView({block:'start'});return;} save().then(function () { if (embedded && !embedded.beforeClose()) return; modal.close(null); global.AdminClaimEvidence.open(contractId, line.id); }).catch(error); };
-      box.querySelector('[data-commit]').onclick = function () { var b = this; if (committing || uploading) return; committing = true; b.disabled = true; save().then(function () { if (!revision) { dirty = true; return save(); } }).then(function () { return call('api_commitClaimEditDraft', [{ lineId: line.id, revision: revision }]); }).then(function (r) { state('확인 대기 기록 #' + r.id); u.toast('기록했습니다. 담당자 확인 후 기성에 포함됩니다.'); return call('api_getClaimEditor', [contractId]).then(function (fresh) { data = fresh; render(); state('확인 대기 기록 #' + r.id); }); }).catch(error).finally(function () { committing = false; b.disabled = false; }); };
+      box.querySelector('[data-commit]').onclick = function () { var b = this; if (committing || uploading) return; committing = true; box.inert = true; b.disabled = true; save().then(function () { if (!revision) { dirty = true; return save(); } }).then(function () { return call('api_commitClaimEditDraft', [{ lineId: line.id, revision: revision }]); }).then(function (r) { state('확인 대기 기록 #' + r.id); u.toast('기록했습니다. 담당자 확인 후 기성에 포함됩니다.'); return call('api_getClaimEditor', [contractId]).then(function (fresh) { data = fresh; render(); state('확인 대기 기록 #' + r.id); }); }).catch(error).finally(function () { committing = false; box.inert = false; b.disabled = false; }); };
       if (activeSheetId !== null) box.querySelector('[data-sheet]').value = String(activeSheetId);
       box.querySelector('[data-sheet]').onchange = function () { if (embedded && !embedded.beforeClose()) { this.value = String(activeSheetId); return; } if (embedded) { embedded.close(true); embedded = null; embeddedSheet = null; } activeSheetId = Number(this.value); preview(); };
       box.querySelector('[data-drawing]').onclick = function () {
@@ -170,7 +215,7 @@
 
     function renderEvidence() {
       box.querySelector('[data-record-title]').textContent = '#' + line.lineNo + ' ' + line.description;
-      box.querySelector('[data-edit-body]').innerHTML = '<section><button type="button" data-cad>CAD 편집 · 기성 증빙 연결</button><label>자료 올리기<input data-upload type="file" multiple accept="image/*,.pdf,.docx,.xlsx,.csv"></label><div data-upload-state role="status"></div><div data-linked></div><label>작업 설명<textarea data-field="notes" rows="12" maxlength="5000">' + esc(content.notes) + '</textarea></label></section>';
+      box.querySelector('[data-edit-body]').innerHTML = '<section><p>자료는 초안으로 저장됩니다. 수량 입력 후 검토 요청을 완료하세요.</p><button type="button" data-next>다음: 수량 입력 · 검토 요청</button><button type="button" data-cad>CAD 편집 · 기성 증빙 연결</button><label>자료 올리기<input data-upload type="file" multiple accept="image/*,.pdf,.docx,.xlsx,.csv"></label><div data-upload-state role="status"></div><div data-linked></div><label>작업 설명<textarea data-field="notes" rows="12" maxlength="10000">' + esc(content.notes) + '</textarea></label></section>';
       var picker = box.querySelector('[data-sheet]');
       if (!picker) {
         picker = document.createElement('select'); picker.dataset.sheet = ''; picker.setAttribute('aria-label','도면 선택');
@@ -182,6 +227,7 @@
       box.querySelector('[data-upload]').onchange = uploadFiles;
       box.querySelector('[data-field="notes"]').oninput = function(){content.notes=this.value;queueSave();};
       box.querySelector('[data-cad]').onclick=openCAD;
+      box.querySelector('[data-next]').onclick=function(){save().then(function(){var id=line.id;modal.close(null);if(!box.isConnected)open(contractId,siteId,sheets,{lineId:id,onClose:options.onClose});}).catch(error);};
       attachments(); preview();
     }
 
@@ -262,22 +308,37 @@
         };
       }).catch(error).finally(function () { button.disabled = false; });
     }
-    function uploadFiles() {
+    async function uploadFiles() {
       var files = Array.from(this.files || []), input = this, statusEl = box.querySelector('[data-upload-state]');
-      if (!files.length || uploading) return; if (files.length + content.evidence.length > 20) { u.toast('연결 증빙은 20개까지 가능합니다.', 'error'); return; }
-      uploading = true; input.disabled = true;
-      files.reduce(function (chain, file) { return chain.then(function () {
-        statusEl.textContent = file.name + ' 올리는 중…';
-        var fd = new FormData(); fd.append('files[]', file); fd.append('purpose','claim_evidence'); fd.append('site_id',siteId);
-        if (data.contract.projectId) fd.append('project_id',data.contract.projectId);
-        if (data.contract.companyId) fd.append('company_id',data.contract.companyId);
-        return fetch('/document-hub/api/upload',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''},body:fd}).then(function(r){return r.json();}).then(function(r){
-          var id = r.documents?.[0]?.id || r.duplicates?.[0]?.documentId;
-          if (!id) throw new Error(file.name + ': ' + (r.failed?.[0]?.reason || r.message || '업로드 실패'));
-          if (!data.sourceOptions.some(function(x){return x.value==='document:'+id;})) data.sourceOptions.push({value:'document:'+id,label:file.name});
-          snapshot(); addSource('document:'+id); sources(); queueSave(); return save();
-        });
-      }); },Promise.resolve()).then(function(){statusEl.textContent='업로드 완료 · 원본 보존 · 분석 및 검토 전';input.value='';}).catch(function(e){statusEl.textContent=e.message;error(e);}).finally(function(){uploading=false;input.disabled=false;});
+      if (!files.length || uploading || conflict) return;
+      var uploaded=input.claimUploaded || (input.claimUploaded=new Map());
+      if (files.filter(function(f){return !uploaded.has(f);}).length + content.evidence.length > 20) { u.toast('연결 증빙은 20개까지 가능합니다.', 'error'); return; }
+      uploading = true; box.inert=true; pendingFiles=files.map(function(f){return f.name;});preserve();
+      var failures=[];
+      try {
+        for(var file of files){
+          try {
+            statusEl.textContent = file.name + ' 원본 저장 및 공정 연결 중…';
+            var id=uploaded.get(file);
+            if(!id){
+              var fd = new FormData(); fd.append('files[]', file); fd.append('purpose','claim_evidence'); fd.append('site_id',siteId);fd.append('project_contract_id',contractId);
+              if (data.contract.projectId) fd.append('project_id',data.contract.projectId);
+              if (data.contract.companyId) fd.append('company_id',data.contract.companyId);
+              var response=await fetch('/document-hub/api/upload',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''},body:fd});
+              var r=await response.json().catch(function(){return {};});
+              id = r.documents?.[0]?.id || r.duplicates?.[0]?.documentId;
+              if (!response.ok || !id) throw new Error(r.failed?.[0]?.reason || r.message || '업로드 실패 · 원본 파일을 보관하세요');
+              uploaded.set(file,id);
+            }
+            if (!data.sourceOptions.some(function(x){return x.value==='document:'+id;})) data.sourceOptions.push({value:'document:'+id,label:file.name});
+            snapshot(); addSource('document:'+id); sources(); queueSave(); await save();
+            pendingFiles=pendingFiles.filter(function(name){return name!==file.name;});preserve();
+          }catch(e){failures.push(file.name+': '+e.message);error(e);}
+        }
+        statusEl.textContent=failures.length ? '완료 '+(files.length-failures.length)+'/'+files.length+' · '+failures.join(' / ') : '원본 저장·공정 연결 완료 · 검토 요청 전';
+        if(failures.length){var retry=document.createElement('button');retry.type='button';retry.textContent='미완료 파일 다시 시도';retry.onclick=function(){uploadFiles.call(input);};statusEl.appendChild(retry);}
+        else {input.value='';uploaded.clear();if(!dirty && backup)backup.clear();}
+      }finally{uploading=false;box.inert=false;}
     }
     function setupStudio() {
       box.classList.add('ce-studio');
@@ -286,7 +347,7 @@
     }
     call('api_getClaimEditor', [contractId]).then(function (r) {
       data = r; if (!data.lines.length) throw new Error('계약 공정을 먼저 등록하세요.');
-      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing || cadActive) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '도면 · 자료' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-save-now>저장 · Ctrl+S</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div>' : '<div data-save-state></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
+      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing || cadActive || navigating || writer.pending) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; global.removeEventListener('beforeunload',unload); global.removeEventListener('online',online); document.removeEventListener('visibilitychange',visibility); clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '도면 · 자료' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-resolve hidden>두 초안 비교</button><button data-save-now>저장 · Ctrl+S</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div>' : '<div data-save-state></div><button data-resolve hidden>두 초안 비교</button><button data-save-now>초안 저장 · 다시 시도</button><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); box.querySelector('[data-resolve]').onclick=resolveConflict; box.querySelector('[data-save-now]').onclick=function(){save().catch(error);}; global.addEventListener('beforeunload',unload); global.addEventListener('online',online); document.addEventListener('visibilitychange',visibility); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
       modal = m;
     }).catch(error);
   }

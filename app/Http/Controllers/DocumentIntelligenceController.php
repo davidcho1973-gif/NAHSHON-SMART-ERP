@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\DocumentActionItem;
 use App\Models\IntelligentDocument;
 use App\Models\Project;
+use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
@@ -264,6 +265,7 @@ class DocumentIntelligenceController extends Controller
             'files' => ['required', 'array', 'min:1', 'max:50'],
             'files.*' => ['required', 'file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
             'purpose' => ['nullable', 'in:claim_evidence,drawing'],
+            'project_contract_id' => ['nullable', 'integer', 'exists:project_contracts,id'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'site_id' => ['nullable', 'integer', 'exists:sites,id'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
@@ -278,6 +280,13 @@ class DocumentIntelligenceController extends Controller
             $request->integer('site_id') ?: null,
             $request->integer('project_id') ?: null,
         );
+        $contractId = $request->integer('project_contract_id') ?: null;
+        if ($contractId) {
+            abort_unless($request->input('purpose') === 'claim_evidence' && app(BillingAdminService::class)->canAccessContract($contractId), 403);
+            $contract = ProjectContract::findOrFail($contractId);
+            abort_unless((int) $contract->company_id === (int) $companyId && (int) $contract->site_id === (int) $siteId
+                && (int) $contract->project_id === (int) $projectId, 422, '증빙의 계약과 현장·프로젝트가 일치하지 않습니다.');
+        }
 
         // 접수 규칙(형식·중복·유실 복원·저장·분석 큐)은 DocumentIntake 한 곳에 있다 —
         // 채팅방에 올린 파일도 같은 창구로 들어오기 때문이다. 여기서는 결과를
@@ -293,7 +302,7 @@ class DocumentIntelligenceController extends Controller
             $result = $intake->ingest(
                 $file,
                 ['company_id' => $companyId, 'site_id' => $siteId, 'project_id' => $projectId],
-                ['uploaded_by' => $request->user()->id, 'source' => $request->input('purpose') ?: 'dropzone'],
+                ['uploaded_by' => $request->user()->id, 'source' => $request->input('purpose') ?: 'dropzone', 'project_contract_id' => $contractId],
             );
 
             match ($result['status']) {

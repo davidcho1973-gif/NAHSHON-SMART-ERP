@@ -39,9 +39,10 @@ class FieldClaimController extends Controller
                 'unit' => $l->unit, 'quantity' => (float) $l->contract_qty,
                 'stages' => $l->recognition_basis === 'milestone' ? array_keys($l->stage_weights ?? []) : ['installed'],
                 'records' => $records->where('contract_boq_line_id', $l->id)->map(fn ($r) => [
-                    'id' => $r->id, 'workDate' => $r->work_date?->toDateString(), 'location' => $r->location,
+                    'id' => $r->id, 'revision' => (int) $r->revision, 'workDate' => $r->work_date?->toDateString(), 'location' => $r->location,
                     'stage' => $r->stage, 'reportedQty' => (float) $r->reported_qty, 'status' => $r->status,
                     'notes' => $r->notes, 'evidenceCount' => count($r->evidence ?? []),
+                    'verifiedQty' => $r->verified_qty === null ? null : (float) $r->verified_qty, 'reviewNote' => $r->review_note,
                     'evidence' => collect($r->evidence ?? [])->map(function ($e) use ($attachments, $l) {
                         $a = $attachments->where('contract_boq_line_id', $l->id)->firstWhere('intelligent_document_id', $e['id'] ?? 0);
 
@@ -60,6 +61,7 @@ class FieldClaimController extends Controller
         $model = FieldClaimAccess::line($line, true);
         abort_unless($model->status === 'accepted', 422, '확정된 공정만 기록할 수 있습니다.');
         $input = $request->validate([
+            'requestId' => ['nullable', 'uuid'], 'expectedRevision' => ['nullable', 'integer', 'min:1'],
             'id' => ['nullable', 'integer'], 'workDate' => ['required', 'date_format:Y-m-d'],
             'location' => ['required', 'string', 'max:255'], 'stage' => ['required', 'string', 'max:60'],
             'reportedQty' => ['required', 'numeric', 'min:0'], 'notes' => ['nullable', 'string', 'max:10000'],
