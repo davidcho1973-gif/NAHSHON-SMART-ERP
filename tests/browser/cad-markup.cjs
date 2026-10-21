@@ -253,10 +253,23 @@ const C = context.window.CADCore;
         await tool("pen");
         await move(88, 40);
         await page.mouse.down();
-        await move(94, 48);
-        await move(111, 40);
+        for (let i = 0; i < 10; i++) await move(88 + i * 2.3, i % 2 ? 48 : 38);
         await page.mouse.up();
         await count(5);
+        await save();
+        const penBefore = structuredClone(
+            drawing.markups.find((m) => m.kind === "pen"),
+        );
+        assert.ok(penBefore.points.length >= 50);
+        const middle =
+            penBefore.points[Math.floor(penBefore.points.length / 2)];
+        await drag([middle.x, middle.y], [middle.x + 2, middle.y + 2]);
+        await save();
+        const penAfter = drawing.markups.find((m) => m.kind === "pen");
+        penAfter.points.forEach((p, i) => {
+            assert.ok(Math.abs(p.x - penBefore.points[i].x - 2) < 0.1);
+            assert.ok(Math.abs(p.y - penBefore.points[i].y - 2) < 0.1);
+        });
         await tool("highlight");
         await drag([30, 15], [170, 15]);
         await count(6);

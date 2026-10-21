@@ -241,7 +241,11 @@
                 const grip =
                     chosen().length === 1 && !chosen()[0].locked
                         ? chosen()[0].points.findIndex(
-                              (q) => M.distance(q, raw) * api.scale() < 8,
+                              (q, i, points) =>
+                                  (points.length < 50 ||
+                                      i === 0 ||
+                                      i === points.length - 1) &&
+                                  M.distance(q, raw) * api.scale() < 8,
                           )
                         : -1;
                 const hit = visible
