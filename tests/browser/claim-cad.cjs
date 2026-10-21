@@ -9,7 +9,7 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   const dxf='0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0\n20\n0\n11\n100\n21\n50\n0\nENDSEC\n0\nEOF\n';
   let drawing={id:9,title:'Claim CAD',site_id:1,revision:1,dxf,canManage:true,warnings:[],sourceFormat:'dxf'},attachments=0,conflictNext=false;
   const revisions=new Map([[1,{...drawing}]]);
-  const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'').replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
+  const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'').replace('{{ csrf_token() }}','synthetic').replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
   await page.route('https://synthetic.test/**',async route=>{
    const url=new URL(route.request().url()),method=route.request().method();let json;
    if(url.pathname==='/'){return route.fulfill({contentType:'text/html',body:'<html><body></body></html>'});}

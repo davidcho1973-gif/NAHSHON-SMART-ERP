@@ -11,7 +11,7 @@ const fs = require('node:fs'), assert = require('node:assert/strict');
   let drawing={id:9,title:'Synthetic plan',site_id:1,revision:1,dxf,canManage:true,warnings:[]};
   const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8')
    .replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'<link rel="stylesheet" href="/cad-editor.css">')
-   .replace('{{ csrf_token() }}','synthetic').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
+   .replace('{{ csrf_token() }}','synthetic').replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP').replace('</body>','<script src="/cad-core.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
   await page.route('https://synthetic.test/**',async route=>{
    const u=new URL(route.request().url()),method=route.request().method();let json;
    if(u.pathname==='/cad')return route.fulfill({contentType:'text/html',body:html});

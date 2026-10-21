@@ -91,7 +91,7 @@ const C = context.window.CADCore;
                 /<link[^>]*>/g,
                 '<link rel="stylesheet" href="/cad-editor.css">',
             )
-            .replace("{{ csrf_token() }}", "synthetic")
+            .replace("{{ csrf_token() }}", "synthetic").replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP')
             .replace(
                 "</body>",
                 ["cad-core", "cad-markup", "cad-markup-tools", "cad-editor"]

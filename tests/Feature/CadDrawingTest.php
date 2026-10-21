@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Drawings\CadConverter;
+use App\Support\Org;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -44,6 +45,15 @@ class CadDrawingTest extends TestCase
     {
         return ['id' => 'area-1', 'kind' => 'area', 'points' => [['x' => 1, 'y' => 2], ['x' => 30, 'y' => 2], ['x' => 30, 'y' => 20]],
             'color' => '#38bdf8', 'opacity' => 0.35, 'width' => 2, 'size' => 8, 'pattern' => 'diagonal', 'text' => '', 'locked' => false];
+    }
+
+    public function test_cad_workspace_uses_the_current_organization_name(): void
+    {
+        config(['org.name' => 'SYNTHETIC WORKS']);
+        Org::forget();
+        $this->get('/cad')->assertOk()->assertSee('SYNTHETIC WORKS · CAD 도면 편집', false)
+            ->assertSee('title="SYNTHETIC WORKS"', false);
+        Org::forget();
     }
 
     public function test_markups_share_immutable_revisions_without_changing_original_or_dxf(): void

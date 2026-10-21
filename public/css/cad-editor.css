@@ -171,7 +171,7 @@ body.claim-linked main {height:calc(100dvh - 205px);}
 /* Drawing Studio: one task surface, with an explicit original-CAD workspace. */
 body {height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:#0d1625;}
 header {padding:10px 16px;gap:8px;border-bottom:1px solid #2d3b50;background:#172336;flex:none;}
-.brand {font-size:14px;letter-spacing:.08em;white-space:nowrap;margin-right:12px;}
+.brand {font-size:14px;letter-spacing:.08em;white-space:nowrap;margin-right:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;}
 .brand span {display:block;font-size:10px;color:#9baec7;letter-spacing:.04em;font-weight:400;}
 header button,header .button {font-size:12px;}
 #save {background:#167e97;border-color:#259bb4;font-weight:600;}

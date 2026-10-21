@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<title>나손 ERP · CAD 도면 편집</title>
+<title>{{ \App\Support\Org::name() }} · CAD 도면 편집</title>
 <link rel="stylesheet" href="{{ asset('css/cad-editor.css') }}?v={{ filemtime(public_path('css/cad-editor.css')) }}">
 <script defer src="{{ asset('js/cad-core.js') }}?v={{ filemtime(public_path('js/cad-core.js')) }}">
 </script>
@@ -18,7 +18,7 @@
 <body data-workspace="markup">
 <header>
 <a href="/">← ERP</a>
-<strong class="brand">NAHSHON <span>Drawing Studio</span>
+<strong class="brand" title="{{ \App\Support\Org::name() }}">{{ \App\Support\Org::name() }} <span>Drawing Studio</span>
 </strong>
 <select id="sites" aria-label="현장">
 </select>
