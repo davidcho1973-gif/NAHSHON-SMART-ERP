@@ -94,7 +94,7 @@ const C = context.window.CADCore;
             .replace("{{ csrf_token() }}", "synthetic").replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP')
             .replace(
                 "</body>",
-                ["cad-core", "cad-markup", "cad-markup-tools", "cad-editor"]
+                ["polygon-clipping", "cad-core", "cad-fidelity", "cad-markup", "cad-markup-geometry", "cad-markup-workbench", "cad-print", "cad-markup-tools", "cad-editor"]
                     .map((n) => `<script src="/${n}.js"></script>`)
                     .join("") + "</body>",
             );
@@ -104,6 +104,7 @@ const C = context.window.CADCore;
             let json;
             if (u.pathname === "/cad")
                 return route.fulfill({ contentType: "text/html", body: html });
+            if (u.pathname === "/polygon-clipping.js") return route.fulfill({contentType:"text/javascript",body:fs.readFileSync("public/vendor/polygon-clipping/polygon-clipping.js","utf8")});
             if (/^\/cad-[a-z-]+\.js$/.test(u.pathname))
                 return route.fulfill({
                     contentType: "text/javascript",
@@ -153,6 +154,7 @@ const C = context.window.CADCore;
                     ...drawing,
                     revision: drawing.revision + 1,
                     markups: payload.markups,
+                    workspace: payload.workspace,
                 };
                 writes++;
                 revisions.set(drawing.revision, structuredClone(drawing));
@@ -345,15 +347,13 @@ const C = context.window.CADCore;
         );
         await page.locator("#markup-visible").uncheck();
         await page.locator("#print-markups").click();
-        assert.ok(await page.evaluate(() => window.printRequested));
+        await expect(page.locator("#cad-print-dialog")).toBeVisible();
         assert.match(
-            await page.locator("#cad-print-image").getAttribute("src"),
+            await page.locator("#cp-preview").getAttribute("src"),
             /^data:image\/png/,
         );
-        await page.emulateMedia({ media: "print" });
-        await expect(page.locator("#cad-print-image")).toBeVisible();
-        await expect(page.locator("header")).toBeHidden();
-        await page.emulateMedia({ media: "screen" });
+        await expect(page.locator("#cp-download")).toBeEnabled();
+        await page.locator("#cp-close").click();
         await page.locator("#markup-visible").check();
         fs.mkdirSync("test-results/assistant-browser", { recursive: true });
         await page.screenshot({

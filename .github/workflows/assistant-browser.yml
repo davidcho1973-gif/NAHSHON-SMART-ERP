@@ -87,6 +87,10 @@ jobs:
           timeout 90s node tests/browser/cad-annotations.cjs
           timeout 90s node tests/browser/cad-ai.cjs
           timeout 90s node tests/browser/cad-markup.cjs
+          timeout 90s node tests/browser/cad-workbench.cjs
+          timeout 90s node tests/browser/cad-review.cjs
+          timeout 90s node tests/browser/cad-reference.cjs
+          timeout 90s node tests/browser/cad-workflow.cjs
           timeout 60s node tests/browser/cad-import.cjs
           timeout 60s node tests/browser/claim-drawing.cjs
           timeout 60s node tests/browser/drawing-studio.cjs

@@ -8,14 +8,25 @@
 <link rel="stylesheet" href="{{ asset('css/cad-editor.css') }}?v={{ filemtime(public_path('css/cad-editor.css')) }}">
 <script defer src="{{ asset('js/cad-core.js') }}?v={{ filemtime(public_path('js/cad-core.js')) }}">
 </script>
+<script defer src="{{ asset('js/cad-fidelity.js') }}?v={{ filemtime(public_path('js/cad-fidelity.js')) }}"></script>
+<script defer src="{{ asset('js/cad-reference.js') }}?v={{ filemtime(public_path('js/cad-reference.js')) }}"></script>
 <script defer src="{{ asset('js/cad-markup.js') }}?v={{ filemtime(public_path('js/cad-markup.js')) }}">
 </script>
+<script defer src="{{ asset('vendor/polygon-clipping/polygon-clipping.js') }}?v=0.15.7"></script>
+<script defer src="{{ asset('js/cad-markup-geometry.js') }}?v={{ filemtime(public_path('js/cad-markup-geometry.js')) }}"></script>
+<script defer src="{{ asset('js/cad-markup-workbench.js') }}?v={{ filemtime(public_path('js/cad-markup-workbench.js')) }}"></script>
+<script defer src="{{ asset('js/cad-recovery.js') }}?v={{ filemtime(public_path('js/cad-recovery.js')) }}"></script>
+<script defer src="{{ asset('js/cad-print.js') }}?v={{ filemtime(public_path('js/cad-print.js')) }}"></script>
+<script defer src="{{ asset('js/cad-review.js') }}?v={{ filemtime(public_path('js/cad-review.js')) }}"></script>
+<script defer src="{{ asset('js/cad-review-workbench.js') }}?v={{ filemtime(public_path('js/cad-review-workbench.js')) }}"></script>
+<script defer src="{{ asset('js/cad-workflow.js') }}?v={{ filemtime(public_path('js/cad-workflow.js')) }}"></script>
+<script defer src="{{ asset('js/cad-packets.js') }}?v={{ filemtime(public_path('js/cad-packets.js')) }}"></script>
 <script defer src="{{ asset('js/cad-markup-tools.js') }}?v={{ filemtime(public_path('js/cad-markup-tools.js')) }}">
 </script>
 <script defer src="{{ asset('js/cad-editor.js') }}?v={{ filemtime(public_path('js/cad-editor.js')) }}">
 </script>
 </head>
-<body data-workspace="markup">
+<body data-workspace="markup" data-editor-owner="{{ auth()->id() }}">
 <header>
 <a href="/">← ERP</a>
 <strong class="brand" title="{{ \App\Support\Org::name() }}">{{ \App\Support\Org::name() }} <span>Drawing Studio</span>
@@ -25,12 +36,12 @@
 <select id="drawings" aria-label="도면">
 <option value="">도면 선택</option>
 </select>
-<label class="button">DWG / DXF 올리기<input id="upload" type="file" accept=".dwg,.dxf" hidden>
+<label class="button">CAD / PDF / 이미지 올리기<input id="upload" type="file" accept=".dwg,.dxf,.pdf,.png,.jpg,.jpeg" hidden>
 </label>
 <button id="save">저장 Ctrl+S</button>
 <button id="reload">다시 열기</button>
 <button id="history">변경 이력</button>
-<button id="print-markups">현재 화면 인쇄 / PDF</button>
+<button id="print-markups">출력 작업대 / PDF</button>
 <button id="original">업로드 원본</button>
 <button id="dxf">CAD만 DXF</button>
 <button id="dwg">CAD만 DWG</button>
@@ -200,6 +211,7 @@
 </div>
 </details>
 <h2>표시 목록</h2>
+<div id="markup-workbench"></div>
 <p class="note">겹친 표시도 목록에서 선택 · Shift 추가 선택</p>
 <div id="markup-list">
 </div>
