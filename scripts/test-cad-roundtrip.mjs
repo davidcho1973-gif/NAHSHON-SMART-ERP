@@ -129,7 +129,10 @@ assert.equal(reopenedNote.height, 3);
 assert.ok(Math.abs(reopenedNote.angle - 30) < 1e-8, `Expected 30 degrees, got ${reopenedNote.angle}`);
 reopenedAnnotations.entities = reopenedAnnotations.entities.map(e => {
     if (e.type === 'ERP_DIMENSION') return C.resize(C.resize(e, 'dimension-line', {x:-25,y:105}), 'dimension-text', {x:65,y:110});
-    return {...C.transform(e, {dx:7,dy:-5}), text:note+'\n수정 완료', width:48, dirty:true};
+    // Native DXF also carries read-only layout records. Edit the selected note,
+    // exactly as the browser does, and retain every unrelated entity unchanged.
+    if (e.id === reopenedNote.id) return {...C.transform(e, {dx:7,dy:-5}), text:note+'\n수정 완료', width:48, dirty:true};
+    return e;
 });
 writeFileSync(path.resolve(directory, 'annotations-edited.dxf'), C.exportDXF(reopenedAnnotations));
 convert('annotations-edited.dxf', 'annotations-edited.dwg', 19);
