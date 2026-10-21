@@ -77,10 +77,10 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   rect=one('LWPOLYLINE');assert.equal(rect.color,0x8844ee);assert.equal(rect.lineWeight,70);assert.equal(one('LINE').color,0xff6600);
   // Text defaults are separate from selection edits, including rotation preservation.
   await page.locator('#default-text').fill('기성 확인');await page.locator('#default-text-height').fill('4');await page.locator('#default-text-color').fill('#ffee44');await page.locator('#angle').fill('15');
-  await tool('text');await click(25,20);await save();let text=one('TEXT');assert.equal(text.text,'기성 확인');assert.equal(text.height,4);assert.equal(text.color,0xffee44);assert.equal(text.angle,15);
+  await tool('text');await click(25,20);await page.locator('#text-dialog-content').fill('기성 확인');await page.locator('#text-dialog-confirm').click();await save();let text=one('MTEXT');assert.equal(text.text,'기성 확인');assert.equal(text.height,4);assert.equal(text.color,0xffee44);near(text.angle,15);
   assert.equal(await page.locator('#text').inputValue(),'기성 확인');assert.equal(await page.locator('#height').inputValue(),'4');
   await page.locator('#text').fill('수정 완료');await page.locator('#height').fill('6');await page.locator('#text-color').fill('#00aaff');await page.locator('#apply-text').click();await save();
-  text=one('TEXT');assert.equal(text.text,'수정 완료');assert.equal(text.height,6);assert.equal(text.color,0x00aaff);assert.equal(text.angle,15);
+  text=one('MTEXT');assert.equal(text.text,'수정 완료');assert.equal(text.height,6);assert.equal(text.color,0x00aaff);near(text.angle,15);
   // Writes in flight and locked layers reject further pointer mutations.
   await click(65,70);await page.locator('#entity-color').fill('#cc3300');await page.locator('#apply-style').click();
   let releaseSave;saveGate=new Promise(resolve=>releaseSave=resolve);const started=new Promise(resolve=>saveStarted=resolve),priorWrites=writes,priorRev=drawing.revision;
@@ -93,7 +93,7 @@ const point = (actual, x, y) => {near(actual.x,x);near(actual.y,y);};
   // Reopen persisted geometry/appearance and verify narrow layouts retain the inspector.
   await page.locator('#reload').click();await page.getByText('Pointer fixture · 5개 객체',{exact:true}).waitFor();
   await click(145,55);assert.equal(await page.locator('#entity-color').inputValue(),'#8844ee');
-  await click(27,22);assert.equal(await page.locator('#text').inputValue(),'수정 완료');assert.equal(await page.locator('#height').inputValue(),'6');
+  await click(27,19);assert.equal(await page.locator('#text').inputValue(),'수정 완료');assert.equal(await page.locator('#height').inputValue(),'6');
   fs.mkdirSync('test-results/assistant-browser',{recursive:true});await page.screenshot({path:'test-results/assistant-browser/SYNTHETIC-cad-direct.png'});
   await page.setViewportSize({width:760,height:900});assert.equal(await page.locator('#text-color').isVisible(),true);assert.equal(await page.locator('#apply-style').isVisible(),true);
   // Pinned proofs are read-only even when loaded from a manageable drawing.

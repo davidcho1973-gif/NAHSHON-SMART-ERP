@@ -29,8 +29,8 @@
     }
     function newDimension(a,b,placement,options={}){
         if(![a.x,a.y,b.x,b.y,placement.x,placement.y].every(Number.isFinite)||distance(a,b)<1e-10)throw Error('서로 다른 두 점을 지정하세요.');
-        const mode=options.mode||'aligned',height=options.height??2.5;if(!['aligned','horizontal','vertical'].includes(mode)||!Number.isFinite(height)||height<=0||(mode==='horizontal'&&Math.abs(a.x-b.x)<1e-10)||(mode==='vertical'&&Math.abs(a.y-b.y)<1e-10))throw Error('치수 방향·문자 크기·두 점을 확인하세요.');
-        return newEntity('ERP_DIMENSION',{p:{...a},q:{...b},placement:{...placement},textPosition:null,mode:options.mode||'aligned',height:options.height||2.5,color:options.color??0xe2e8f0,lineWeight:25,groupId:uid(),...options},options.layer||'0');
+        const mode=options.mode||'aligned',height=options.height??2.5; if(options.axis&&(![options.axis.x,options.axis.y].every(Number.isFinite)||Math.abs(Math.hypot(options.axis.x,options.axis.y)-1)>1e-8))throw Error('치수 기준 축이 잘못되었습니다.');if(options.textPosition&&![options.textPosition.x,options.textPosition.y].every(Number.isFinite))throw Error('치수 문자 위치가 잘못되었습니다.');if(!['aligned','horizontal','vertical'].includes(mode)||!Number.isFinite(height)||height<=0||(mode==='horizontal'&&Math.abs(a.x-b.x)<1e-10)||(mode==='vertical'&&Math.abs(a.y-b.y)<1e-10))throw Error('치수 방향·문자 크기·두 점을 확인하세요.');
+        return newEntity('ERP_DIMENSION',{p:{...a},q:{...b},placement:{...placement},textPosition:null,mode:options.mode||'aligned',height:options.height||2.5,color:options.color??0xe2e8f0,lineWeight:25,lineType:'BYLAYER',groupId:uid(),...options},options.layer||'0');
     }
     function dimensionLayout(e){
         const delta={x:e.q.x-e.p.x,y:e.q.y-e.p.y},len=Math.hypot(delta.x,delta.y),u=e.axis|| (e.mode==='horizontal'?{x:1,y:0}:e.mode==='vertical'?{x:0,y:1}:{x:delta.x/len,y:delta.y/len}),n={x:-u.y,y:u.x};
@@ -43,12 +43,12 @@
         const l=dimensionLayout(e),length=e.height*.3,tick=p=>({p:{x:p.x-(l.u.x+l.n.x)*length,y:p.y-(l.u.y+l.n.y)*length},q:{x:p.x+(l.u.x+l.n.x)*length,y:p.y+(l.u.y+l.n.y)*length}});
         const shapes=[['LINE',{p:e.p,q:l.a}],['LINE',{p:e.q,q:l.b}],['LINE',{p:l.a,q:l.b}],['LINE',tick(l.a)],['LINE',tick(l.b)],['TEXT',{p:l.text,text:l.label,height:e.height,angle:l.angle}]];
         return shapes.map(([type,shape],index)=>{
-            const payload=JSON.stringify({v:1,group:e.groupId,part:index,a:e.p,b:e.q,placement:e.placement,textPosition:e.textPosition||null,mode:e.mode,axis:e.axis||null,height:e.height,color:e.color,lineWeight:e.lineWeight??25,layer:e.layer});
+            const payload=JSON.stringify({v:1,group:e.groupId,part:index,a:e.p,b:e.q,placement:e.placement,textPosition:e.textPosition||null,mode:e.mode,axis:e.axis||null,height:e.height,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',layer:e.layer});
             let raw=e.rawParts?.[index]?clone(e.rawParts[index]):null;
             if(raw){const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_DIM');if(at>=0){let end=at+1;while(end<raw.length&&raw[end][0]!==1001)end++;raw.splice(at,end-at);}}
             if(!raw)raw=[[0,type],[100,'AcDbEntity'],[8,e.layer],[100,type==='LINE'?'AcDbLine':'AcDbText']];
             raw.push([1001,'ERP_CAD_DIM']);for(let i=0;i<payload.length;i+=200)raw.push([1000,payload.slice(i,i+200)]);
-            return newEntity(type,{...shape,id:e.id+'-'+index,color:e.color,lineWeight:e.lineWeight??25,raw,dirty:true},e.layer);
+            return newEntity(type,{...shape,id:e.id+'-'+index,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',raw,dirty:true},e.layer);
         });
     }
     function restoreDimensions(doc){
@@ -59,9 +59,9 @@
             if(entries.length!==6||new Set(entries.map(x=>x.m.part)).size!==6||entries.some(x=>!Number.isInteger(x.m.part)||x.m.part<0||x.m.part>5))continue;
             entries.sort((a,b)=>a.m.part-b.m.part);const m=entries[0].m;
             if(!['aligned','horizontal','vertical'].includes(m.mode)||!Number.isFinite(m.height)||m.height<=0||entries.some(x=>JSON.stringify({...x.m,part:0})!==JSON.stringify({...m,part:0})))continue;
-            const e=newDimension(m.a,m.b,m.placement,{id:'dim-'+group,groupId:group,mode:m.mode,axis:m.axis||undefined,textPosition:m.textPosition,height:m.height,color:m.color,lineWeight:m.lineWeight,layer:m.layer});
+            const e=newDimension(m.a,m.b,m.placement,{id:'dim-'+group,groupId:group,mode:m.mode,axis:m.axis||undefined,textPosition:m.textPosition,height:m.height,color:m.color,lineWeight:m.lineWeight,lineType:m.lineType||'BYLAYER',layer:m.layer});
             const expected=dimensionParts(e),near=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=Math.max(1,Math.abs(a),Math.abs(b))*1e-8;
-            if(entries.some(({e:actual},i)=>{const wanted=expected[i];return !actual.editable||actual.type!==wanted.type||actual.layer!==wanted.layer||actual.color!==wanted.color||actual.lineWeight!==wanted.lineWeight||!near(actual.p.x,wanted.p.x)||!near(actual.p.y,wanted.p.y)||(actual.type==='LINE'? !near(actual.q.x,wanted.q.x)||!near(actual.q.y,wanted.q.y):actual.text!==wanted.text||!near(actual.height,wanted.height)||!near(actual.angle,wanted.angle));}))continue;
+            if(entries.some(({e:actual},i)=>{const wanted=expected[i];return !actual.editable||actual.type!==wanted.type||actual.layer!==wanted.layer||actual.color!==wanted.color||actual.lineWeight!==wanted.lineWeight||actual.lineType!==wanted.lineType||!near(actual.p.x,wanted.p.x)||!near(actual.p.y,wanted.p.y)||(actual.type==='LINE'? !near(actual.q.x,wanted.q.x)||!near(actual.q.y,wanted.q.y):actual.text!==wanted.text||!near(actual.height,wanted.height)||Math.abs(((actual.angle-wanted.angle+180)%360+360)%360-180)>1e-8);}))continue;
             e.dirty=false;e.rawParts=entries.map(x=>x.e.raw);replace.set(entries[0].e.id,e);entries.slice(1).forEach(x=>remove.add(x.e.id));
         }catch(_){}}
         doc.entities=doc.entities.filter(e=>!remove.has(e.id)).map(e=>replace.get(e.id)||e);return doc;
@@ -71,6 +71,8 @@
         if(e.type==='ERP_DIMENSION')return [e.p,e.q];
         if(e.points)return e.points;
         if(e.type==='LINE')return [e.p,e.q,{x:(e.p.x+e.q.x)/2,y:(e.p.y+e.q.y)/2}];
+        if(!['TEXT','MTEXT','POINT','CIRCLE','ARC','ELLIPSE'].includes(e.type))return [];
+        if(e.type==='ARC'){const path=geometry(e);return [e.p,path[0],path.at(-1)].filter(Boolean);}
         return e.p?[e.p]:[];
     }
 
@@ -722,8 +724,7 @@
                 if(e.type==='MTEXT'){const encoded=String(encode(textValue));const chunks=encoded.match(/[\s\S]{1,200}/g)||[''];set(1,chunks.pop());const at=r.findIndex(p=>p[0]===1);r.splice(at,0,...chunks.map(chunk=>[3,chunk]));}else set(1,textValue);
                 if (!r.some((p) => p[0] === 7)) set(7, styleName);
                 set(40, e.height);
-                set(50,e.type==='MTEXT'?(e.angle||0)*Math.PI/180:e.angle||0);
-                if(e.type==='MTEXT'){set(41,e.width||0);set(71,1);set(72,1);}
+                if(e.type==='MTEXT'){r=r.filter(pair=>pair[0]!==50);const angle=(e.angle||0)*Math.PI/180;set(11,Math.cos(angle));set(21,Math.sin(angle));set(31,0);set(41,e.width||0);set(71,1);set(72,1);}else set(50,e.angle||0);
             }
             if (e.type === "LWPOLYLINE") {
                 r = r.filter((p) => ![10, 20, 40, 41, 42, 91].includes(p[0]));
@@ -933,7 +934,7 @@
         return {a,u,v,w,h};
     }
     function grips(e) {
-        if(e.type==='ERP_DIMENSION'){const l=dimensionLayout(e);return [{key:'dimension-line',point:{x:(l.a.x+l.b.x)/2,y:(l.a.y+l.b.y)/2}},{key:'dimension-text',point:l.text}];}
+        if(e.type==='ERP_DIMENSION'){const l=dimensionLayout(e);return [{key:'dimension-line',point:{x:l.a.x+(l.b.x-l.a.x)/3,y:l.a.y+(l.b.y-l.a.y)/3}},{key:'dimension-text',point:l.text}];}
         if(e.type==='MTEXT'&&e.editable){const b=textBox(e);return [{key:'text-width',point:{x:e.p.x+b.u.x*b.width,y:e.p.y+b.u.y*b.width}},{key:'text-size',point:{x:e.p.x-b.v.x*b.height,y:e.p.y-b.v.y*b.height}}];}
         if(e.type==='LINE')return [{key:'p',point:e.p},{key:'q',point:e.q}];
         if(!rectangleFrame(e))return [];
