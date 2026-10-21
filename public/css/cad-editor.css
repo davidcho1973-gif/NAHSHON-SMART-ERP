@@ -158,3 +158,12 @@ body.claim-linked main {height:calc(100dvh - 205px);}
 #drawing-state[data-state=error] {border-color:#db946b;}
 #drawing-state[data-state=error] strong {color:#ffd1a8;}
 #drawing-state[data-state=loading] {cursor:progress;}
+
+#annotation-readout {position:absolute;top:12px;left:12px;background:#172237dd;color:#80e5ba;padding:6px 10px;pointer-events:none;max-width:90%;}
+#annotation-readout:empty {display:none;}
+#text-dialog {background:#172237;color:#e2e8f0;border:1px solid #64bdde;border-radius:10px;width:min(560px,95vw);max-height:92vh;overflow:auto;padding:22px;}
+#text-dialog::backdrop {background:#0009;}
+#text-dialog label {display:block;margin:10px 0;}
+#text-dialog textarea {width:100%;font:inherit;background:#101827;color:#fff;border:1px solid #40516c;padding:10px;resize:vertical;}
+#text-dialog-error {color:#ffbd95;}
+#text-properties textarea {width:100%;font:inherit;background:#101827;color:#fff;}
