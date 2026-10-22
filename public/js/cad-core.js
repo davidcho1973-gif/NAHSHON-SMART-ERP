@@ -1080,6 +1080,34 @@
         });return {document:doc,affectedIds:[...affected]};
     }
 
+    // Display contrast belongs to the viewport, never the saved entity or paper export.
+    const canvasColors = new Map();
+    function canvasColor(color, background) {
+        if (background !== 'white' || !/^#[0-9a-f]{6}$/i.test(color)) return color;
+        if (canvasColors.has(color)) return canvasColors.get(color);
+        const rgb = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
+        const luminance = values => values.map(v => {
+            const c = v / 255;
+            return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+        }).reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0);
+        let result = color;
+        if (1.05 / (luminance(rgb) + .05) < 4.5) {
+            if (Math.max(...rgb) - Math.min(...rgb) < 24) result = '#334155';
+            else {
+                let low = 0, high = 1;
+                for (let i = 0; i < 12; i++) {
+                    const factor = (low + high) / 2;
+                    if (1.05 / (luminance(rgb.map(v => Math.floor(v * factor))) + .05) >= 4.5) low = factor;
+                    else high = factor;
+                }
+                result = '#' + rgb.map(v => Math.floor(v * low).toString(16).padStart(2, '0')).join('');
+            }
+        }
+        if (canvasColors.size >= 1024) canvasColors.clear();
+        canvasColors.set(color, result);
+        return result;
+    }
+
     // The editor and paper export use the same native CAD rendering path.
     function renderEntities(ctx, doc, shown, screen, scale, options = {}) {
         if(doc?.reference){g.CADReference?.draw(ctx,doc,screen);shown=shown.filter(e=>!doc.entities.some(original=>original.id===e.id));}
@@ -1094,6 +1122,7 @@
                     ? C.aci(e.aci)
                     : doc.layers[e.layer]?.color || "#e2e8f0";
             if(printing && /^#(?:ffffff|e2e8f0)$/i.test(ctx.strokeStyle))ctx.strokeStyle="#334155";
+            if(!printing)ctx.strokeStyle=canvasColor(ctx.strokeStyle,options.background);
             ctx.fillStyle = ctx.strokeStyle;
             ctx.setLineDash(
                 (
@@ -1150,6 +1179,7 @@
     }
 
     g.CADCore = {
+        canvasColor,
         renderEntities,
         quantities, aiGeometry, aiContext, applyAIActions, utf8Size,
         uid, newDimension, dimensionLayout, dimensionParts, textLines, textBox, snapPoints,

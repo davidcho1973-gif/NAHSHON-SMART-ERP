@@ -268,7 +268,9 @@
         const ps = item.points.map(screen),
             size = item.size * scale;
         ctx.save();
-        ctx.strokeStyle = ctx.fillStyle = item.color;
+        const color = !options.paper && options.color ? options.color(item.color) : item.color;
+        ctx.strokeStyle = item.kind === 'highlight' ? item.color : color;
+        ctx.fillStyle = ['area', 'pin', 'highlight'].includes(item.kind) ? item.color : color;
         const lineScale = options.lineScale || 1;
         ctx.lineWidth = item.width * lineScale;
         ctx.lineJoin = ctx.lineCap = "round";
@@ -385,7 +387,7 @@
                 ctx.fillRect(0, 0, box.width * scale, box.height * scale);
             if (style.border !== false)
                 ctx.strokeRect(0, 0, box.width * scale, box.height * scale);
-            ctx.fillStyle = item.color;
+            ctx.fillStyle = style.background === 'none' ? color : item.color;
             ctx.textBaseline = "top";
             ctx.font = `${style.italic ? "italic " : ""}${style.bold ? "700 " : "400 "}${Math.max(1, size)}px ${{ sans: "sans-serif", serif: "serif", mono: "monospace" }[style.font] || "sans-serif"}`;
             ctx.textAlign = style.align || "left";
@@ -434,7 +436,8 @@
             ctx.globalAlpha = 1;
             ctx.font = `600 ${Math.max(1, size)}px sans-serif`;
             ctx.textBaseline = "bottom";
-            ctx.strokeStyle = options.paper ? "#fff" : "#152338";
+            ctx.strokeStyle = options.paper || options.background === 'white' ? "#fff" : "#152338";
+            ctx.fillStyle = color;
             ctx.lineWidth = 3;
             ctx.strokeText(item.label, p.x, p.y - size * 0.4);
             ctx.fillText(item.label, p.x, p.y - size * 0.4);

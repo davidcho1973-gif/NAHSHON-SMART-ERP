@@ -219,12 +219,13 @@
         ctx.beginPath();
         ps.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y)));
         ctx.closePath();
-        ctx.fillStyle = options.paper ? "#fff" : "#0c1423";
+        ctx.fillStyle = options.paper || options.background === 'white' ? "#fff" : "#0c1423";
         ctx.fill();
         ctx.clip();
         C.renderEntities(ctx, doc, visible(doc), project, detailScale, {
             paper: options.paper,
             pixelsPerMm: options.pixelsPerMm,
+            background: options.background,
         });
         for (const m of doc.markups || [])
             if (
@@ -238,12 +239,13 @@
         ctx.beginPath();
         ps.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y)));
         ctx.closePath();
-        ctx.strokeStyle = item.color;
+        const color = !options.paper && options.color ? options.color(item.color) : item.color;
+        ctx.strokeStyle = color;
         ctx.stroke();
         ctx.font = `600 ${Math.max(8, item.size * scale)}px sans-serif`;
         ctx.textAlign = "left";
         ctx.textBaseline = "bottom";
-        ctx.fillStyle = item.color;
+        ctx.fillStyle = color;
         ctx.fillText(
             item.label || "확대 상세 · 원본 연결",
             ps[3].x,
