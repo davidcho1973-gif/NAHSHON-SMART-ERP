@@ -1,0 +1,21 @@
+// Isolated in-memory fixture for manual and automated 2D editor checks. No ERP DB or external calls.
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path');
+let revision=0,document={version:1,unit:'ft',precision:2,layers:[{id:'default',name:'시험 레이어',visible:true,locked:false}],entities:[]};
+const page=`<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="save-user" content="synthetic-2d"><style>body{margin:0;font:14px Arial;background:#101b2c;color:white}#host{position:relative;height:calc(100vh - 50px)}button{padding:8px}</style><link rel="stylesheet" href="/public/css/drawing-studio.css"><body><button id="open">시험 도면 열기</button><button id="reopen">닫고 다시 열기</button><span id="result">SYNTHETIC — 실제 기성에 반영되지 않음</span><div id="host"></div>
+<script>window.__pdfjsMock={GlobalWorkerOptions:{},getDocument:()=>({destroy(){},promise:Promise.resolve({getPage:()=>Promise.resolve({getViewport:({scale})=>({width:800*scale,height:600*scale}),getTextContent:()=>Promise.resolve({items:[]}),render:({canvasContext:c,viewport:v})=>{c.fillStyle='#fff';c.fillRect(0,0,v.width,v.height);c.strokeStyle='#94a3b8';c.lineWidth=2;c.strokeRect(.15*v.width,.15*v.height,.7*v.width,.7*v.height);c.fillStyle='#64748b';c.font='24px Arial';c.fillText('SYNTHETIC A-101 — 2D MEASUREMENT',.2*v.width,.9*v.height);return {promise:Promise.resolve()};}})})})};
+window.__scale={feetPerPoint:.1,scaleLabel:'시험: 10 pt = 1 ft'};window.__takeoffs=[];
+window.gsRun=async(m,a)=>{if(m==='api_setSheetScale'){window.__scale={feetPerPoint:a[2],scaleLabel:a[3]};return {success:true,...window.__scale};}return {success:true,canManage:true,sheetNo:'A-101',marks:[],sheet:{id:1,pdfUrl:'/fixture.pdf',pageNo:1,widthPt:800,heightPt:600,...window.__scale}};};window.AdminUI={toast:t=>document.querySelector('#result').textContent=t};
+</script><script src="/public/js/claim-save-safety.js"></script><script src="/public/js/drawing-studio-core.js"></script><script src="/public/js/drawing-studio.js"></script><script src="/public/js/drawing-marker.js"></script><script>
+let editor;function open(){editor=DrawingMarker.open({host:document.querySelector('#host'),siteId:1,sheetNo:'A-101',edit2d:true,line:{id:4,lineNo:4,unit:'SF'},onTakeoff:async r=>{window.__takeoffs.push(r);document.querySelector('#result').textContent='시험 공정 수량 '+r.quantity+' '+r.unit+' · v'+r.revision;}});}document.querySelector('#open').onclick=()=>{if(!editor)open();};document.querySelector('#reopen').onclick=()=>{if(editor)editor.close(true);open();};
+</script></body></html>`;
+function start(port=8876){const server=http.createServer(async(req,res)=>{const url=new URL(req.url,'http://localhost'),send=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
+  if(url.pathname==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return res.end(page);}
+  const allowed=['drawing-studio.css','claim-save-safety.js','drawing-studio-core.js','drawing-studio.js','drawing-marker.js'];
+  if(allowed.includes(path.basename(url.pathname))&&/^\/public\/(js|css)\//.test(url.pathname)){let data=fs.readFileSync(path.join(process.cwd(),url.pathname));if(url.pathname.endsWith('drawing-marker.js'))data=data.toString().replace('import(PDFJS)','Promise.resolve(window.__pdfjsMock)');res.writeHead(200,{'Content-Type':url.pathname.endsWith('.css')?'text/css':'text/javascript; charset=utf-8'});return res.end(data);}
+  let input='';for await(const chunk of req)input+=chunk;
+  if(url.pathname.endsWith('/studio')){if(req.method==='PUT'){const p=JSON.parse(input);if(p.revision!==revision)return send({message:'다른 창과 충돌'},409);document=p.document;revision++;return send({success:true,revision});}return send({document,revision,canManage:true});}
+  if(url.pathname.endsWith('/validate'))return send({document:JSON.parse(input).document});
+  if(url.pathname.endsWith('/history'))return send({rows:[],document});
+  return send({message:'Fixture route unavailable'},404);
+});return new Promise(resolve=>server.listen(port,'127.0.0.1',()=>resolve(server)));}
+module.exports={start};if(require.main===module)start().then(()=>console.log('Synthetic 2D fixture: http://127.0.0.1:8876'));
