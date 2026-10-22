@@ -76,6 +76,41 @@ class DrawingStudioTest extends TestCase
         $this->getJson($this->url)->assertOk()->assertJsonPath('revision', 1);
     }
 
+    public function test_2d_holes_groups_calibration_library_and_views_survive_save_and_history(): void
+    {
+        $d = $this->drawing();
+        $e = &$d['entities'][0];
+        $e['type'] = 'polygon';
+        $e['points'] = [[.1, .1], [.9, .1], [.9, .9], [.1, .9]];
+        $e['holes'] = [[[.2, .2], [.3, .2], [.3, .3], [.2, .3]]];
+        $e['group'] = 'room';
+        $e['calibration'] = ['feetPerPoint' => .1, 'widthPt' => 800, 'heightPt' => 600, 'label' => 'Verified reference'];
+        unset($e);
+        $d['blocks'] = [['id' => 'part', 'name' => 'Typical room', 'entities' => $d['entities']]];
+        $d['views'] = [['id' => 'east', 'name' => 'East room', 'x' => .5, 'y' => .5, 'zoom' => 1, 'layers' => ['default']]];
+        $this->postJson($this->url.'/validate', ['document' => $d])->assertOk();
+        $this->assertDatabaseCount('drawing_studios', 0);
+        $this->putJson($this->url, ['revision' => 0, 'document' => $d])->assertOk();
+        $this->getJson($this->url)->assertOk()->assertJsonPath('document.entities.0.holes.0.0.0', .2)->assertJsonPath('document.entities.0.calibration.feetPerPoint', .1)->assertJsonPath('document.blocks.0.name', 'Typical room');
+        $this->getJson($this->url.'/history?revision=1')->assertOk()->assertJsonPath('document.views.0.name', 'East room');
+    }
+
+    public function test_crossed_or_duplicate_deductions_and_invalid_library_never_save(): void
+    {
+        $d = $this->drawing();
+        $d['entities'][0]['type'] = 'polygon';
+        $d['entities'][0]['points'] = [[.1, .1], [.9, .9], [.1, .9], [.9, .1]];
+        $this->putJson($this->url, ['revision' => 0, 'document' => $d])->assertUnprocessable();
+        $d['entities'][0]['points'] = [[.1, .1], [.9, .1], [.9, .9], [.1, .9]];
+        $hole = [[.2, .2], [.3, .2], [.3, .3], [.2, .3]];
+        $d['entities'][0]['holes'] = [$hole, $hole];
+        $this->putJson($this->url, ['revision' => 0, 'document' => $d])->assertUnprocessable();
+        unset($d['entities'][0]['holes']);
+        $d['blocks'] = [['id' => 'bad', 'name' => 'Bad', 'entities' => [['type' => 'script']]]];
+        $this->postJson($this->url.'/validate', ['document' => $d])->assertUnprocessable();
+        $this->assertDatabaseCount('drawing_studios', 0);
+    }
+
     public function test_scope_and_read_only_permissions_apply_to_every_route(): void
     {
         $otherSite = Site::create(['company_id' => $this->sheet->site->company_id, 'code' => 'OTHER', 'name' => 'Other', 'status' => 'active']);
@@ -86,6 +121,7 @@ class DrawingStudioTest extends TestCase
         $viewer = User::factory()->create(['account_status' => 'active', 'access_role' => 'payroll', 'access_scope' => 'all_sites']);
         $this->actingAs($viewer)->getJson($this->url)->assertOk()->assertJsonPath('canManage', false);
         $this->actingAs($viewer)->putJson($this->url, ['revision' => 0, 'document' => $this->drawing()])->assertForbidden();
+        $this->postJson($this->url.'/validate', ['document' => $this->drawing()])->assertForbidden();
         $this->actingAs($viewer)->getJson($this->url.'/share-options')->assertForbidden();
     }
 

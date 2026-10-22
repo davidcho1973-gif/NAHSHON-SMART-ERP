@@ -51,9 +51,9 @@ class DrawingStudioService
             'layers.*.name' => ['required', 'string', 'max:80'],
             'layers.*.visible' => ['required', 'boolean'], 'layers.*.locked' => ['required', 'boolean'],
             'entities' => ['present', 'array', 'list', 'max:2000'],
-            'entities.*' => ['array:id,type,layer,points,text,color,fill,width,opacity,dash,fontSize'],
+            'entities.*' => ['array:id,type,layer,points,text,color,fill,width,opacity,dash,fontSize,holes,group,symbol,dimensionOffset,calibration'],
             'entities.*.id' => ['required', 'string', 'max:64', 'distinct'],
-            'entities.*.type' => ['required', Rule::in(['line', 'polyline', 'polygon', 'rect', 'ellipse', 'cloud', 'arrow', 'text', 'pen', 'highlight', 'dimension', 'angle'])],
+            'entities.*.type' => ['required', Rule::in(['line', 'polyline', 'polygon', 'rect', 'ellipse', 'cloud', 'arrow', 'text', 'pen', 'highlight', 'dimension', 'angle', 'symbol'])],
             'entities.*.layer' => ['required', 'string', Rule::in(array_column(is_array($input['layers'] ?? null) ? $input['layers'] : [], 'id'))],
             'entities.*.points' => ['required', 'array', 'list', 'min:1', 'max:1000'],
             'entities.*.points.*' => ['required', 'array', 'list', 'size:2'],
@@ -65,6 +65,32 @@ class DrawingStudioService
             'entities.*.opacity' => ['required', 'numeric', 'between:0.05,1'],
             'entities.*.dash' => ['required', Rule::in(['solid', 'dash', 'dot'])],
             'entities.*.fontSize' => ['required', 'numeric', 'between:6,72'],
+            'entities.*.group' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'entities.*.symbol' => ['sometimes', 'string', 'max:8'],
+            'entities.*.dimensionOffset' => ['sometimes', 'numeric', 'between:-500,500'],
+            'entities.*.holes' => ['sometimes', 'array', 'list', 'max:30'],
+            'entities.*.holes.*' => ['array', 'list', 'min:3', 'max:1000'],
+            'entities.*.holes.*.*' => ['array', 'list', 'size:2'],
+            'entities.*.holes.*.*.*' => ['numeric', 'between:0,1'],
+            'entities.*.calibration' => ['sometimes', 'array:feetPerPoint,widthPt,heightPt,label'],
+            'entities.*.calibration.feetPerPoint' => ['required_with:entities.*.calibration', 'numeric', 'gt:0', 'max:100000'],
+            'entities.*.calibration.widthPt' => ['required_with:entities.*.calibration', 'numeric', 'gt:0', 'max:100000'],
+            'entities.*.calibration.heightPt' => ['required_with:entities.*.calibration', 'numeric', 'gt:0', 'max:100000'],
+            'entities.*.calibration.label' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'views' => ['sometimes', 'array', 'list', 'max:30'],
+            'views.*' => ['array:id,name,x,y,zoom,layers'],
+            'views.*.id' => ['required', 'string', 'max:64', 'distinct'],
+            'views.*.name' => ['required', 'string', 'max:80'],
+            'views.*.x' => ['required', 'numeric', 'between:-2,3'],
+            'views.*.y' => ['required', 'numeric', 'between:-2,3'],
+            'views.*.zoom' => ['required', 'numeric', 'between:0.05,30'],
+            'views.*.layers' => ['present', 'array', 'list', 'max:30'],
+            'views.*.layers.*' => ['string', Rule::in(array_column(is_array($input['layers'] ?? null) ? $input['layers'] : [], 'id'))],
+            'blocks' => ['sometimes', 'array', 'list', 'max:30'],
+            'blocks.*' => ['array:id,name,entities'],
+            'blocks.*.id' => ['required', 'string', 'max:64', 'distinct'],
+            'blocks.*.name' => ['required', 'string', 'max:80'],
+            'blocks.*.entities' => ['required', 'array', 'list', 'min:1', 'max:100'],
         ])->validate();
         $total = 0;
         foreach ($v['entities'] as &$entity) {
@@ -73,14 +99,30 @@ class DrawingStudioService
             $total += $count;
             $valid = match ($entity['type']) {
                 'text' => $count === 1 && trim($entity['text']) !== '',
+                'symbol' => $count === 1,
                 'line', 'rect', 'ellipse', 'cloud', 'arrow', 'dimension' => $count === 2,
                 'angle' => $count === 3,
                 'polygon' => $count >= 3,
                 default => $count >= 2,
             };
-            if (! $valid || $total > 30000) {
+            foreach ($entity['holes'] ?? [] as $hole) {
+                $total += count($hole);
+            }
+            if (! $valid || $total > 30000 || (! empty($entity['holes']) && ! in_array($entity['type'], ['polygon', 'rect', 'ellipse']))) {
                 throw ValidationException::withMessages(['document' => '도형의 점 개수 또는 전체 크기가 올바르지 않습니다.']);
             }
+            DrawingGeometry::validate($entity);
+        }
+        unset($entity);
+        foreach ($v['blocks'] ?? [] as $i => $block) {
+            $validated = $this->validateDocument(array_merge(array_intersect_key($v, array_flip(['version', 'unit', 'precision', 'layers'])), ['entities' => $block['entities']]));
+            $v['blocks'][$i]['entities'] = $validated['entities'];
+            foreach ($validated['entities'] as $entity) {
+                $total += count($entity['points']) + array_sum(array_map('count', $entity['holes'] ?? []));
+            }
+        }
+        if ($total > 30000) {
+            throw ValidationException::withMessages(['document' => '도형과 부품의 전체 점은 30,000개까지 저장할 수 있습니다.']);
         }
 
         return $v;
