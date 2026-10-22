@@ -465,7 +465,7 @@
                     return;
                 }
                 captured = {
-                    doc: structuredClone(state.doc),
+                    doc: root.CADCore.copyDocument(state.doc),
                     record: structuredClone(state.record),
                     dirty: state.dirty,
                 };

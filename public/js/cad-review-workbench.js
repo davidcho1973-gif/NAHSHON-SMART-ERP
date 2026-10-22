@@ -178,7 +178,7 @@
             epoch++;
             mode = kind;
             captured = {
-                doc: structuredClone(state.doc),
+                doc: C.copyDocument(state.doc),
                 record: structuredClone(state.record),
                 canManage: state.canManage,
                 version: state.version,

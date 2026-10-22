@@ -19,6 +19,39 @@
         "POINT",
     ]);
 
+    // Raw DXF and tessellated block geometry are read-only assets, not edit state.
+    // A JSON copy expands shared point paths into separate multi-megabyte copies.
+    // Share these assets across history entries; copy every mutable editing field.
+    const immutableAssets = new WeakSet();
+    const documentAssets = new Set(['prefix', 'suffix', 'lineTypes', 'presentation']);
+    const entityAssets = new Set(['raw', 'rawParts', 'displayGeometry', 'preview', 'renderParts', 'hatch', 'presentationWarnings']);
+    function immutableAsset(value) {
+        if (!value || typeof value !== 'object' || immutableAssets.has(value)) return value;
+        immutableAssets.add(value);
+        for (const child of Object.values(value)) immutableAsset(child);
+        return Object.freeze(value);
+    }
+    function copyEditState(value, assets) {
+        const mutable = {}, shared = {};
+        for (const [key, item] of Object.entries(value)) {
+            if (assets.has(key)) shared[key] = immutableAsset(item);
+            else mutable[key] = item;
+        }
+        return Object.assign(clone(mutable), shared);
+    }
+    function copyDocument(source) {
+        const {entities, ...metadata} = source;
+        const result = copyEditState(metadata, documentAssets);
+        result.entities = entities.map(entity => copyEditState(entity, entityAssets));
+        return result;
+    }
+    function prepareDocumentAssets(doc) {
+        for (const key of documentAssets) immutableAsset(doc[key]);
+        for (const entity of doc.entities)
+            for (const key of entityAssets) immutableAsset(entity[key]);
+        return doc;
+    }
+
     function canonicalLineType(value){const upper=String(value).toUpperCase();return ['BYLAYER','BYBLOCK','CONTINUOUS'].includes(upper)?upper:String(value);}
     function decodeUnicode(value){return String(value).replace(/\\U\+([0-9a-f]{4})/gi,(_,h)=>String.fromCharCode(parseInt(h,16)));}
     function uid(){return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2);}
@@ -327,7 +360,7 @@
                 : 1032;
         if (doc.acadVersion < 1015)
             doc.entities.forEach((e) => (e.editable = false));
-        return restoreDimensions(g.CADFidelity ? g.CADFidelity.enhance(doc,pairs) : doc);
+        return prepareDocumentAssets(restoreDimensions(g.CADFidelity ? g.CADFidelity.enhance(doc,pairs) : doc));
     }
     function aci(n) {
         return (
@@ -895,7 +928,10 @@
             throw Error(
                 "블록 또는 미지원 데이터가 있는 도면의 레이어 이름은 원래 CAD에서 바꾸세요.",
             );
-        const doc = clone(source);
+        const doc = copyDocument(source);
+        // Layer renaming is one of the few operations that edits raw DXF records.
+        // Detach those assets before changing them so undo and the source stay intact.
+        doc.prefix = clone(source.prefix);
         doc.layers[name] = doc.layers[old];
         delete doc.layers[old];
         doc.layersDirty = true;
@@ -903,6 +939,7 @@
             if (entity.layer === old) {
                 entity.layer = name;
                 if(entity.type==='ERP_DIMENSION')entity.dirty=true;
+                if (entity.raw) entity.raw = clone(entity.raw);
                 const pair = entity.raw?.find((p) => p[0] === 8);
                 if (pair) pair[1] = name;
             }
@@ -1012,7 +1049,7 @@
         if(!options.canManage)throw Error('현재 도면은 읽기 전용입니다.');
         if(!/^[a-f0-9]{64}$/.test(options.expectedHash||'')||!/^[a-f0-9]{64}$/.test(options.currentHash||'')||options.expectedHash!==options.currentHash)throw Error('AI 요청 이후 도면이 변경되었습니다. 다시 공유한 뒤 요청하세요.');
         if(!Array.isArray(actions)||!actions.length||actions.length>100)throw Error('편집 요청은 1~100개 동작이어야 합니다.');
-        const ids=new Set(options.sharedIds||[]),layers=new Set(options.sharedLayers||[]),doc=clone(source),affected=new Set();let targets=0;
+        const ids=new Set(options.sharedIds||[]),layers=new Set(options.sharedLayers||[]),doc=copyDocument(source),affected=new Set();let targets=0;
         const point=p=>{if(!p||Object.keys(p).some(k=>!['x','y'].includes(k))||!Number.isFinite(p.x)||!Number.isFinite(p.y)||Math.abs(p.x)>1e12||Math.abs(p.y)>1e12)throw Error('올바른 좌표가 필요합니다.');return {x:p.x,y:p.y};};
         const finite=n=>{if(!Number.isFinite(n)||Math.abs(n)>1e12)throw Error('올바른 수치가 필요합니다.');return n;};
         const color=c=>{if(typeof c!=='string'||!/^#[a-f0-9]{6}$/i.test(c))throw Error('색상은 #RRGGBB 형식이어야 합니다.');return parseInt(c.slice(1),16);};
@@ -1130,6 +1167,7 @@
         segmentDistance,
         newEntity,
         clone,
+        copyDocument,
         aci,
     };
 })(typeof window === "undefined" ? globalThis : window);

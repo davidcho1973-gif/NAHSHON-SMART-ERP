@@ -169,7 +169,7 @@
         recovery?.schedule();
     }
     function snapshot() {
-        undo.push(C.clone(doc));
+        undo.push(C.copyDocument(doc));
         if (undo.length > 60) undo.shift();
         redo = [];
         mark();
@@ -288,8 +288,10 @@
     function render() {
         const r = canvas.getBoundingClientRect(),
             dpr = printing ? 3 : window.devicePixelRatio || 1;
-        canvas.width = r.width * dpr;
-        canvas.height = r.height * dpr;
+        const width = Math.floor(r.width * dpr), height = Math.floor(r.height * dpr);
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
+        ctx.save();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, r.width, r.height);
         if(printing){ctx.fillStyle="#ffffff";ctx.fillRect(0,0,r.width,r.height);}
@@ -366,6 +368,7 @@
             }[tool] || "점을 순서대로 지정 · Esc 취소");
         markup?.render(ctx,{paper:printing});
         if(!printing)workflow?.renderOverlay(ctx,screen);
+        ctx.restore();
     }
     function focusBounds(b){const width=Math.max(b.maxX-b.minX,1e-6),height=Math.max(b.maxY-b.minY,1e-6);scale=Math.min(canvas.clientWidth/(width*1.4),canvas.clientHeight/(height*1.4));origin={x:canvas.clientWidth/2-(b.minX+b.maxX)/2*scale,y:canvas.clientHeight/2+(b.minY+b.maxY)/2*scale};render();}
     function fit() {
@@ -919,7 +922,7 @@
     $("undo").onclick = () => {
         if(busy||gesture||markup?.pending())return;
         if (undo.length) {
-            redo.push(C.clone(doc));
+            redo.push(C.copyDocument(doc));
             doc = undo.pop();
             markup?.changed();
             selected.clear();
@@ -931,7 +934,7 @@
     $("redo").onclick = () => {
         if(busy||gesture||markup?.pending())return;
         if (redo.length) {
-            undo.push(C.clone(doc));
+            undo.push(C.copyDocument(doc));
             doc = redo.pop();
             markup?.changed();
             selected.clear();
