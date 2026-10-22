@@ -115,7 +115,7 @@
     const aa=a[0]**2+a[1]**2,bb=b[0]**2+b[1]**2,cc=c[0]**2+c[1]**2,center=[(aa*(b[1]-c[1])+bb*(c[1]-a[1])+cc*(a[1]-b[1]))/den,(aa*(c[0]-b[0])+bb*(a[0]-c[0])+cc*(b[0]-a[0]))/den];
     const start=Math.atan2(a[1]-center[1],a[0]-center[0]),end=Math.atan2(c[1]-center[1],c[0]-center[0]),tau=2*Math.PI;let sweep=(end-start+tau)%tau;if(cross(a,b,c)<0)sweep-=tau;const r=dist(a,center,1,1),n=Math.max(16,Math.ceil(Math.abs(sweep)*32));
     return Array.from({length:n+1},(_,i)=>[(center[0]+r*Math.cos(start+sweep*i/n))/w,(center[1]+r*Math.sin(start+sweep*i/n))/h]);}
-  function takeoff(items,unit,v){const u=unit.toUpperCase().replace(/\s/g,''),area=['SF','SQFT','FT2','M2','㎡','SY','YD2'].includes(u),length=['LF','FT','M','LM','MM'].includes(u),count=['EA','EACH','PCS','개','SET'].includes(u);
+  function takeoff(items,unit,v){const u=unit.toUpperCase().replace(/\s/g,'').replaceAll('²','2'),area=['SF','SQFT','FT2','M2','㎡','SY','YD2'].includes(u),length=['LF','FT','M','LM','MM'].includes(u),count=['EA','EACH','PCS','개','SET'].includes(u);
     if(!area&&!length&&!count)throw Error('이 계약 단위는 자동 환산을 지원하지 않습니다. 수량 근거를 확인해 직접 입력하세요.');
     let total=0;const rows=items.map(e=>{const m=measure(e,v.wPt,v.hPt,v.fpp),closed=['polygon','rect','ellipse'].includes(e.type);let quantity;
       if(area){if(!closed||m.area===null)throw Error('면적 공정에는 축척이 있는 닫힌 영역을 선택하세요.');quantity=m.area*(u==='M2'||u==='㎡'?.09290304:['SY','YD2'].includes(u)?1/9:1);}

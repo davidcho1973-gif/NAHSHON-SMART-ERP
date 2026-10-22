@@ -42,7 +42,7 @@ const {start}=require('./fixture-2d.cjs');
     await expand('files');const downloaded=p.waitForEvent('download');await p.locator('[data-dxf]').click();const file=await downloaded;
     fs.mkdirSync('test-results/assistant-browser',{recursive:true});await file.saveAs('test-results/assistant-browser/SYNTHETIC-2d.dxf');
     assert.match(fs.readFileSync('test-results/assistant-browser/SYNTHETIC-2d.dxf','utf8'),/POLYLINE/);
-    await p.screenshot({path:'test-results/assistant-browser/SYNTHETIC-2d-editor.png'});assert.deepEqual(errors,[]);
+    await p.screenshot({path:'test-results/assistant-browser/SYNTHETIC-2d-editor.png'});await p.setViewportSize({width:390,height:844});await p.locator('[data-fit]').click();assert.ok((await p.locator('[data-stage]').boundingBox()).width>350,'Mobile tools must not consume the drawing width');await p.screenshot({path:'test-results/assistant-browser/SYNTHETIC-2d-mobile.png'});assert.deepEqual(errors,[]);
     console.log(JSON.stringify({passed:true,enter:true,netArea:720,savedRevisions:saved.revision,draftRecovery:true,blocks:true,views:true}));
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
