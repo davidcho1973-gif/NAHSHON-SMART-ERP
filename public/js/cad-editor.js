@@ -66,6 +66,16 @@
     let gesture = null, inspectorKey = "",hoverPoint=null,snapMark=null,textDraft=null;
     let measurements=[];
     let markup=null, recovery=null, reviewWorkbench=null, workflow=null, packets=null, printing=false, cadBaseline="";
+    const backgroundKey = 'cad:canvas-background:' + (document.body.dataset.editorOwner || 'guest');
+    let canvasBackground = 'dark';
+    try { if (localStorage.getItem(backgroundKey) === 'white') canvasBackground = 'white'; } catch (_) {}
+    $('canvas-background').value = canvasBackground;
+    $('canvas-background').onchange = () => {
+        canvasBackground = $('canvas-background').value === 'white' ? 'white' : 'dark';
+        try { localStorage.setItem(backgroundKey, canvasBackground); } catch (_) {}
+        render();
+    };
+    const displayColor = color => C.canvasColor(color, canvasBackground);
     const styleEdits=new Set(),textEdits=new Set();
     const labels = {
         select: "선택",
@@ -294,10 +304,11 @@
         ctx.save();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, r.width, r.height);
-        if(printing){ctx.fillStyle="#ffffff";ctx.fillRect(0,0,r.width,r.height);}
+        ctx.fillStyle = printing || canvasBackground === 'white' ? '#ffffff' : '#0a1020';
+        ctx.fillRect(0,0,r.width,r.height);
         const spacing = Number($("spacing").value);
         if (!printing && $("grid").checked && spacing > 0 && spacing * scale > 8) {
-            ctx.strokeStyle = "#202c40";
+            ctx.strokeStyle = canvasBackground === 'white' ? '#e2e8f0' : '#202c40';
             ctx.lineWidth = 1;
             const step = spacing * scale;
             ctx.beginPath();
@@ -324,25 +335,25 @@
         ctx.globalAlpha=doc?.workspace?.underlay?.opacity ?? 1;
         if(doc?.workspace?.underlay?.grayscale)ctx.filter="grayscale(1)";
         const shown=[...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e),...(annotation?[annotation]:[])];
-        C.renderEntities(ctx,doc,shown,screen,scale,{paper:printing,selected});
+        C.renderEntities(ctx,doc,shown,screen,scale,{paper:printing,selected,background:canvasBackground});
         ctx.restore();
         ctx.setLineDash([]);
         if(gesture?.kind==='draw'&&gesture.moved){
-            ctx.strokeStyle=$('default-color').value;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
+            ctx.strokeStyle=displayColor($('default-color').value);ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
             const a=screen(gesture.start),b=screen(gesture.end);if(['rectangle','text'].includes(gesture.tool))ctx.rect(a.x,a.y,b.x-a.x,b.y-a.y);else {ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}ctx.stroke();ctx.setLineDash([]);
         }
         if(!printing&&tool==='select'&&!busy)for(const e of [...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e)].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient))){for(const grip of C.grips(e)){const p=screen(grip.point);ctx.fillStyle='#101827';ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.fillRect(p.x-4,p.y-4,8,8);ctx.strokeRect(p.x-4,p.y-4,8,8);}}
-        if(!printing&&snapMark){const marker=screen(snapMark);ctx.strokeStyle='#ffb347';ctx.lineWidth=2;ctx.setLineDash([]);ctx.strokeRect(marker.x-6,marker.y-6,12,12);ctx.beginPath();ctx.moveTo(marker.x-10,marker.y);ctx.lineTo(marker.x+10,marker.y);ctx.moveTo(marker.x,marker.y-10);ctx.lineTo(marker.x,marker.y+10);ctx.stroke();}
+        if(!printing&&snapMark){const marker=screen(snapMark);ctx.strokeStyle=displayColor('#ffb347');ctx.lineWidth=2;ctx.setLineDash([]);ctx.strokeRect(marker.x-6,marker.y-6,12,12);ctx.beginPath();ctx.moveTo(marker.x-10,marker.y);ctx.lineTo(marker.x+10,marker.y);ctx.moveTo(marker.x,marker.y-10);ctx.lineTo(marker.x,marker.y+10);ctx.stroke();}
         canvas.dataset.snapActive=String(!!snapMark);if(snapMark){canvas.dataset.snapX=snapMark.x;canvas.dataset.snapY=snapMark.y;}
         const measured=annotation||measurements.find(e=>selected.has(e.id));
         $('annotation-readout').textContent=measured?'거리 '+C.dimensionLayout(measured).label+' 도면 단위 · '+(points.length===2?'치수 위치를 지정하세요':measured.transient?'화면 측정 · 저장되지 않음':'끝점/꼭지점 자동 스냅'):'';
 
-        if(aiPreview){ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='#77ffb3';ctx.lineWidth=2;for(const id of aiPreview.affectedIds){const entity=aiPreview.document.entities.find(e=>e.id===id);if(!entity)continue;const paths=entity.type==='ERP_DIMENSION'?C.dimensionParts(entity).map(C.geometry):[C.geometry(entity)];for(const path of paths){ctx.beginPath();path.forEach((p,i)=>{const s=screen(p);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y);});ctx.stroke();}}ctx.restore();}
+        if(aiPreview){ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=displayColor('#77ffb3');ctx.lineWidth=2;for(const id of aiPreview.affectedIds){const entity=aiPreview.document.entities.find(e=>e.id===id);if(!entity)continue;const paths=entity.type==='ERP_DIMENSION'?C.dimensionParts(entity).map(C.geometry):[C.geometry(entity)];for(const path of paths){ctx.beginPath();path.forEach((p,i)=>{const s=screen(p);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y);});ctx.stroke();}}ctx.restore();}
         inspector();aiControls();
         reviewWorkbench?.refresh();
         workflow?.refresh();
         packets?.refresh();
-        ctx.fillStyle = "#5eead4";
+        ctx.fillStyle = displayColor('#5eead4');
         points.forEach((p) => {
             const s = screen(p);
             ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
@@ -366,7 +377,7 @@
                 move: "기준점 → 목적점",
                 copy: "기준점 → 목적점",
             }[tool] || "점을 순서대로 지정 · Esc 취소");
-        markup?.render(ctx,{paper:printing});
+        markup?.render(ctx,{paper:printing,background:canvasBackground,color:printing?undefined:displayColor});
         if(!printing)workflow?.renderOverlay(ctx,screen);
         ctx.restore();
     }

@@ -66,6 +66,12 @@
 <label>
 <input id="markup-visible" type="checkbox" checked> 표시 보기</label>
 <span id="markup-count">0개 표시</span>
+<label class="canvas-background-control" title="화면 배경만 변경합니다. 원본 도면과 출력 색상은 유지됩니다.">도면 배경
+<select id="canvas-background" aria-label="도면 배경">
+<option value="dark">어둡게</option>
+<option value="white">흰색</option>
+</select>
+</label>
 </nav>
 <main>
 <aside id="tools">

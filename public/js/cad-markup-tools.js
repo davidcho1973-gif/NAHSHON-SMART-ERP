@@ -1138,7 +1138,7 @@
                     );
                 if (!options.paper) {
                     const p = preview(gesture);
-                    if (p) M.draw(ctx, p, api.screen, api.scale());
+                    if (p) M.draw(ctx, p, api.screen, api.scale(), options);
                 }
             }
             if (!options.paper && mode === "markup") {
@@ -1152,9 +1152,9 @@
                               : "area",
                         ps,
                     );
-                    M.draw(ctx, item, api.screen, api.scale());
+                    M.draw(ctx, item, api.screen, api.scale(), options);
                     ctx.save();
-                    ctx.fillStyle = "#fff";
+                    ctx.fillStyle = options.background === 'white' ? '#334155' : '#fff';
                     polygon.forEach((p) => {
                         const q = api.screen(p);
                         ctx.fillRect(q.x - 3, q.y - 3, 6, 6);
@@ -1172,7 +1172,7 @@
                             a = api.screen({ x: b.minX, y: b.maxY }),
                             z = api.screen({ x: b.maxX, y: b.minY });
                         ctx.save();
-                        ctx.strokeStyle = "#7dd3fc";
+                        ctx.strokeStyle = options.color?.('#7dd3fc') || '#7dd3fc';
                         ctx.lineWidth = 1;
                         ctx.setLineDash([4, 4]);
                         ctx.strokeRect(
@@ -1216,8 +1216,8 @@
                             ? gesture.path
                             : M.rect(gesture.start, gesture.end);
                     ctx.save();
-                    ctx.strokeStyle =
-                        gesture.end.x < gesture.start.x ? "#34d399" : "#38bdf8";
+                    const color = gesture.end.x < gesture.start.x ? '#34d399' : '#38bdf8';
+                    ctx.strokeStyle = options.color?.(color) || color;
                     ctx.fillStyle = "rgba(56,189,248,.1)";
                     ctx.lineWidth = 1;
                     ctx.setLineDash([5, 3]);
@@ -1233,7 +1233,7 @@
                 if (tool === "eraser" && hover) {
                     const p = api.screen(hover);
                     ctx.save();
-                    ctx.strokeStyle = "#fff";
+                    ctx.strokeStyle = options.background === 'white' ? '#334155' : '#fff';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
                     ctx.arc(
