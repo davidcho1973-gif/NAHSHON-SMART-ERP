@@ -1,3 +1,7 @@
+## CODEX — 2026-10-21 PNG claim evidence compatibility
+- Before production release, server-contract review found that the new 2D producer emits PNG but the existing claim image endpoint accepted JPEG only. Preserve lossless PNG and legacy JPEG by validating the declared format against decoded image bytes; keep the existing byte/pixel limits and private document intake.
+- Add a real HTTP regression that stores the studio PNG, checks exact saved bytes and SHA-256, links the original drawing, rejects MIME spoofing/corruption, and confirms no work approval or background reprocessing occurs. New PNG and existing JPEG focused checks pass (2 tests, 24 assertions). Full release checks remain mandatory; PR #212 must include this correction before production.
+
 ## CODEX — 2026-10-21 Embedded 2D takeoff workspace
 - Root cause: rebuilding the embedded viewer toolbar removed keyboard focus while its scoped Enter listener ignored events outside the viewer. Focus the canvas on pointer/tool actions and expose an explicit finish action. Open the richer 2D workspace directly from the selected claim line.
 - Add validated area cutouts, vertex editing, physical offsets and arrays, three-point arc approximation, count symbols, grouping, reusable 2D parts, named views, intersection snapping, mirroring and rectangular rotation. Preserve each new measurement's calibration. Export overlay SVG/DXF and an Excel-readable quantity CSV; validate same-sheet JSON recovery on the server. No 3D, new dependencies or schema changes.
@@ -421,6 +425,7 @@ Owner requested removal of pay viewing from the worker app. Removed the pay tab,
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-21 | CODEX | PNG takeoff evidence | Match the studio PNG producer to the actual claim upload API while preserving JPEG and byte validation. | codex/claim-png-evidence | Real HTTP and legacy JPEG tests passed; required before release #212. |
 | 2026-10-21 | CODEX | Embedded 2D takeoff | Repair Enter focus; add precision tools, retained calibration, recoverable drafts and evidence-first quantity transfer. | codex/claim-2d-workspace | JS/API/Chromium regressions passed; full CI and exact-commit NAHSHON deployment required. |
 | 2026-10-21 | CODEX + Antigravity role | CAD canvas background | Personal white/dark canvas with legible CAD lines/text and preserved source, fills, output and Undo. | codex/cad-canvas-background | 257 JS, 26 PHP/295 assertions, new pixel/interaction browser and existing markup/repeat/review suites passed; release evidence in PR. |
 | 2026-10-21 | CODEX + Antigravity role | CAD memory stability | Share immutable source/render assets across all 60 history states; preserve mutable edit isolation and detach renamed raw records. | codex/cad-memory-stability | Actual local DXF: 445.5 MiB/one legacy snapshot vs 33.6 MiB/60 fixed snapshots; JS/browser/build passed, full release evidence in PR. |

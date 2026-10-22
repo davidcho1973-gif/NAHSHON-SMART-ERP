@@ -299,6 +299,30 @@ class ClaimEvidenceTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_studio_png_crosses_the_real_image_api_without_losing_bytes_or_approving_work(): void
+    {
+        $line = $this->line();
+        config(['document-intelligence.disk' => 'local']);
+        Queue::fake();
+        $sheet = DrawingSheet::create(['intelligent_document_id' => $this->document->id, 'site_id' => $this->contract->site_id, 'page_no' => 1, 'sheet_no' => 'A-1']);
+        $bytes = UploadedFile::fake()->image('takeoff.png', 120, 80)->getContent();
+        $input = ['lineId' => $line->id, 'sheetId' => $sheet->id, 'sheetNo' => 'A-1', 'image' => 'data:image/png;base64,'.base64_encode($bytes)];
+        $response = $this->postJson('/smart-company-api/api_saveClaimDrawingImage', ['args' => [$input]])->assertOk()->assertJsonPath('success', true)->assertJsonPath('sourceDocumentId', $this->document->id);
+        $doc = IntelligentDocument::findOrFail($response->json('id'));
+        $this->assertSame('image/png', $doc->mime_type);
+        $this->assertSame('png', $doc->extension);
+        $this->assertSame($bytes, Storage::disk($doc->disk)->get($doc->file_path));
+        $this->assertSame(hash('sha256', $bytes), $doc->sha256);
+        $this->assertSame('ready', $doc->ai_status);
+        $this->assertSame(0, ClaimWorkRecord::count());
+        $input['image'] = 'data:image/jpeg;base64,'.base64_encode($bytes);
+        $this->postJson('/smart-company-api/api_saveClaimDrawingImage', ['args' => [$input]])->assertOk()->assertJsonPath('success', false);
+        $input['image'] = 'data:image/png;base64,invalid-image';
+        $this->postJson('/smart-company-api/api_saveClaimDrawingImage', ['args' => [$input]])->assertOk()->assertJsonPath('success', false);
+        $this->assertSame(2, IntelligentDocument::count());
+        Queue::assertNothingPushed();
+    }
+
     public function test_edit_draft_calculation_commits_once_without_verifying_or_allocating(): void
     {
         $line = $this->line();
