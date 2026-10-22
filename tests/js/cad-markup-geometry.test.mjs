@@ -122,6 +122,21 @@ test("an unrelated long outer face does not prevent a small closed fill", () => 
     const walls = [{type:"LWPOLYLINE",points:ring,closed:true}, ...wallBox(20,20,10,10)];
     assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x:25,y:25})), 100);
 });
+
+test("adaptive search finds a tall room before dense adjacent equipment hits the limit", () => {
+    const walls = wallBox(0,0,10,30);
+    for (let i=0;i<500;i++) {
+        walls.push(wall(33+i/500,0,33+i/500,10));
+        walls.push(wall(33,i/50,34,i/50));
+    }
+    const point = {x:5,y:5};
+    assert.equal(G.findDrawingBoundary(walls, point, {bounds:{minX:-11,minY:-11,maxX:21,maxY:21}}), null);
+    assert.throws(() => G.findDrawingBoundary(walls, point, {bounds:{minX:-27,minY:-27,maxX:37,maxY:37}}), error => error.code === 'CAD_BOUNDARY_LIMIT');
+    const result = G.findDrawingBoundaryAdaptive(walls, point, {radii:[16,32,64,128]});
+    assert.equal(boundaryArea(result), 300);
+    assert.ok(result.search.attempts <= 8);
+    assert.throws(() => G.findDrawingBoundaryAdaptive(walls, {x:NaN,y:5}, {radii:[16,32]}), /좌표/);
+});
 test("holes touching another boundary are rejected before server save", () => {
     const a = area("a", box(0, 0, 10, 10));
     a.holes = [box(0, 2, 2, 2)];

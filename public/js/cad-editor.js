@@ -1267,13 +1267,9 @@
         setView:view=>{scale=view.scale;origin={x:canvas.clientWidth/2-view.center.x*scale,y:canvas.clientHeight/2+view.center.y*scale};render();},
         boundary:p=>{
             if(!window.CADMarkupGeometry?.findDrawingBoundary)throw Error('경계 분석 도구를 불러오지 못했습니다. 저장 후 다시 열거나 자유 영역을 사용하세요.');
-            const source=entities();
-            for(const pixels of [96,192,384,768]){
-                const radius=pixels/scale;
-                const result=window.CADMarkupGeometry.findDrawingBoundary(source,p,{layers:doc.layers,bounds:{minX:p.x-radius,minY:p.y-radius,maxX:p.x+radius,maxY:p.y+radius}});
-                if(result)return result;
-            }
-            return null;
+            return window.CADMarkupGeometry.findDrawingBoundaryAdaptive(entities(),p,{
+                layers:doc.layers,radii:[96,192,384,768].map(pixels=>pixels/scale),
+            });
         },
         clearCAD:()=>{cancelGesture();selected.clear();points=[];hoverPoint=null;snapMark=null;setTool('select');},
         pan:(dx,dy)=>{origin.x+=dx;origin.y+=dy;render();}});

@@ -470,11 +470,19 @@
             facePoints: 512,
             ...options.limits,
         };
-        const stats = { entities: 0, points: 0, segments: 0, comparisons: 0, splits: 0 };
+        const stats = {
+            entities: 0,
+            points: 0,
+            segments: 0,
+            comparisons: 0,
+            splits: 0,
+        };
         const fail = () => {
-            throw Error(
+            const error = Error(
                 "경계 분석 한도를 넘었습니다. 불필요한 레이어를 숨긴 뒤 다시 클릭하거나 자유 영역을 사용하세요.",
             );
+            error.code = "CAD_BOUNDARY_LIMIT";
+            throw error;
         };
         const finite = (p) => p && Number.isFinite(p.x) && Number.isFinite(p.y);
         if (!finite(point))
@@ -831,6 +839,67 @@
         )
             fail();
         return { points: chosen.points, holes, stats };
+    };
+    // A coarse doubling step can jump past a closed room into dense adjacent
+    // linework. Refine that failed interval without raising any geometry budget.
+    G.findDrawingBoundaryAdaptive = (entities, point, options = {}) => {
+        const { radii, refinements = 3, ...queryOptions } = options;
+        if (
+            !Array.isArray(radii) ||
+            !radii.length ||
+            radii.length > 8 ||
+            radii.some(
+                (radius, i) =>
+                    !Number.isFinite(radius) ||
+                    radius <= 0 ||
+                    (i > 0 && radius <= radii[i - 1]),
+            ) ||
+            !Number.isInteger(refinements) ||
+            refinements < 0 ||
+            refinements > 3
+        ) {
+            throw Error("경계 검색 단계가 올바르지 않습니다.");
+        }
+        let safeRadius = 0,
+            attempts = 0;
+        const query = (radius) => {
+            attempts++;
+            const result = G.findDrawingBoundary(entities, point, {
+                ...queryOptions,
+                bounds: {
+                    minX: point.x - radius,
+                    minY: point.y - radius,
+                    maxX: point.x + radius,
+                    maxY: point.y + radius,
+                },
+            });
+            return result && { ...result, search: { attempts, radius } };
+        };
+        for (const radius of radii) {
+            try {
+                const result = query(radius);
+                if (result) return result;
+                safeRadius = radius;
+            } catch (error) {
+                if (error.code !== "CAD_BOUNDARY_LIMIT") throw error;
+                let low = safeRadius,
+                    high = radius;
+                for (let i = 0; i < refinements; i++) {
+                    const middle = (low + high) / 2;
+                    try {
+                        const result = query(middle);
+                        if (result) return result;
+                        low = middle;
+                    } catch (refinementError) {
+                        if (refinementError.code !== "CAD_BOUNDARY_LIMIT")
+                            throw refinementError;
+                        high = middle;
+                    }
+                }
+                throw error;
+            }
+        }
+        return null;
     };
     root.CADMarkupGeometry = G;
 })(typeof window === "undefined" ? globalThis : window);
