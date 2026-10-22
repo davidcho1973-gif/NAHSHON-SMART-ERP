@@ -201,6 +201,7 @@ const fs = require("node:fs"),
         await save();
         assert.equal(drawing.markups.at(-1).kind, "cloud");
         assert.equal(drawing.markups.at(-1).points.length, 4);
+        await page.locator("#markup-list button").first().click();
         await detail("문자 · 변경");
         await page.locator("#mw-label").fill("REV-03");
         await page.locator("#mw-label-apply").click();
@@ -210,6 +211,7 @@ const fs = require("node:fs"),
         await click(115, 45);
         await page.locator("#markup-dialog-text").fill("배관 변경\n현장 확인");
         await page.locator("#markup-dialog-confirm").click();
+        await page.locator("#markup-list button").first().click();
         await page.locator("#mw-bold").check();
         await page.locator("#mw-text-size").fill("2");
         await page.locator("#mw-text-width").fill("35");

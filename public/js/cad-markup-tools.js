@@ -40,6 +40,24 @@
         calibrate: "실제 거리를 입력한 뒤 도면의 두 기준점 클릭",
         region: "대각선 드래그로 출력 범위 지정 · Esc 취소",
     };
+    // Static SVG artwork keeps the toolbar legible without platform icon fonts.
+    const toolArtwork = {
+        select: ['blue', '<path d="M5 3l14 10-7 1-3 7z" fill="currentColor" stroke-width="1.3"/>'],
+        boundary: ['teal', '<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/><path d="M12 7c-1.5 2-4 4-4 6a4 4 0 008 0c0-2-2.5-4-4-6z" fill="currentColor" fill-opacity=".35"/><path d="M10 14c0 1 1 2 2 2"/>'],
+        area: ['teal', '<path d="M4 16L7 5l10 2 4 10-10 4z" fill="currentColor" fill-opacity=".2"/><circle cx="7" cy="5" r="1.4" fill="currentColor"/><circle cx="21" cy="17" r="1.4" fill="currentColor"/>'],
+        box: ['teal', '<rect x="4" y="5" width="16" height="14" rx="1.5" fill="currentColor" fill-opacity=".2"/><path d="M4 9V5h4m8 14h4v-4" stroke-width="2.5"/>'],
+        cloud: ['coral', '<path d="M6 6c0-3 5-3 6-1 3-3 7-1 6 2 4 0 5 5 2 6 2 4-2 7-5 5-2 3-6 3-7 0-4 1-7-3-4-6-3-2-2-6 2-6z"/>'],
+        callout: ['violet', '<path d="M9 4h12v10H11l-3 3V5z" fill="currentColor" fill-opacity=".16"/><path d="M5 20l6-6M2 18l3 2 1-4M12 8h6m-6 3h4"/>'],
+        pen: ['amber', '<path d="M14 5l5 5M4 20l2-7L16 3l5 5-10 10z"/><path d="M4 20l7-2M3 22h12"/>'],
+        highlight: ['amber', '<path d="M9 13l7-10 6 5-9 9z" fill="currentColor" fill-opacity=".24"/><path d="M9 13l4 4-3 3-5-2zM3 22h15" stroke-width="2.4"/>'],
+        pin: ['coral', '<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1114 0z" fill="currentColor" fill-opacity=".18"/><path d="M11 7h2v7m-3 0h5"/>'],
+        freecloud: ['coral', '<path d="M4 15c-3-3 0-7 3-6-1-5 5-7 7-3 4-2 8 2 5 5 4 2 2 7-2 6-1 4-7 4-8 0-3 3-6 1-5-2z"/><path d="M7 11l5-3 4 5-5 3z" stroke-dasharray="2 2" stroke-width="1.2"/>'],
+        text: ['violet', '<rect x="3" y="4" width="18" height="16" rx="2" stroke-dasharray="3 2"/><path d="M8 8h8m-4 0v9m-2 0h4" stroke-width="2.2"/>'],
+        route: ['teal', '<path d="M4 18h7V6h9" stroke-width="5" opacity=".24"/><path d="M4 18h7V6h9"/><circle cx="4" cy="18" r="2" fill="currentColor"/><path d="M17 3l3 3-3 3"/>'],
+        eraser: ['rose', '<path d="M4 14l9-10a2 2 0 013 0l5 5-10 11H8z" fill="currentColor" fill-opacity=".18"/><path d="M8 10l8 7M11 20h10"/>'],
+        lasso: ['blue', '<path d="M19 11c0 4-4 6-9 6s-8-3-8-6 4-7 9-7 8 3 8 7z" stroke-dasharray="3 2"/><path d="M9 17c-2 5 4 6 6 2 1-2-2-4-4-2"/>'],
+        calibrate: ['blue', '<path d="M3 17L17 3l5 5L8 22z" fill="currentColor" fill-opacity=".16"/><path d="M7 13l3 3m1-7l3 3m1-7l3 3"/><circle cx="3" cy="17" r="1.5" fill="currentColor"/><circle cx="17" cy="3" r="1.5" fill="currentColor"/>'],
+    };
     window.createCADMarkupTools = function (api) {
         let mode = "markup",
             tool = "select",
@@ -169,10 +187,9 @@
             }
             api.snapshot();
             api.document().markups.push(item);
-            selection = new Set([item.id]);
+            selection.clear();
             polygon = [];
             hover = null;
-            tool = "select";
             panelKey = "";
             $("properties").scrollTop = 0;
             api.render();
@@ -243,7 +260,17 @@
             const button = document.createElement("button");
             button.type = "button";
             button.dataset.markupTool = key;
-            button.textContent = name;
+            const [family, artwork] = toolArtwork[key];
+            button.dataset.toolTone = family;
+            button.setAttribute('aria-label', key === 'select' ? '선택' : name);
+            button.title = name + ' · ' + hints[key];
+            const icon = document.createElement('span'), label = document.createElement('span');
+            icon.className = 'markup-tool-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.innerHTML = '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + artwork + '</svg>';
+            label.className = 'markup-tool-label';
+            label.textContent = name;
+            button.append(icon, label);
             button.onclick = () => setTool(key);
             $("markup-tools").append(button);
         }
@@ -561,7 +588,7 @@
             if (event.buttons === 2 || event.buttons === 4) return;
             stop(event);
             if (!api.document() || api.busy()) return;
-            if (!gesture && !polygon.length && tool !== "eraser") return;
+            if (!gesture && !polygon.length && tool !== 'eraser'){const raw=api.world(event);canvas.style.cursor=space?'grab':tool==='select'&&chosen().some(item=>!isLocked(item)&&handles(item).some(h=>M.distance(h.point||h,raw)*api.scale()<8))?'nwse-resize':tool==='select'?'default':'crosshair';return;}
             const raw = api.world(event);
             hover = polygon.length ? api.snap(raw) : raw;
             if (tool === "route" && polygon.length && G)
@@ -1095,6 +1122,7 @@
             }
         }
         function render(ctx, options = {}) {
+            if(mode==='markup'&&!options.paper)canvas.style.cursor=gesture?.kind==='pan'?'grabbing':space?'grab':gesture?.kind==='move'?'move':gesture?.kind==='vertex'?'nwse-resize':tool==='select'?'default':'crosshair';
             options = {...options,doc:api.document()};
             if (visible || options.paper) {
                 const previewMap = new Map(
@@ -1250,7 +1278,7 @@
                     return;
                 if (event.code === "Space") {
                     stop(event);
-                    space = true;
+                    space = true;canvas.style.cursor="grab";
                     return;
                 }
                 if (event.key === "Escape") {
@@ -1330,7 +1358,7 @@
             true,
         );
         document.addEventListener("keyup", (event) => {
-            if (event.code === "Space") space = false;
+            if (event.code === "Space") {space = false;api.render();}
         });
         window.addEventListener("blur", () => {
             space = false;
