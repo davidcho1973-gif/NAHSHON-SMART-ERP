@@ -12,6 +12,27 @@ vm.runInContext(
     box,
 );
 const C = box.CADCore;
+test('white canvas keeps CAD colors legible without changing dark or paper colors', () => {
+    const luminance = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)
+        .reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0);
+    for (const color of ['#ffffff', '#e2e8f0', '#FFFF00', '#62dbed', '#58df8a', '#000000', '#ff0000', '#123456']) {
+        assert.ok(1.05 / (luminance(C.canvasColor(color, 'white')) + .05) >= 4.5, color);
+        assert.equal(C.canvasColor(color, 'dark'), color);
+        assert.equal(C.canvasColor(color), color);
+    }
+    assert.equal(C.canvasColor('#123456', 'white'), '#123456');
+    const entity = C.newEntity('LINE', {p:{x:0,y:0},q:{x:10,y:0},color:0xffffff});
+    const before = JSON.stringify(entity), strokes = [];
+    const ctx = {setLineDash(){},beginPath(){},moveTo(){},lineTo(){},stroke(){strokes.push([this.strokeStyle,this.lineWidth]);}};
+    const doc = {layers:{0:{color:'#e2e8f0'}}};
+    for (const options of [{},{background:'white'},{paper:true},{paper:true,background:'white'}])
+        C.renderEntities(ctx, doc, [entity], p => p, 1, options);
+    assert.deepEqual(strokes[0], ['#ffffff',1]);
+    assert.deepEqual(strokes[1], ['#334155',1]);
+    assert.deepEqual(strokes[2], strokes[3]);
+    assert.equal(JSON.stringify(entity), before);
+});
 const fixture =
     [
         "0",

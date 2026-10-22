@@ -188,6 +188,8 @@ header button,header .button {font-size:12px;}
 #capability {padding:4px 16px;color:#91a6bf;font-size:11px;background:#111d2e;flex:none;}
 .workspace-bar {display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:9px 16px;background:#101b2c;border-bottom:1px solid #2a3a50;flex:none;}
 .workspace-bar label {margin-left:auto;white-space:nowrap;font-size:12px;}
+.workspace-bar .canvas-background-control {display:flex;align-items:center;gap:6px;margin-left:0;}
+#canvas-background {min-height:32px;}
 .mode-switch {display:flex;padding:3px;background:#0b1422;border:1px solid #2a3a50;border-radius:8px;gap:3px;}
 .mode-switch button {border:0;background:transparent;padding:7px 14px;color:#9fb0c7;}
 .mode-switch button[aria-pressed=true] {background:#263c52;color:#d6f6ff;box-shadow:inset 0 0 0 1px #3d677d;}
