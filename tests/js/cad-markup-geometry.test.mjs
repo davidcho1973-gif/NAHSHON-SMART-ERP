@@ -18,6 +18,110 @@ const area = (id, points) => ({
     text: "",
     locked: false,
 });
+
+const wall = (x1, y1, x2, y2, extra = {}) => ({
+    type: "LINE", p: {x: x1, y: y1}, q: {x: x2, y: y2}, ...extra,
+});
+const wallBox = (x, y, w, h) => [
+    wall(x, y, x+w, y), wall(x+w, y, x+w, y+h),
+    wall(x+w, y+h, x, y+h), wall(x, y+h, x, y),
+];
+const boundaryArea = boundary => {
+    assert.ok(boundary, "Expected a closed boundary");
+    assert.ok(G.valid({...area("boundary", boundary.points), holes: boundary.holes}));
+    return G.area(boundary);
+};
+
+test("boundary fill recognizes separate wall lines without changing native geometry", () => {
+    const walls = wallBox(0, 0, 10, 8), before = structuredClone(walls);
+    assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x: 3, y: 4})), 80);
+    assert.deepEqual(walls, before);
+    assert.equal(G.findDrawingBoundary(walls, {x: 12, y: 4}), null);
+});
+
+test("boundary fill splits crossings and T joints and ignores dangling branches", () => {
+    const walls = [...wallBox(0, 0, 10, 10), wall(5, -2, 5, 12), wall(-2, 5, 12, 5), wall(0, 2, 2, 2)];
+    for (const x of [2, 8]) for (const y of [3, 8]) {
+        assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x, y})), 25);
+    }
+});
+
+test("boundary fill deduplicates reversed and partially overlapping walls", () => {
+    const walls = [...wallBox(0, 0, 10, 10), wall(10, 0, 0, 0), wall(4, 0, 12, 0), wall(0, 3, 0, 7)];
+    assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x: 5, y: 5})), 100);
+});
+
+test("boundary fill accepts closed and connected open polylines without edit permission", () => {
+    const ring = box(0, 0, 10, 10);
+    assert.equal(boundaryArea(G.findDrawingBoundary([{type: "LWPOLYLINE", points: ring, closed: true, editable: false}], {x: 5, y: 5})), 100);
+    const walls = [{type: "POLYLINE", points: ring, closed: false}, wall(0, 10, 0, 0)];
+    assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x: 5, y: 5})), 100);
+});
+
+test("boundary fill preserves nested columns as holes and can fill a column itself", () => {
+    const walls = [...wallBox(0, 0, 20, 20), ...wallBox(5, 5, 8, 8), ...wallBox(7, 7, 2, 2)];
+    const room = G.findDrawingBoundary(walls, {x: 2, y: 2});
+    assert.equal(boundaryArea(room), 336);
+    assert.equal(room.holes.length, 1);
+    assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x: 6, y: 6})), 60);
+    assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x: 8, y: 8})), 4);
+});
+
+test("boundary fill does not close real door gaps or bridge disconnected block paths", () => {
+    const open = wallBox(0, 0, 10, 10);
+    open[3].q.y = 0.001;
+    assert.equal(G.findDrawingBoundary(open, {x: 5, y: 5}), null);
+    assert.equal(G.findDrawingBoundary([{type: "INSERT", preview: [[{x:0,y:0},{x:10,y:0}], [{x:10,y:10},{x:0,y:10}]]}], {x: 5, y: 5}), null);
+});
+
+test("boundary fill reads transformed block parts but ignores text boxes and hidden linework", () => {
+    const block = {type: "INSERT", renderParts: wallBox(100, 200, 12, 10)};
+    assert.equal(boundaryArea(G.findDrawingBoundary([block], {x: 105, y: 205})), 120);
+    assert.equal(G.findDrawingBoundary([{type: "TEXT", displayGeometry: [...box(0, 0, 10, 10), {x:0,y:0}]}], {x: 5, y: 5}), null);
+    for (const excluded of [{hidden:true}, {paper:true}, {layer:"hidden"}]) {
+        const walls = wallBox(0, 0, 10, 10);
+        Object.assign(walls[0], excluded);
+        assert.equal(G.findDrawingBoundary(walls, {x:5,y:5}, {layers:{hidden:{visible:false}}}), null);
+    }
+});
+
+test("boundary fill keeps precision at site coordinates and handles a concave room", () => {
+    const walls = wallBox(1e8, -1e8, 10, 10);
+    assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x:1e8+5,y:-1e8+5})), 100);
+    const points = [{x:0,y:0},{x:10,y:0},{x:10,y:4},{x:4,y:4},{x:4,y:10},{x:0,y:10}];
+    const lines = points.map((p,i) => wall(p.x,p.y,points[(i+1)%points.length].x,points[(i+1)%points.length].y));
+    assert.equal(boundaryArea(G.findDrawingBoundary(lines, {x:2,y:8})), 64);
+    assert.equal(G.findDrawingBoundary(lines, {x:8,y:8}), null);
+});
+
+test("boundary analysis stops at explicit complexity limits instead of partial fills", () => {
+    assert.throws(() => G.findDrawingBoundary(wallBox(0,0,10,10), {x:5,y:5}, {limits:{segments:3}}), /한도/);
+    assert.throws(() => G.findDrawingBoundary(wallBox(0,0,10,10), {x:5,y:5}, {limits:{comparisons:1}}), /한도/);
+    assert.throws(() => G.findDrawingBoundary(wallBox(0,0,10,10), {x:5,y:5}, {limits:{points:2}, bounds:{minX:100,minY:100,maxX:110,maxY:110}}), /한도/);
+    assert.throws(() => G.findDrawingBoundary([], {x:NaN,y:1}), /좌표/);
+});
+
+test("local boundary search ignores distant density and never closes the search box", () => {
+    const bounds = {minX:-2,minY:-2,maxX:12,maxY:12};
+    const distant = Array.from({length:6000}, (_,i) => wall(100+i,100,101+i,101));
+    const room = G.findDrawingBoundary([...wallBox(0,0,10,10), ...distant], {x:5,y:5}, {bounds});
+    assert.equal(boundaryArea(room), 100);
+    assert.equal(G.findDrawingBoundary(wallBox(-20,-20,40,40), {x:0,y:0}, {bounds}), null);
+    const open = [wall(-20,0,20,0),wall(0,-20,0,20)];
+    assert.equal(G.findDrawingBoundary(open, {x:5,y:5}, {bounds}), null);
+    // A genuine closed region is still rejected if its boundary was cropped.
+    assert.equal(G.findDrawingBoundary(wallBox(0,0,20,10), {x:5,y:5}, {bounds}), null);
+});
+
+test("an unrelated long outer face does not prevent a small closed fill", () => {
+    const ring = [];
+    for (let i=0;i<150;i++) ring.push({x:i,y:0});
+    for (let i=0;i<150;i++) ring.push({x:150,y:i});
+    for (let i=0;i<150;i++) ring.push({x:150-i,y:150});
+    for (let i=0;i<150;i++) ring.push({x:0,y:150-i});
+    const walls = [{type:"LWPOLYLINE",points:ring,closed:true}, ...wallBox(20,20,10,10)];
+    assert.equal(boundaryArea(G.findDrawingBoundary(walls, {x:25,y:25})), 100);
+});
 test("holes touching another boundary are rejected before server save", () => {
     const a = area("a", box(0, 0, 10, 10));
     a.holes = [box(0, 2, 2, 2)];
