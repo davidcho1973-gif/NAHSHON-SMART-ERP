@@ -123,6 +123,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     await page.locator('.dm-form [data-save]').click();
     await page.locator('.ds-panel [data-selected-scale]').waitFor();
     assert.equal(JSON.stringify(document.entities[0].points),coordinatesBefore,'Reference calibration must not resize the source line');
+    assert.match(await page.locator('.ds-overlay').textContent(),/16.40 ft/,'Previously recorded measurements retain their calibration until explicitly changed');
+    await expand('precision');page.once('dialog',d=>d.accept());await page.locator('[data-recalibrate]').click();
     assert.match(await page.locator('.ds-overlay').textContent(),/12.50 ft/);
     await page.locator('[data-length]').fill('6′-3″');await page.locator('[data-transform]').click();
     assert.match(await page.locator('.ds-overlay').textContent(),/6.25 ft/);

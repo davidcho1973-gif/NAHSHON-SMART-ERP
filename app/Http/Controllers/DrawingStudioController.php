@@ -31,6 +31,14 @@ class DrawingStudioController extends Controller
         return response()->json($this->studio->save($request->user(), $sheet, $data['revision'], $data['document'], $data['requestId'] ?? null));
     }
 
+    public function validateImport(Request $request, DrawingSheet $sheet): JsonResponse
+    {
+        $this->studio->access($request->user(), $sheet, true);
+        $data = $request->validate(['document' => 'required|array']);
+
+        return response()->json(['document' => $this->studio->validateDocument($data['document'])]);
+    }
+
     /** Read only the selected printed label; the user identifies its dimension endpoints and confirms scale. */
     public function readDimension(Request $request, DrawingSheet $sheet, OcrEngine $ocr): JsonResponse
     {

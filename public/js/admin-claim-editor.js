@@ -64,6 +64,7 @@
       });
       return saving;
     }
+    async function saveAll() { if(embedded?.flush)await embedded.flush();await save(); }
     function choose(id) {
       if (uploading || committing || cadActive || navigating) return Promise.resolve();
       if (embedded && !embedded.beforeClose()) return Promise.resolve();
@@ -227,7 +228,7 @@
       box.querySelector('[data-upload]').onchange = uploadFiles;
       box.querySelector('[data-field="notes"]').oninput = function(){content.notes=this.value;queueSave();};
       box.querySelector('[data-cad]').onclick=openCAD;
-      box.querySelector('[data-next]').onclick=function(){save().then(function(){var id=line.id;modal.close(null);if(!box.isConnected)open(contractId,siteId,sheets,{lineId:id,onClose:options.onClose});}).catch(error);};
+      box.querySelector('[data-next]').onclick=function(){saveAll().then(function(){var id=line.id;modal.close(null);if(!box.isConnected)open(contractId,siteId,sheets,{lineId:id,onClose:options.onClose});}).catch(error);};
       attachments(); preview();
     }
 
@@ -256,7 +257,7 @@
         return call('api_saveClaimDrawingImage', [{lineId: line.id, sheetId: g.sheetId, sheetNo: g.sheetNo, image: image}]);
       }).then(function (r) {
         var id = r.id, sourceId = r.sourceDocumentId;
-        return call('api_getClaimEditor', [contractId]).then(function (fresh) { data.sourceOptions = fresh.sourceOptions; addSource('document:' + id); if (sourceId) addSource('document:' + sourceId); var proof = content.evidence.find(function (p) { return p.type === 'document' && p.id === id; }); proof.locator = g.sheetNo + ' · 표시 도면 · 실제 시공 확인 전'; render(); queueSave(); return save(); });
+        return call('api_getClaimEditor', [contractId]).then(function (fresh) { data.sourceOptions = fresh.sourceOptions; addSource('document:' + id); if (sourceId) addSource('document:' + sourceId); var proof = content.evidence.find(function (p) { return p.type === 'document' && p.id === id; }); proof.locator = g.sheetNo + (g.revision?' · 2D v'+g.revision:'') + ' · 표시 도면 · 실제 시공 확인 전'; render(); queueSave(); return save(); });
       });
     }
     function selectedSheet() { return (sheets || []).find(function (s) { return String(s.id) === box.querySelector('[data-sheet]').value; }); }
@@ -268,7 +269,20 @@
       if (embedded && embeddedSheet === (s && s.id)) return;
       if (!s || !global.DrawingMarker) { host.textContent = '연결된 도면이 없습니다. 오른쪽에서 자료와 작업 설명을 저장할 수 있습니다.'; return; }
       host.textContent = ''; embeddedSheet = s.id;
-      embedded = global.DrawingMarker.open({host:host, siteId:siteId, sheetNo:s.sheetNo, sectionId:line.workSectionId, line:line});
+      embedded = global.DrawingMarker.open({host:host, siteId:siteId, sheetNo:s.sheetNo, sectionId:line.workSectionId, line:line,edit2d:true,onTakeoff:async function(result){
+        if(conflict||uploading||committing)throw new Error('현재 저장·업로드를 완료한 뒤 다시 가져오세요.');
+        const incoming=result.rows.map(function(row){return {label:'[2D:'+result.sheetId+':'+row.id+'] '+result.sheetNo+' v'+result.revision+' · '+row.label,length:Math.round(row.quantity*10000)/10000,height:1,count:1,deduction:0};});
+        if(incoming.some(function(row){return row.label.length>255;}))throw new Error('측정 이름이 너무 깁니다. 도형 이름을 줄인 뒤 다시 가져오세요.');
+        const keys=result.rows.map(function(row){return '[2D:'+result.sheetId+':'+row.id+'] ';});
+        const rows=content.calculations.filter(function(row){return !keys.some(function(key){return row.label.startsWith(key);});});
+        if(!content.calculations.length&&Number(content.quantity)>0)rows.push({label:'기존 직접 입력 수량',length:Number(content.quantity),height:1,count:1,deduction:0});
+        if(rows.length+incoming.length>100)throw new Error('산출 항목은 100개까지 가능합니다.');
+        if(content.evidence.length>18)throw new Error('측정 도면과 원본을 연결할 증빙 공간이 부족합니다.');
+        // Persist the source image first: a failed upload must not introduce unsupported quantities.
+        const wasInert=box.inert;uploading=true;box.inert=true;
+        try{await uploadMarked(result);snapshot();content.calculations=rows.concat(incoming);content.quantity=content.calculations.reduce(function(sum,row){return sum+row.length*row.height*row.count-row.deduction;},0);queueSave();await save();render();}
+        finally{uploading=false;box.inert=wasInert;}
+      }});
     }
     function calculations() {
       box.querySelector('[data-calcs]').innerHTML = content.calculations.map(function (r, i) { return '<div style="display:flex;gap:4px;margin:6px 0">' + ['label', 'length', 'height', 'count', 'deduction'].map(function (k) { return '<input aria-label="' + esc({label:'위치',length:'길이',height:'높이',count:'개수',deduction:'공제'}[k]) + '" title="' + esc({label:'위치',length:'길이',height:'높이',count:'개수',deduction:'공제'}[k]) + '" data-row="' + i + '" data-key="' + k + '" style="width:18%" type="' + (k === 'label' ? 'text' : 'number') + '" value="' + esc(r[k]) + '">'; }).join('') + '<button type="button" data-delete-row="' + i + '">×</button></div>'; }).join('');
@@ -342,12 +356,12 @@
     }
     function setupStudio() {
       box.classList.add('ce-studio');
-      box.querySelector('[data-save-now]').onclick=function(){save().catch(error);};
-      box.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&!e.target.closest('.dm-wrap')){e.preventDefault();save().catch(error);}});
+      box.querySelector('[data-save-now]').onclick=function(){saveAll().catch(error);};
+      box.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&!e.target.closest('.dm-wrap')){e.preventDefault();saveAll().catch(error);}});
     }
     call('api_getClaimEditor', [contractId]).then(function (r) {
       data = r; if (!data.lines.length) throw new Error('계약 공정을 먼저 등록하세요.');
-      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing || cadActive || navigating || writer.pending) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; global.removeEventListener('beforeunload',unload); global.removeEventListener('online',online); document.removeEventListener('visibilitychange',visibility); clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '도면 · 자료' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-resolve hidden>두 초안 비교</button><button data-save-now>저장 · Ctrl+S</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div>' : '<div data-save-state></div><button data-resolve hidden>두 초안 비교</button><button data-save-now>초안 저장 · 다시 시도</button><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); box.querySelector('[data-resolve]').onclick=resolveConflict; box.querySelector('[data-save-now]').onclick=function(){save().catch(error);}; global.addEventListener('beforeunload',unload); global.addEventListener('online',online); document.addEventListener('visibilitychange',visibility); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { save().then(function () { m.close(null); }).catch(error); } });
+      var m = u.modal({ beforeClose: function () { var dialogs=Array.from(document.querySelectorAll('[role=dialog]')); if(dialogs.at(-1)!==box.querySelector('[role=dialog]')) return false; if (uploading || committing || cadActive || navigating || writer.pending) { u.toast('저장·업로드가 끝날 때까지 기다려 주세요.'); return false; } if (Array.from(document.querySelectorAll('.dm-wrap')).some(function(e){return !box.contains(e);})) return false; if (dirty) { u.toast('저장하고 닫기를 눌러주세요.'); return false; } if (embedded && !embedded.beforeClose()) return false; if (embedded) embedded.close(true); closed = true; global.removeEventListener('beforeunload',unload); global.removeEventListener('online',online); document.removeEventListener('visibilitychange',visibility); clearTimeout(timer); clearTimeout(searchTimer); if(options.onClose) options.onClose(); return true; }, title: options.fullscreen ? '도면 · 자료' : '기성 편집', width: 1400, body: (options.fullscreen ? '<div class="ce-studio-toolbar"><strong data-record-title></strong><span data-save-state></span><button data-resolve hidden>두 초안 비교</button><button data-save-now>저장 · Ctrl+S</button></div><div class="ce-studio-layout"><div data-studio-drawing></div><div data-edit-body></div></div>' : '<div data-save-state></div><button data-resolve hidden>두 초안 비교</button><button data-save-now>초안 저장 · 다시 시도</button><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label>회차 마감일 <input data-period type="date" value="' + esc(data.contract.today) + '"></label><button type="button" data-period-prepare>이번 회차 준비</button><div data-packet-state></div></div><div data-edit-body></div>'), actions: [{ label: '저장하고 닫기', value: 'keep' }], onReady: function (el) { box = el; box.classList.add('ce-editor'); if(options.fullscreen) setupStudio(); box.querySelector('[data-resolve]').onclick=resolveConflict; box.querySelector('[data-save-now]').onclick=function(){saveAll().catch(error);}; global.addEventListener('beforeunload',unload); global.addEventListener('online',online); document.addEventListener('visibilitychange',visibility); choose(options.lineId || data.lines[0].id); if(box.querySelector('[data-period-prepare]')) box.querySelector('[data-period-prepare]').onclick = preparePeriod; }, onAction: function () { saveAll().then(function () { m.close(null); }).catch(error); } });
       modal = m;
     }).catch(error);
   }

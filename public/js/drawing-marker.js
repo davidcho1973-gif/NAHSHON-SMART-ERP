@@ -342,6 +342,11 @@
     if (opts.host) { wrap.style.cssText = 'position:absolute;inset:0;z-index:1'; wrap.querySelector('[data-close]').style.display = 'none'; }
     var $ = function (sel) { return wrap.querySelector(sel); };
     var stage = $('[data-stage]'), world = $('[data-world]'), svg = $('[data-svg]'), canvas = $('[data-canvas]');
+    stage.tabIndex = 0;
+    stage.setAttribute('aria-label', '도면 작업 영역');
+    stage.addEventListener('pointerdown', function (e) {
+      if (!e.target.closest('button,input,textarea,select,.dm-form,.ds-panel')) stage.focus({preventScroll:true});
+    }, true);
 
     function beforeClose() { return !studio || studio.beforeClose(); }
     function close(force) {
@@ -437,6 +442,9 @@
           if (!st.pick && global.DrawingStudio && s.id) {
             studio = global.DrawingStudio.mount({ wrap: wrap, stage: stage, world: world, sheetId: s.id, sheetNo: st.data.sheetNo,
               side: $('[data-side]'), tools: $('[data-tools]'), canManage: r.canManage, scopedKeys: !!opts.host,
+              line: opts.line, onTakeoff: opts.onTakeoff,
+              captureView: function () { var rect=stage.getBoundingClientRect();return {x:(rect.width/2-st.x)/(st.W*st.k),y:(rect.height/2-st.y)/(st.H*st.k),zoom:st.k/(Math.min(rect.width/st.W,rect.height/st.H)*.94)}; },
+              restoreView: function (view) { var rect=stage.getBoundingClientRect();st.k=view.zoom*Math.min(rect.width/st.W,rect.height/st.H)*.94;st.x=rect.width/2-view.x*st.W*st.k;st.y=rect.height/2-view.y*st.H*st.k;apply(); },
               view: function () { return { W: st.W, H: st.H, wPt: st.wPt, hPt: st.hPt, k: st.k, fpp: st.fpp }; },
               toWorld: toWorld, refit: fit, hint: showHint, scaleLabel: function () { return st.scaleLabel; },
               calibrate: function (points) {
@@ -455,6 +463,7 @@
               },
               setHand: function () { st.tool = 'hand'; st.draft = []; select(null); }, snapshot: studioSnapshot,
             });
+            if (opts.edit2d) studio.ready.then(function () { if (!disposed) studio.activate(); });
             $('[data-studio]').style.display = '';
             if (r.canManage) $('[data-share-studio]').style.display = '';
           }
@@ -1322,7 +1331,7 @@
       setTimeout(function () { if (h.parentNode) { h.style.transition = 'opacity .4s'; h.style.opacity = '0'; setTimeout(function () { h.remove(); }, 420); } }, 5200);
     }
 
-    return { close: close, beforeClose: beforeClose, state: st };
+    return { close: close, beforeClose: beforeClose, state: st, flush: function () { return studio ? studio.flush() : Promise.resolve(); } };
   }
 
   global.DrawingMarker = {
