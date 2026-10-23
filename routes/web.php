@@ -341,6 +341,7 @@ Route::middleware('auth')->group(function (): void {
     Route::prefix('admin-api/drawing-sheets/{sheet}/studio')->controller(DrawingStudioController::class)->group(function (): void {
         Route::get('/', 'show');
         Route::put('/', 'save');
+        Route::post('/validate', 'validateImport')->middleware('throttle:30,1');
         Route::post('/read-dimension', 'readDimension')->middleware('throttle:6,1');
         Route::get('/history', 'history');
         Route::get('/share-options', 'options');

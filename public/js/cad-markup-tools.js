@@ -24,7 +24,7 @@
     const hints = {
         select: "클릭하여 선택 · Shift로 추가 · 드래그 이동 · 꼭짓점으로 모양 수정",
         boundary:
-            "원본의 닫힌 직선 폴리선 안쪽 클릭 · 경계가 없으면 자유 영역 사용",
+            "연결된 원본 직선 경계 안쪽 클릭 · 실제 틈이나 곡선·이미지는 자유 영역 사용",
         area: "경계를 차례로 클릭 · 첫 점 클릭 또는 Enter로 완성 · Esc 취소",
         box: "대각선으로 드래그하여 영역 지정",
         cloud: "변경된 부분을 감싸도록 드래그",
@@ -193,6 +193,7 @@
             panelKey = "";
             $("properties").scrollTop = 0;
             api.render();
+            return true;
         }
         function cancel() {
             const receiver=regionReceiver;regionReceiver=null;
@@ -517,14 +518,16 @@
                 $("markup-visible").checked = true;
             }
             if (tool === "boundary") {
-                const boundary = api.boundary(raw);
-                if (!boundary) {
-                    api.status(
-                        "이 위치에는 지원되는 닫힌 직선 폴리선이 없습니다. 자유 영역으로 경계를 지정하세요.",
-                    );
-                    return;
-                }
-                commit(create("area", boundary));
+                try {
+                    const boundary = api.boundary(raw);
+                    if (!boundary) {
+                        api.status('클릭한 곳을 둘러싼 닫힌 직선 경계를 찾지 못했습니다. 선의 틈·숨긴 레이어를 확인하세요. 곡선이나 이미지 영역은 자유 영역으로 지정하세요.');
+                        return;
+                    }
+                    const item = create('area', Array.isArray(boundary) ? boundary : boundary.points);
+                    if(boundary.holes?.length)item.holes=clone(boundary.holes);
+                    if(commit(item))api.status('영역을 색칠했습니다. 다른 닫힌 구역을 계속 클릭하거나 Esc로 마치세요.');
+                } catch(error) { api.status(error.message); }
                 return;
             }
             if (["area", "freecloud", "route"].includes(tool)) {
