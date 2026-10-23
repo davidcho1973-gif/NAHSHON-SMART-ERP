@@ -126,7 +126,29 @@
         recovery?.offer();
     }
     $('drawing-state-dismiss').onclick=()=>{$('drawing-state').hidden=true;};
+    function byteSize(text) {
+        let bytes=0;
+        for(let i=0;i<text.length;i++){
+            const code=text.charCodeAt(i);
+            if(code<128)bytes++;
+            else if(code<2048)bytes+=2;
+            else if(code>=0xd800&&code<=0xdbff&&text.charCodeAt(i+1)>=0xdc00&&text.charCodeAt(i+1)<=0xdfff){bytes+=4;i++;}
+            else bytes+=3;
+        }
+        return bytes;
+    }
+    function sizeLabel(bytes){const divisor=bytes<1024?1:bytes<1048576?1024:1048576,unit=divisor===1?' B':divisor===1024?' KiB':' MiB';return (bytes/divisor).toLocaleString('ko-KR',{maximumFractionDigits:2})+unit;}
+    function capabilityLimit(name){const value=cap.limits?.[name];return Number.isSafeInteger(value)&&value>0?value:null;}
+    const uploadLimitHint=document.createElement('span');
+    uploadLimitHint.id='upload-limit';uploadLimitHint.className='note';uploadLimitHint.hidden=true;
+    $('upload').closest('label').after(uploadLimitHint);$('upload').setAttribute('aria-describedby','upload-limit');
+    function showUploadLimit(){const max=capabilityLimit('maxUploadBytes');uploadLimitHint.hidden=!max;uploadLimitHint.textContent=max?'파일당 최대 '+sizeLabel(max):'';}
     async function api(path = "", options = {}) {
+        const maxRequest=capabilityLimit('maxRequestBytes');
+        if(maxRequest&&typeof options.body==='string'){
+            const actual=byteSize(options.body);
+            if(actual>maxRequest)throw Error('저장·전송할 내용이 너무 큽니다 ('+sizeLabel(actual)+' / 최대 '+sizeLabel(maxRequest)+'). 현재 도면과 저장하지 않은 표시는 유지됩니다. 도면을 나누거나 관리자에게 문의하세요.');
+        }
         const r = await fetch("/admin-api/cad" + path, {
             credentials: "same-origin",
             ...options,
@@ -764,8 +786,10 @@
         markup?.refresh();
         inspector();
         try {
-            const content = dxfContent(), markupContent=JSON.stringify(doc.markups || []), workspaceContent=JSON.stringify(doc.workspace || {}),
-                j = await api("/" + record.id, {
+            const content = dxfContent(), markupContent=JSON.stringify(doc.markups || []), workspaceContent=JSON.stringify(doc.workspace || {});
+            const maxDrawing=capabilityLimit('maxDrawingBytes');
+            if(maxDrawing&&byteSize(content)>maxDrawing)throw Error('저장할 CAD 도면이 너무 큽니다 ('+sizeLabel(byteSize(content))+' / 최대 '+sizeLabel(maxDrawing)+'). 현재 편집은 유지됩니다. 도면을 나누거나 관리자에게 문의하세요.');
+            const j = await api("/" + record.id, {
                     method: "PUT",
                     body: JSON.stringify({
                         revision: record.revision,
@@ -872,6 +896,8 @@
         let token=null;
         try{
             const file=e.target.files[0];if(!file)return;
+            const maxUpload=capabilityLimit('maxUploadBytes');
+            if(maxUpload&&file.size>maxUpload)throw Error('“'+file.name+'” 파일이 너무 큽니다 ('+sizeLabel(file.size)+' / 파일당 최대 '+sizeLabel(maxUpload)+'). 파일을 나누거나 크기를 줄인 뒤 다시 올려 주세요.');
             if(!guard())return;
             const site=$('sites').value;
             if(!site)throw Error('도면을 등록할 현장을 먼저 선택하세요. 위의 현장 목록에서 현장을 선택한 뒤 다시 파일을 올려 주세요.');
@@ -1323,6 +1349,7 @@
         }) : Promise.resolve(),
         api("/capabilities").then((j) => {
             cap = j;
+            showUploadLimit();
             $("capability").textContent =
                 j.message ||
                 "DWG 읽기: " +

@@ -9,6 +9,7 @@ use App\Services\Drawings\CadClaimDraftService;
 use App\Services\Drawings\CadConverter;
 use App\Services\Drawings\CadDrawingService;
 use App\Services\Drawings\DrawingStudioService;
+use App\Support\CadFileLimits;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -31,7 +32,7 @@ class CadDrawingController extends Controller
     {
         $this->cad->gate($request->user());
 
-        return response()->json($this->converter->capabilities());
+        return response()->json($this->converter->capabilities() + ['limits' => CadFileLimits::capabilities()]);
     }
 
     public function claimContext(Request $request, CadClaimDraftService $claims)
@@ -68,7 +69,7 @@ class CadDrawingController extends Controller
                         throw $e;
                     }
 
-return false;
+                    return false;
                 } catch (ModelNotFoundException) {
                     return false;
                 }
@@ -80,9 +81,11 @@ return false;
     public function store(Request $request)
     {
         $this->cad->gate($request->user(), true);
-        $data = $request->validate(['file' => 'required|file|max:20480', 'site_id' => 'required|integer', 'title' => 'required|string|max:255',
+        $data = $request->validate(['file' => 'required|file|max:'.(CadFileLimits::drawingBytes() / 1024), 'site_id' => 'required|integer', 'title' => 'required|string|max:255',
             'reference' => 'sometimes|array:page,width,height', 'reference.page' => 'required_with:reference|integer|between:1,500',
-            'reference.width' => 'required_with:reference|numeric|between:1,100000', 'reference.height' => 'required_with:reference|numeric|between:1,100000']);
+            'reference.width' => 'required_with:reference|numeric|between:1,100000', 'reference.height' => 'required_with:reference|numeric|between:1,100000'],
+            ['file.max' => 'CAD 원본 파일은 최대 '.CadFileLimits::label().'까지 업로드할 수 있습니다.',
+                'file.uploaded' => '서버가 파일을 받지 못했습니다. 화면에 표시된 업로드 한도를 확인한 뒤 다시 시도하세요.']);
         $drawing = $this->cad->import($request->user(), Site::findOrFail($data['site_id']), $request->file('file'), $data['title'], $data['reference'] ?? null);
 
         return response()->json($this->cad->read($drawing) + ['canManage' => true, 'canExport' => $this->cad->canExport($request->user())], 201);
@@ -108,7 +111,7 @@ return false;
         $this->sourceSheet($request, $sheet);
         $doc = $sheet->document;
         abort_unless($doc->mime_type === 'application/pdf' && Storage::disk($doc->disk)->exists($doc->file_path), 422);
-        abort_if(Storage::disk($doc->disk)->size($doc->file_path) > config('cad.max_bytes'), 422, '현재 CAD 편집기의 원본 한도는 20MB입니다.');
+        abort_if(Storage::disk($doc->disk)->size($doc->file_path) > CadFileLimits::drawingBytes(), 422, '현재 CAD 편집기의 원본 한도는 '.CadFileLimits::label().'입니다.');
         $bytes = Storage::disk($doc->disk)->get($doc->file_path);
         abort_unless(is_string($bytes) && hash_equals($doc->sha256, hash('sha256', $bytes)), 409, '문서 원본 해시가 변경되었습니다.');
 
@@ -129,7 +132,7 @@ return false;
                     abort_unless((float) $prior->reference[$key] === (float) $data['reference'][$key], 409);
                 }
 
-return $prior;
+                return $prior;
             }
             $bytes = $this->sourceSheetFile($request, $sheet)->getContent();
             $temp = tempnam(sys_get_temp_dir(), 'cad-pdf-');
