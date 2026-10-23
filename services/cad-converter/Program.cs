@@ -35,7 +35,7 @@ try
 {
     // The PHP bridge passes its canonical limit to both commands. Standalone
     // invocations retain the same bounded default; invalid overrides fail closed.
-    var configuredLimit = Environment.GetEnvironmentVariable("NAHSHON_CAD_MAX_BYTES");
+    var configuredLimit = Environment.GetEnvironmentVariable("CAD_CONVERTER_MAX_BYTES");
     if (configuredLimit != null && (!long.TryParse(configuredLimit, out maxBytes) || maxBytes <= 0 || maxBytes > int.MaxValue))
         throw new ArgumentException("Invalid CAD size limit.");
     if (args is ["capabilities"])

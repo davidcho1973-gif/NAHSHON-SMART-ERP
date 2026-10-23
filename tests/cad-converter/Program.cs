@@ -96,7 +96,7 @@ try
         var command = new ProcessStartInfo(args[0]) { RedirectStandardOutput = true, RedirectStandardError = true };
         if (args.Length > 1) command.ArgumentList.Add(args[1]);
         foreach (var arg in new[] { "convert", "--input", from, "--output", to }) command.ArgumentList.Add(arg);
-        command.Environment["NAHSHON_CAD_MAX_BYTES"] = limit.ToString();
+        command.Environment["CAD_CONVERTER_MAX_BYTES"] = limit.ToString();
         using var native = Process.Start(command)!;
         var outputTask = native.StandardOutput.ReadToEndAsync();
         var errorTask = native.StandardError.ReadToEndAsync();

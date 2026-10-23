@@ -127,7 +127,7 @@ class CadDrawingTest extends TestCase
         $temp = tempnam(sys_get_temp_dir(), 'cad-size-');
         $binary = $temp.'.dll';
         file_put_contents($binary, '<?php
-if (getenv("NAHSHON_CAD_MAX_BYTES") !== "1024") exit(3);
+if (getenv("CAD_CONVERTER_MAX_BYTES") !== "1024") exit(3);
 if ($argv[1] === "capabilities") { echo json_encode(["dwgRead"=>true,"dwgWrite"=>true]); exit(0); }
 file_put_contents($argv[5], str_repeat("x", 1025)); echo "{}";');
         config(['cad.max_bytes' => 1024, 'cad.converter_binary' => $binary, 'cad.dotnet_binary' => PHP_BINARY]);

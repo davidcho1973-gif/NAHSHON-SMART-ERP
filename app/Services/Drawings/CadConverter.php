@@ -18,7 +18,7 @@ class CadConverter
         if (is_string($binary) && is_file($binary) && (str_ends_with(strtolower($binary), '.dll') || is_executable($binary))) {
             try {
                 $process = new Process([...$this->command($binary), 'capabilities']);
-                $process->setEnv(['NAHSHON_CAD_MAX_BYTES' => (string) CadFileLimits::drawingBytes()]);
+                $process->setEnv(['CAD_CONVERTER_MAX_BYTES' => (string) CadFileLimits::drawingBytes()]);
                 $process->setTimeout(5);
                 $process->run();
                 $meta = json_decode($process->getOutput(), true);
@@ -52,7 +52,7 @@ class CadConverter
             $binary = config('cad.converter_binary');
             $argv = $this->command($binary);
             $process = new Process([...$argv, 'convert', '--input', $input, '--output', $output]);
-            $process->setEnv(['NAHSHON_CAD_MAX_BYTES' => (string) CadFileLimits::drawingBytes()]);
+            $process->setEnv(['CAD_CONVERTER_MAX_BYTES' => (string) CadFileLimits::drawingBytes()]);
             $process->setTimeout(config('cad.converter_timeout', 60));
             try {
                 $process->run();
