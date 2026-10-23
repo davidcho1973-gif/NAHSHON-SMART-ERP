@@ -18,6 +18,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -53,6 +55,10 @@ class CadDrawingTest extends TestCase
             'color' => '#38bdf8', 'opacity' => 0.35, 'width' => 2, 'size' => 8, 'pattern' => 'diagonal', 'text' => '', 'locked' => false];
     }
 
+    // HTTP requests have fresh PHP processes; earlier suite fixtures must not
+    // consume the headroom for this full-size upload/save regression.
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
     public function test_dxf_larger_than_twenty_megabytes_uploads_edits_and_retains_original(): void
     {
         // Valid comment pairs keep the fixture compact in entity count while
@@ -61,15 +67,21 @@ class CadDrawingTest extends TestCase
         $source = str_replace("0\nEOF\n", $comments."0\nEOF\n", self::DXF);
         unset($comments);
         $this->assertGreaterThan(47 * 1048576, strlen($source));
+        $originalHash = hash('sha256', $source);
         $created = $this->upload($source)->assertCreated();
         $id = $created->json('id');
         unset($created);
         $drawing = CadDrawing::findOrFail($id);
-        $this->assertSame(hash('sha256', $source), hash_file('sha256', Storage::disk('local')->path($drawing->original_path)));
+        $this->assertSame($originalHash, hash_file('sha256', Storage::disk('local')->path($drawing->original_path)));
         $edited = str_replace("11\n100\n", "11\n125\n", $source);
-        $saved = $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => $edited])->assertOk()->assertJsonPath('revision', 2);
-        $this->assertSame(hash('sha256', $edited), hash('sha256', $saved->json('dxf')));
-        $this->assertSame(hash('sha256', $source), hash_file('sha256', Storage::disk('local')->path($drawing->original_path)));
+        $editedHash = hash('sha256', $edited);
+        unset($source);
+        $saved = $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => $edited])->assertOk();
+        unset($edited);
+        $payload = $saved->json();
+        $this->assertSame(2, $payload['revision']);
+        $this->assertSame($editedHash, hash('sha256', $payload['dxf']));
+        $this->assertSame($originalHash, hash_file('sha256', Storage::disk('local')->path($drawing->original_path)));
     }
 
     public function test_configured_limit_applies_to_upload_save_and_conversion_without_partial_writes(): void
