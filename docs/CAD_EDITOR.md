@@ -2,7 +2,7 @@
 
 ## 사용
 
-공정별 도면에서 **CAD 도면 편집**을 열거나 `/cad?site_id=현장ID`로 들어간다. 현장을 고른 뒤 DWG 또는 UTF-8 ASCII DXF(최대 20MiB)를 올린다. 원본은 비공개로 보관하며 편집 저장은 새 DXF 개정을 만든다. **DWG 내려받기**는 선택한 개정을 실제 DWG 2018(AC1032) 파일로 변환한다. ERP에 저장하는 작업과 DWG 파일 내려받기는 별도 동작이다.
+공정별 도면에서 **CAD 도면 편집**을 열거나 `/cad?site_id=현장ID`로 들어간다. 현장을 고른 뒤 DWG 또는 UTF-8 ASCII DXF(최대 64MiB)를 올린다. 업로드 옆에는 현재 서버의 실제 파일 한도가 표시되며, PHP 설정이 낮으면 그 한도가 우선한다. 원본은 비공개로 보관하며 편집 저장은 새 DXF 개정을 만든다. **DWG 내려받기**는 선택한 개정을 실제 DWG 2018(AC1032) 파일로 변환한다. ERP에 저장하는 작업과 DWG 파일 내려받기는 별도 동작이다.
 
 편집: 직선, 연속선, 사각형, 원, 원호, 문자 상자, 위치를 조정할 수 있는 거리 치수, 거리 측정; 선택, 이동, 복사, 회전, 균일 배율, 대칭, 삭제, 직선/원 오프셋, 두 직선 자르기/연장, 직사각 배열. 좌표 입력, 스냅, 직교, 격자, 레이어, 색/선종류/선굵기, 실행 취소/다시 실행, 화면 이동/확대/전체 보기를 제공한다. 작업 전에 선택한 도구의 안내를 확인한다. 거리 수치는 파일의 도면 단위이며 자동 단위 추정이나 법정 물량 확정에 쓰지 않는다.
 
@@ -60,7 +60,9 @@ CAD_STORAGE_DISK=s3
 
 프레임워크 종속 DLL 배포는 `CAD_CONVERTER_BINARY=/absolute/Nahshon.CadConverter.dll`, `CAD_DOTNET_BINARY=/absolute/dotnet`을 설정한다. 앱 서비스 계정이 엔진을 실행하고 `storage/app/private/cad-tmp`를 생성할 수 있어야 한다. 엔진 설정이 없거나 실행되지 않으면 DWG 기능은 비활성화되고 DXF 편집을 사용할 수 있다. 실행 파일 존재만으로 지원 가능 표시를 하지 않고 `capabilities` 명령 응답을 확인한다.
 
-운영 파일은 비공개 영구 디스크가 필요하다. `CAD_STORAGE_DISK`가 비어 있으면 문서함의 `document-intelligence.disk`를 사용한다. 공개 디스크나 운영 임시 로컬 디스크에는 업로드를 허용하지 않는다. 스토리지 읽기/쓰기는 권한 검증 후 서버에서 수행한다. 웹서버/PHP의 `upload_max_filesize`, `post_max_size`도 20MiB 파일과 JSON 본문을 수용하도록 설정한다.
+운영 파일은 비공개 영구 디스크가 필요하다. `CAD_STORAGE_DISK`가 비어 있으면 문서함의 `document-intelligence.disk`를 사용한다. 공개 디스크나 운영 임시 로컬 디스크에는 업로드를 허용하지 않는다. 스토리지 읽기/쓰기는 권한 검증 후 서버에서 수행한다. 원본·변환 입력/출력·편집 DXF 한도는 `config/cad.php`의 `max_bytes` 한 곳을 사용하며 PHP가 변환기 프로세스에 전달한다. DWG가 DXF로 풀리면서 64MiB를 넘으면 변환을 거절한다. 서버는 한도를 검사한 뒤 DXF 코드 쌍을 순차 검사해 거대한 줄 배열을 만들지 않는다.
+
+`public/.user.ini`는 파일 64M, 요청 전체 144M로 설정한다. 요청 한도는 DXF 줄바꿈 등의 JSON 이스케이프와 표시 데이터를 수용하기 위해 파일 한도보다 크다. 프록시 한도도 이에 맞춰야 하며 `/build-version`에서 실제 PHP 적용값을 확인한다. `/admin-api/cad/capabilities`의 `limits`는 유효 업로드·편집 DXF·요청 본문 한도를 제공한다. 초과 파일은 PDF 처리/업로드 전에 한국어로 안내하고, 초과 저장 요청은 현재 미저장 편집을 유지한다. 파일 크기가 한도 안이어도 지원되지 않는 객체나 변환 시간 제한 때문에 실패할 수 있다.
 
 루트 Dockerfile에는 Linux 변환기 빌드와 `/opt/cad` 설치가 포함되어 있다. Laravel Cloud에서는 기존 Build commands 끝에 `bash scripts/build-cad-converter.sh`를 추가한다. 이 스크립트는 .NET SDK가 없으면 Microsoft 공식 고정 버전 아카이브를 SHA512로 검증해 임시 폴더에 설치하고, 자체 포함 Linux 실행 파일을 `services/cad-converter/publish`에 빌드한다. PHP 설정은 이 경로를 기본으로 찾으므로 별도 비밀값 수정이 필요 없다. `capabilities` 실행이 실패하면 빌드도 실패한다. 코드 병합만으로 기존 Laravel Cloud의 DWG 엔진이 준비되었다고 간주하지 않는다. 파일 다운로드·변환은 20초 HTTP 제한을 넘길 수 있으므로 현장 도면으로 확인 후 서버 timeout과 PHP 한도를 조정한다.
 

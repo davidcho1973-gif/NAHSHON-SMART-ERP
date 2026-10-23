@@ -10,12 +10,17 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Drawings\CadConverter;
+use App\Services\Drawings\CadDrawingService;
+use App\Support\CadFileLimits;
 use App\Support\Org;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class CadDrawingTest extends TestCase
@@ -48,6 +53,93 @@ class CadDrawingTest extends TestCase
     {
         return ['id' => 'area-1', 'kind' => 'area', 'points' => [['x' => 1, 'y' => 2], ['x' => 30, 'y' => 2], ['x' => 30, 'y' => 20]],
             'color' => '#38bdf8', 'opacity' => 0.35, 'width' => 2, 'size' => 8, 'pattern' => 'diagonal', 'text' => '', 'locked' => false];
+    }
+
+    // HTTP requests have fresh PHP processes; earlier suite fixtures must not
+    // consume the headroom for this full-size upload/save regression.
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_dxf_larger_than_twenty_megabytes_uploads_edits_and_retains_original(): void
+    {
+        // Valid comment pairs keep the fixture compact in entity count while
+        // exercising the actual HTTP, validation, storage and revision sizes.
+        $comments = str_repeat('999'."\n".str_repeat('x', 240)."\n", 201200);
+        $source = str_replace("0\nEOF\n", $comments."0\nEOF\n", self::DXF);
+        unset($comments);
+        $this->assertGreaterThan(47 * 1048576, strlen($source));
+        $originalHash = hash('sha256', $source);
+        $created = $this->upload($source)->assertCreated();
+        $id = $created->json('id');
+        unset($created);
+        $drawing = CadDrawing::findOrFail($id);
+        $this->assertSame($originalHash, hash_file('sha256', Storage::disk('local')->path($drawing->original_path)));
+        $edited = str_replace("11\n100\n", "11\n125\n", $source);
+        $editedHash = hash('sha256', $edited);
+        unset($source);
+        $saved = $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => $edited])->assertOk();
+        unset($edited);
+        $payload = $saved->json();
+        $this->assertSame(2, $payload['revision']);
+        $this->assertSame($editedHash, hash('sha256', $payload['dxf']));
+        $this->assertSame($originalHash, hash_file('sha256', Storage::disk('local')->path($drawing->original_path)));
+    }
+
+    public function test_configured_limit_applies_to_upload_save_and_conversion_without_partial_writes(): void
+    {
+        $id = $this->upload()->assertCreated()->json('id');
+        config(['cad.max_bytes' => 1024]);
+        $exact = self::DXF.str_repeat(' ', 1024 - strlen(self::DXF));
+        $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => $exact])->assertOk()->assertJsonPath('revision', 2);
+        $oversize = str_repeat(' ', 1025);
+        $this->upload($oversize)->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->putJson('/admin-api/cad/'.$id, ['revision' => 2, 'dxf' => $oversize])->assertUnprocessable()->assertJsonValidationErrors('dxf');
+        $this->assertDatabaseCount('cad_drawings', 1);
+        $this->assertDatabaseCount('cad_drawing_revisions', 2);
+        $this->expectException(HttpException::class);
+        $this->expectExceptionMessage('최대');
+        app(CadConverter::class)->convert($oversize, 'dxf', 'dwg');
+    }
+
+    public function test_capabilities_expose_effective_limits_and_php_lower_bounds(): void
+    {
+        $this->assertSame(64 * 1048576, CadFileLimits::drawingBytes());
+        $this->getJson('/admin-api/cad/capabilities')->assertOk()->assertJsonPath('limits', CadFileLimits::capabilities());
+        $this->assertSame(2 * 1048576, CadFileLimits::effectiveUploadBytes(64 * 1048576, 2 * 1048576, 8 * 1048576));
+        $this->assertSame(7 * 1048576, CadFileLimits::effectiveUploadBytes(64 * 1048576, 64 * 1048576, 8 * 1048576));
+        $this->assertSame(64 * 1048576, CadFileLimits::effectiveUploadBytes(64 * 1048576, 0, 0));
+    }
+
+    public function test_streaming_dxf_validation_keeps_line_endings_and_rejects_malformed_pairs(): void
+    {
+        $validator = app(CadDrawingService::class);
+        foreach (["\n", "\r\n", "\r"] as $ending) {
+            $validator->validateDxf(str_replace("\n", $ending, self::DXF));
+            $validator->validateDxf(rtrim(str_replace("\n", $ending, self::DXF)));
+        }
+        foreach ([self::DXF."0\nLINE\n", str_replace("0\nEOF\n", "999\n", self::DXF), str_replace("0\nENDSEC\n", '', self::DXF)] as $invalid) {
+            $this->upload($invalid)->assertUnprocessable()->assertJsonValidationErrors('dxf');
+        }
+        $this->assertDatabaseCount('cad_drawings', 0);
+    }
+
+    public function test_native_bridge_receives_canonical_limit_and_rejects_oversize_output(): void
+    {
+        $temp = tempnam(sys_get_temp_dir(), 'cad-size-');
+        $binary = $temp.'.dll';
+        file_put_contents($binary, '<?php
+if (getenv("CAD_CONVERTER_MAX_BYTES") !== "1024") exit(3);
+if ($argv[1] === "capabilities") { echo json_encode(["dwgRead"=>true,"dwgWrite"=>true]); exit(0); }
+file_put_contents($argv[5], str_repeat("x", 1025)); echo "{}";');
+        config(['cad.max_bytes' => 1024, 'cad.converter_binary' => $binary, 'cad.dotnet_binary' => PHP_BINARY]);
+        try {
+            $this->getJson('/admin-api/cad/capabilities')->assertJsonPath('dwgRead', true);
+            $this->upload("AC1032\0fixture", 'large-result.dwg')->assertUnprocessable();
+            $this->assertDatabaseCount('cad_drawings', 0);
+            $this->assertSame([], glob(storage_path('app/private/cad-tmp/*/input.dwg')) ?: []);
+        } finally {
+            unlink($binary);
+            unlink($temp);
+        }
     }
 
     public function test_pdf_studio_import_is_page_pinned_idempotent_and_keeps_document_permissions(): void

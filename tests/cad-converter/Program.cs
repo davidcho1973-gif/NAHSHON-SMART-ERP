@@ -78,6 +78,47 @@ try
     Assert(presentationMeta.GetProperty("warnings").EnumerateArray().Any(x=>x.GetString()!.Contains("3D 표시")),"Omitted presentation metadata must be disclosed.");
     var presentationCheck=DxfReader.Read(presentationOutput,Strict);
     Assert(presentationCheck.Entities.Count==presentationSource.Entities.Count,"Presentation conversion must preserve model entity count.");
+    // A legitimate XRecord makes both DXF directions exceed the old 20 MiB
+    // bound, without storing customer drawings or a large binary fixture.
+    var largeDoc = new CadDocument();
+    largeDoc.Header.Version = ACadVersion.AC1032;
+    largeDoc.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(100, 50, 0)));
+    var payload = new XRecord("SyntheticLargeDrawingData");
+    for (int i = 0; i < 90000; i++) payload.CreateEntry(1, new string('x', 240) + i.ToString("D6"));
+    largeDoc.RootDictionary.Add(payload);
+    var largeDxf = Path.Combine(directory, "large.dxf");
+    var largeDwg = Path.Combine(directory, "large.dwg");
+    var largeReopened = Path.Combine(directory, "large-reopened.dxf");
+    DxfWriter.Write(largeDxf, largeDoc, binary: false, notification: Strict);
+    Assert(new FileInfo(largeDxf).Length > 20 * 1024 * 1024, "Fixture must exceed the old input limit.");
+    (int code, string error) ConvertLarge(string from, string to, long limit)
+    {
+        var command = new ProcessStartInfo(args[0]) { RedirectStandardOutput = true, RedirectStandardError = true };
+        if (args.Length > 1) command.ArgumentList.Add(args[1]);
+        foreach (var arg in new[] { "convert", "--input", from, "--output", to }) command.ArgumentList.Add(arg);
+        command.Environment["CAD_CONVERTER_MAX_BYTES"] = limit.ToString();
+        using var native = Process.Start(command)!;
+        var outputTask = native.StandardOutput.ReadToEndAsync();
+        var errorTask = native.StandardError.ReadToEndAsync();
+        native.WaitForExit();
+        return (native.ExitCode, errorTask.GetAwaiter().GetResult());
+    }
+    var largeWrite = ConvertLarge(largeDxf, largeDwg, 64 * 1024 * 1024);
+    Assert(largeWrite.code == 0, "Large DXF input failed: " + largeWrite.error);
+    var largeRead = ConvertLarge(largeDwg, largeReopened, 64 * 1024 * 1024);
+    Assert(largeRead.code == 0, "Large DXF output failed: " + largeRead.error);
+    Assert(new FileInfo(largeReopened).Length > 20 * 1024 * 1024, "Converted output must exceed the old limit.");
+    var largeCheck = DxfReader.Read(largeReopened, Strict);
+    Assert(largeCheck.Entities.OfType<Line>().Single().EndPoint == new XYZ(100, 50, 0), "Large conversion must preserve geometry.");
+    // ACadSharp also exposes serialization code 280 flags as entries. Compare
+    // every payload value, not those reader-added structural flags.
+    var preservedEntries = largeCheck.RootDictionary.GetEntry<XRecord>("SyntheticLargeDrawingData").Entries.Where(e => e.Code == 1).Select(e => e.Value.ToString());
+    Assert(preservedEntries.SequenceEqual(Enumerable.Range(0, 90000).Select(i => new string('x', 240) + i.ToString("D6"))), "Every large metadata value must survive.");
+    var rejectedInput = ConvertLarge(largeDxf, Path.Combine(directory, "oversize-input.dwg"), 1024);
+    Assert(rejectedInput.code != 0 && rejectedInput.error.Contains("Input size exceeds limit"), "Native input must enforce the passed limit.");
+    var rejectedOutput = ConvertLarge(largeDwg, Path.Combine(directory, "oversize-output.dxf"), new FileInfo(largeDwg).Length + 1024);
+    Assert(rejectedOutput.code != 0 && rejectedOutput.error.Contains("Invalid output size"), "Native output must enforce the passed limit.");
+    Console.WriteLine("PASS: >20 MiB DXF input/output, real DWG roundtrip, metadata preservation and configured input/output limits.");
     Console.WriteLine("PASS: real DWG duplicate book colors, conflicting RGB rejection, presentation warning, geometry and RGB preservation.");
 }
 finally {Directory.Delete(directory,true);}
