@@ -8,7 +8,7 @@ using ACadSharp.Entities;
 
 // The ERP needs real DWG serialization: changing an extension cannot convert a drawing.
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-const long maxBytes = 20 * 1024 * 1024;
+long maxBytes = 64 * 1024 * 1024;
 var warnings = new List<string>();
 // These resources describe presentation/associativity, not the static 2D
 // entities. A working copy may omit them only with an explicit warning.
@@ -33,9 +33,14 @@ void Notify(object sender, NotificationEventArgs e)
 }
 try
 {
+    // The PHP bridge passes its canonical limit to both commands. Standalone
+    // invocations retain the same bounded default; invalid overrides fail closed.
+    var configuredLimit = Environment.GetEnvironmentVariable("NAHSHON_CAD_MAX_BYTES");
+    if (configuredLimit != null && (!long.TryParse(configuredLimit, out maxBytes) || maxBytes <= 0 || maxBytes > int.MaxValue))
+        throw new ArgumentException("Invalid CAD size limit.");
     if (args is ["capabilities"])
     {
-        Console.WriteLine(JsonSerializer.Serialize(new { version = 1, engine = "ACadSharp 3.8.0", dwgRead = true, dwgWrite = true }));
+        Console.WriteLine(JsonSerializer.Serialize(new { version = 1, engine = "ACadSharp 3.8.0", dwgRead = true, dwgWrite = true, maxBytes }));
         return 0;
     }
     if (args.Length != 5 || args[0] != "convert" || args[1] != "--input" || args[3] != "--output")
@@ -43,7 +48,8 @@ try
     var input = Path.GetFullPath(args[2]);
     var output = Path.GetFullPath(args[4]);
     if (input.Equals(output, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Input and output must differ.");
-    if (!File.Exists(input) || new FileInfo(input).Length > maxBytes) throw new ArgumentException("Input missing or larger than 20 MiB.");
+    if (!File.Exists(input)) throw new ArgumentException("Input missing.");
+    if (new FileInfo(input).Length > maxBytes) throw new ArgumentException("Input size exceeds limit.");
     if (File.Exists(output)) throw new ArgumentException("Refusing to replace an existing output.");
     var source = Path.GetExtension(input).ToLowerInvariant();
     var target = Path.GetExtension(output).ToLowerInvariant();
@@ -83,7 +89,7 @@ try
     var inputGeometry = GeometryInventory(document);
     if (target == ".dwg") DwgWriter.Write(output, document, notification: Notify);
     else DxfWriter.Write(output, document, binary: false, notification: Notify);
-    if (!File.Exists(output) || new FileInfo(output).Length is 0 or > maxBytes) throw new InvalidDataException("Invalid output size.");
+    if (!File.Exists(output) || new FileInfo(output).Length == 0 || new FileInfo(output).Length > maxBytes) throw new InvalidDataException("Invalid output size.");
     // Reopen actual emitted bytes, never report a successful file extension alone.
     var check = target == ".dwg" ? DwgReader.Read(output, Notify) : DxfReader.Read(output, Notify);
     if (check.BlockRecords.SelectMany(b => b.Entities).Count() != inputEntities.Count) throw new InvalidDataException("Entity count changed during serialization; conversion refused.");

@@ -8,6 +8,7 @@ use App\Models\DrawingSheet;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\AiInformationAccess;
+use App\Support\CadFileLimits;
 use App\Support\JobAccess;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
@@ -72,7 +73,7 @@ class CadDrawingService
                 throw $e;
             }
 
-return false;
+            return false;
         } catch (ModelNotFoundException) {
             return false;
         }
@@ -80,19 +81,47 @@ return false;
 
     public function validateDxf(string $dxf): void
     {
-        $lines = preg_split('/\r\n|\n|\r/', trim($dxf));
-        $valid = strlen($dxf) <= config('cad.max_bytes') && mb_check_encoding($dxf, 'UTF-8') && ! str_contains($dxf, "\0") && count($lines) % 2 === 0;
+        if (strlen($dxf) > CadFileLimits::drawingBytes()) {
+            throw ValidationException::withMessages(['dxf' => '편집용 DXF는 최대 '.CadFileLimits::label().'까지 저장할 수 있습니다.']);
+        }
+        // Splitting a large DXF into millions of PHP strings exhausted memory
+        // before validation. Walk pairs in the original string instead.
+        $valid = mb_check_encoding($dxf, 'UTF-8') && ! str_contains($dxf, "\0");
+        $length = strlen($dxf);
+        $offset = 0;
+        $nextLine = static function () use ($dxf, $length, &$offset): ?string {
+            if ($offset >= $length) {
+                return null;
+            }
+            $size = strcspn($dxf, "\r\n", $offset);
+            $line = substr($dxf, $offset, $size);
+            $offset += $size;
+            if ($offset < $length && $dxf[$offset++] === "\r" && $offset < $length && $dxf[$offset] === "\n") {
+                $offset++;
+            }
+
+            return $line;
+        };
         $entities = false;
         $eof = false;
         $section = false;
         if ($valid) {
-            for ($i = 0; $i < count($lines); $i += 2) {
-                if (! preg_match('/^\s*\d{1,4}\s*$/', $lines[$i]) || (int) trim($lines[$i]) > 1071) {
+            while (($rawCode = $nextLine()) !== null) {
+                if ($eof) {
+                    if (trim($rawCode) !== '') {
+                        $valid = false;
+                        break;
+                    }
+
+                    continue;
+                }
+                $rawValue = $nextLine();
+                if ($rawValue === null || ! preg_match('/^\s*\d{1,4}\s*$/', $rawCode) || (int) trim($rawCode) > 1071) {
                     $valid = false;
                     break;
                 }
-                $code = (int) trim($lines[$i]);
-                $value = trim($lines[$i + 1]);
+                $code = (int) trim($rawCode);
+                $value = trim($rawValue);
                 if ($code === 0 && $value === 'SECTION') {
                     if ($section) {
                         $valid = false;
@@ -109,12 +138,12 @@ return false;
                     } $section = false;
                 }
                 if ($code === 0 && $value === 'EOF') {
-                    $eof = ! $section && $i === count($lines) - 2;
+                    $eof = ! $section;
                 }
             }
         }
         if (! $valid || ! $entities || ! $eof) {
-            throw ValidationException::withMessages(['dxf' => '올바른 UTF-8 텍스트 DXF(ENTITIES/EOF 포함, 최대 20MB)가 필요합니다.']);
+            throw ValidationException::withMessages(['dxf' => '올바른 UTF-8 텍스트 DXF(ENTITIES/EOF 포함, 최대 '.CadFileLimits::label().')가 필요합니다.']);
         }
     }
 
@@ -127,10 +156,10 @@ return false;
     {
         $this->gate($user, true);
         abort_unless(AiInformationAccess::canUseSite($user, $site), 404);
-        $bytes = $file->get();
-        if (strlen($bytes) > config('cad.max_bytes')) {
-            throw ValidationException::withMessages(['file' => '최대 20MB까지 업로드할 수 있습니다.']);
+        if ($file->getSize() > CadFileLimits::drawingBytes()) {
+            throw ValidationException::withMessages(['file' => '최대 '.CadFileLimits::label().'까지 업로드할 수 있습니다.']);
         }
+        $bytes = $file->get();
         $dwg = preg_match('/^AC10[0-9]{2}/', $bytes) === 1;
         $reference = app(CadReferenceService::class)->inspect($bytes, $file->getMimeType(), $referenceInput);
         if ($sourceSheet) {
