@@ -200,8 +200,12 @@ const C = context.window.CADCore;
             );
         };
         await tool("boundary");
+        await click(195, 115);
+        await count(0);
+        await expect(page.locator("#status")).toContainText("경계");
         await click(150, 40);
         await count(1);
+        await expect(page.locator("#status")).toContainText("영역을 색칠했습니다");
         await save();
         assert.deepEqual(drawing.markups[0].points, [
             { x: 125, y: 25 },
@@ -212,6 +216,29 @@ const C = context.window.CADCore;
         await page.locator("#undo").click();
         await count(0);
         await save();
+        // A room made of separate wall LINEs must behave like a closed polyline.
+        // Its top and right walls meet at a T joint, and room text is not a boundary.
+        await tool("boundary");
+        await page.locator('[data-markup-color="#34d399"]').click();
+        await click(30, 30);
+        await count(1);
+        await expect(page.locator('[data-markup-tool="boundary"]')).toHaveAttribute("aria-pressed", "true");
+        await save();
+        const lineRoom = drawing.markups[0];
+        assert.equal(lineRoom.kind, "area");
+        assert.equal(lineRoom.color, "#34d399");
+        assert.deepEqual({
+            minX: Math.min(...lineRoom.points.map(p => p.x)),
+            maxX: Math.max(...lineRoom.points.map(p => p.x)),
+            minY: Math.min(...lineRoom.points.map(p => p.y)),
+            maxY: Math.max(...lineRoom.points.map(p => p.y)),
+        }, {minX: 10, maxX: 80, minY: 10, maxY: 65});
+        await page.screenshot({path: "test-results/assistant-browser/SYNTHETIC-cad-connected-boundary.png", fullPage: true});
+        await page.locator("#undo").click();
+        await count(0);
+        await save();
+        await click(195, 115);
+        await count(0); // A click outside the walls must never fill the page.
         await tool("box");
         await drag([20, 20], [70, 55]);
         await count(1);

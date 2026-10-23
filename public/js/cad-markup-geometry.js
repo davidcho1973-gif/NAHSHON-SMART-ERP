@@ -457,5 +457,449 @@
         flush();
         return result;
     };
+
+    // Discover faces from vector linework only. Never join flattened INSERT paths,
+    // snap real gaps closed, or use curve/text/image preview boxes as boundaries.
+    G.findDrawingBoundary = (entities, point, options = {}) => {
+        const limits = {
+            entities: 100000,
+            points: 100000,
+            segments: 5000,
+            comparisons: 200000,
+            splits: 20000,
+            facePoints: 512,
+            ...options.limits,
+        };
+        const stats = {
+            entities: 0,
+            points: 0,
+            segments: 0,
+            comparisons: 0,
+            splits: 0,
+        };
+        const fail = () => {
+            const error = Error(
+                "경계 분석 한도를 넘었습니다. 불필요한 레이어를 숨긴 뒤 다시 클릭하거나 자유 영역을 사용하세요.",
+            );
+            error.code = "CAD_BOUNDARY_LIMIT";
+            throw error;
+        };
+        const finite = (p) => p && Number.isFinite(p.x) && Number.isFinite(p.y);
+        if (!finite(point))
+            throw Error("경계를 찾을 좌표가 올바르지 않습니다.");
+        const segments = [],
+            M = root.CADMarkup,
+            bounds = options.bounds;
+        if (
+            bounds &&
+            (!finite({ x: bounds.minX, y: bounds.minY }) ||
+                !finite({ x: bounds.maxX, y: bounds.maxY }) ||
+                bounds.minX >= bounds.maxX ||
+                bounds.minY >= bounds.maxY)
+        )
+            throw Error("경계 검색 범위가 올바르지 않습니다.");
+        const rawNumber = (e, code, fallback = 0) =>
+            Number(e.raw?.find((pair) => pair[0] === code)?.[1] ?? fallback);
+        function collect(e, depth = 0) {
+            if (++stats.entities > limits.entities || depth > 12) fail();
+            if (
+                !e ||
+                e.hidden ||
+                e.paper ||
+                options.layers?.[e.layer]?.visible === false ||
+                rawNumber(e, 60) === 1 ||
+                rawNumber(e, 67)
+            )
+                return;
+            if (e.type === "INSERT") {
+                if (e.renderParts?.length) {
+                    for (const part of e.renderParts) collect(part, depth + 1);
+                } else
+                    for (const path of e.preview || [])
+                        if (path.length === 2) add(path[0], path[1]);
+                return;
+            }
+            if (!["LINE", "LWPOLYLINE", "POLYLINE"].includes(e.type)) return;
+            if (
+                [30, 31, 38, 210, 220].some(
+                    (code) => rawNumber(e, code) !== 0,
+                ) ||
+                rawNumber(e, 230, 1) !== 1
+            )
+                return;
+            if ((e.points?.length || 0) > limits.points - stats.points) fail();
+            if (
+                e.points?.some((p) => p.bulge) ||
+                (e.type === "POLYLINE" && rawNumber(e, 70) & ~1)
+            )
+                return;
+            const path =
+                e.displayGeometry ||
+                (e.type === "LINE" ? [e.p, e.q] : e.points);
+            if (!Array.isArray(path)) return;
+            for (let i = 1; i < path.length; i++) add(path[i - 1], path[i]);
+            if (e.type !== "LINE" && e.closed && path.length > 2)
+                add(path.at(-1), path[0]);
+        }
+        function add(a, b) {
+            if ((stats.points += 2) > limits.points) fail();
+            if (!finite(a) || !finite(b) || (a.x === b.x && a.y === b.y))
+                return;
+            if (bounds) {
+                // Clip without adding rectangle edges. Any resulting face touching
+                // the search border is rejected below, so clipping cannot close a gap.
+                let lo = 0,
+                    hi = 1;
+                const dx = b.x - a.x,
+                    dy = b.y - a.y;
+                for (const [p, q] of [
+                    [-dx, a.x - bounds.minX],
+                    [dx, bounds.maxX - a.x],
+                    [-dy, a.y - bounds.minY],
+                    [dy, bounds.maxY - a.y],
+                ]) {
+                    if (p === 0) {
+                        if (q < 0) return;
+                        continue;
+                    }
+                    const t = q / p;
+                    if (p < 0) lo = Math.max(lo, t);
+                    else hi = Math.min(hi, t);
+                    if (lo > hi) return;
+                }
+                const start = { x: a.x + dx * lo, y: a.y + dy * lo },
+                    end = { x: a.x + dx * hi, y: a.y + dy * hi };
+                a = start;
+                b = end;
+                if (a.x === b.x && a.y === b.y) return;
+            }
+            if (++stats.segments > limits.segments) fail();
+            segments.push({
+                a: { x: a.x, y: a.y },
+                b: { x: b.x, y: b.y },
+                cuts: [0, 1],
+                minX: Math.min(a.x, b.x),
+                maxX: Math.max(a.x, b.x),
+                minY: Math.min(a.y, b.y),
+                maxY: Math.max(a.y, b.y),
+            });
+        }
+        for (const e of entities) collect(e);
+        if (!segments.length) return null;
+        // Only numerical roundoff is merged: never a pixel/world-unit snap tolerance.
+        const magnitude = segments.reduce(
+            (n, s) =>
+                Math.max(
+                    n,
+                    Math.abs(s.a.x),
+                    Math.abs(s.a.y),
+                    Math.abs(s.b.x),
+                    Math.abs(s.b.y),
+                ),
+            1,
+        );
+        const tolerance = Math.max(1e-10, magnitude * Number.EPSILON * 4);
+        const cross = (a, b) => a.x * b.y - a.y * b.x;
+        const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+        function cut(segment, t) {
+            if (t < 0 || t > 1) return;
+            if (++stats.splits > limits.splits) fail();
+            segment.cuts.push(t);
+        }
+        const ordered = [...segments].sort((a, b) => a.minX - b.minX),
+            active = [];
+        for (const s of ordered) {
+            for (let i = active.length - 1; i >= 0; i--)
+                if (active[i].maxX < s.minX - tolerance) active.splice(i, 1);
+            for (const other of active) {
+                if (++stats.comparisons > limits.comparisons) fail();
+                if (
+                    other.maxY < s.minY - tolerance ||
+                    s.maxY < other.minY - tolerance
+                )
+                    continue;
+                const r = sub(s.b, s.a),
+                    v = sub(other.b, other.a),
+                    q = sub(other.a, s.a),
+                    den = cross(r, v);
+                const lenR = Math.hypot(r.x, r.y),
+                    lenV = Math.hypot(v.x, v.y);
+                if (Math.abs(den) > Number.EPSILON * 16 * lenR * lenV) {
+                    const t = cross(q, v) / den,
+                        u = cross(q, r) / den;
+                    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+                        cut(s, t);
+                        cut(other, u);
+                    }
+                } else if (Math.abs(cross(q, r)) <= tolerance * lenR) {
+                    // Split coincident overlap at all native endpoints, then deduplicate edges.
+                    for (const p of [other.a, other.b])
+                        cut(
+                            s,
+                            ((p.x - s.a.x) * r.x + (p.y - s.a.y) * r.y) /
+                                (lenR * lenR),
+                        );
+                    for (const p of [s.a, s.b])
+                        cut(
+                            other,
+                            ((p.x - other.a.x) * v.x +
+                                (p.y - other.a.y) * v.y) /
+                                (lenV * lenV),
+                        );
+                }
+            }
+            active.push(s);
+        }
+        const vertices = [],
+            buckets = new Map(),
+            edges = [],
+            edgeKeys = new Set();
+        function vertex(p) {
+            const x = Math.floor(p.x / tolerance),
+                y = Math.floor(p.y / tolerance);
+            for (let dx = -1; dx <= 1; dx++)
+                for (let dy = -1; dy <= 1; dy++)
+                    for (const id of buckets.get(x + dx + "," + (y + dy)) || [])
+                        if (
+                            Math.hypot(
+                                vertices[id].x - p.x,
+                                vertices[id].y - p.y,
+                            ) <= tolerance
+                        )
+                            return id;
+            const id = vertices.length;
+            vertices.push({ x: p.x, y: p.y, links: [] });
+            const key = x + "," + y;
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key).push(id);
+            return id;
+        }
+        for (const s of segments) {
+            s.cuts.sort((a, b) => a - b);
+            for (let i = 1; i < s.cuts.length; i++) {
+                const at = (t) => ({
+                        x: s.a.x + (s.b.x - s.a.x) * t,
+                        y: s.a.y + (s.b.y - s.a.y) * t,
+                    }),
+                    a = vertex(at(s.cuts[i - 1])),
+                    b = vertex(at(s.cuts[i]));
+                if (a === b) continue;
+                const key = Math.min(a, b) + "," + Math.max(a, b);
+                if (edgeKeys.has(key)) continue;
+                edgeKeys.add(key);
+                const id = edges.length;
+                edges.push({ a, b });
+                vertices[a].links.push(id);
+                vertices[b].links.push(id);
+                if (edges.length > limits.splits) fail();
+            }
+        }
+        // Remove bridges: dangling/T-joint branches must not pollute face rings.
+        const discovery = new Int32Array(vertices.length),
+            low = new Int32Array(vertices.length),
+            bridges = new Set();
+        let clock = 0;
+        for (let start = 0; start < vertices.length; start++)
+            if (!discovery[start]) {
+                discovery[start] = low[start] = ++clock;
+                const stack = [{ id: start, parent: -1, edge: -1, next: 0 }];
+                while (stack.length) {
+                    const frame = stack.at(-1),
+                        links = vertices[frame.id].links;
+                    if (frame.next < links.length) {
+                        const edgeId = links[frame.next++];
+                        if (edgeId === frame.edge) continue;
+                        const edge = edges[edgeId],
+                            to = edge.a === frame.id ? edge.b : edge.a;
+                        if (!discovery[to]) {
+                            discovery[to] = low[to] = ++clock;
+                            stack.push({
+                                id: to,
+                                parent: frame.id,
+                                edge: edgeId,
+                                next: 0,
+                            });
+                        } else
+                            low[frame.id] = Math.min(
+                                low[frame.id],
+                                discovery[to],
+                            );
+                    } else {
+                        stack.pop();
+                        if (frame.parent >= 0) {
+                            low[frame.parent] = Math.min(
+                                low[frame.parent],
+                                low[frame.id],
+                            );
+                            if (low[frame.id] > discovery[frame.parent])
+                                bridges.add(frame.edge);
+                        }
+                    }
+                }
+            }
+        const outgoing = vertices.map(() => []),
+            halves = [];
+        edges.forEach((edge, id) => {
+            if (bridges.has(id)) return;
+            const n = halves.length;
+            halves.push(
+                { from: edge.a, to: edge.b, twin: n + 1 },
+                { from: edge.b, to: edge.a, twin: n },
+            );
+            outgoing[edge.a].push(n);
+            outgoing[edge.b].push(n + 1);
+        });
+        outgoing.forEach((list, id) =>
+            list.sort(
+                (a, b) =>
+                    Math.atan2(
+                        vertices[halves[a].to].y - vertices[id].y,
+                        vertices[halves[a].to].x - vertices[id].x,
+                    ) -
+                    Math.atan2(
+                        vertices[halves[b].to].y - vertices[id].y,
+                        vertices[halves[b].to].x - vertices[id].x,
+                    ),
+            ),
+        );
+        const positions = new Int32Array(halves.length);
+        outgoing.forEach((list) =>
+            list.forEach((id, index) => (positions[id] = index)),
+        );
+        const seen = new Set(),
+            faces = [];
+        for (let start = 0; start < halves.length; start++)
+            if (!seen.has(start)) {
+                let at = start;
+                const ids = [];
+                do {
+                    if (seen.has(at)) break;
+                    seen.add(at);
+                    const edge = halves[at];
+                    ids.push(edge.from);
+                    const list = outgoing[edge.to];
+                    at =
+                        list[
+                            (positions[edge.twin] + list.length - 1) %
+                                list.length
+                        ];
+                } while (at !== start);
+                if (
+                    at !== start ||
+                    ids.length < 3 ||
+                    new Set(ids).size !== ids.length
+                )
+                    continue;
+                const points = ids.map((id) => ({
+                        x: vertices[id].x,
+                        y: vertices[id].y,
+                    })),
+                    area = M.signedArea(points);
+                if (Math.abs(area) > tolerance * tolerance)
+                    faces.push({ points, area });
+            }
+        const interior = (p) =>
+            !bounds ||
+            (p.x > bounds.minX + tolerance &&
+                p.x < bounds.maxX - tolerance &&
+                p.y > bounds.minY + tolerance &&
+                p.y < bounds.maxY - tolerance);
+        const containing = faces
+            .filter(
+                (f) =>
+                    f.area > 0 &&
+                    f.points.every(interior) &&
+                    M.inside(point, f.points),
+            )
+            .sort((a, b) => a.area - b.area);
+        if (!containing.length) return null;
+        const chosen = containing[0];
+        if (chosen.points.length > limits.facePoints) fail();
+        const candidates = faces.filter(
+            (f) =>
+                f.area < 0 &&
+                Math.abs(f.area) < chosen.area - tolerance * tolerance &&
+                f.points.every((p) => M.inside(p, chosen.points)),
+        );
+        const holes = candidates
+            .filter(
+                (f) =>
+                    !candidates.some(
+                        (other) =>
+                            other !== f &&
+                            Math.abs(other.area) > Math.abs(f.area) &&
+                            f.points.every((p) => M.inside(p, other.points)),
+                    ),
+            )
+            .map((f) => [...f.points].reverse());
+        if (
+            chosen.points.length +
+                holes.reduce((n, ring) => n + ring.length, 0) >
+            limits.facePoints
+        )
+            fail();
+        return { points: chosen.points, holes, stats };
+    };
+    // A coarse doubling step can jump past a closed room into dense adjacent
+    // linework. Refine that failed interval without raising any geometry budget.
+    G.findDrawingBoundaryAdaptive = (entities, point, options = {}) => {
+        const { radii, refinements = 3, ...queryOptions } = options;
+        if (
+            !Array.isArray(radii) ||
+            !radii.length ||
+            radii.length > 8 ||
+            radii.some(
+                (radius, i) =>
+                    !Number.isFinite(radius) ||
+                    radius <= 0 ||
+                    (i > 0 && radius <= radii[i - 1]),
+            ) ||
+            !Number.isInteger(refinements) ||
+            refinements < 0 ||
+            refinements > 3
+        ) {
+            throw Error("경계 검색 단계가 올바르지 않습니다.");
+        }
+        let safeRadius = 0,
+            attempts = 0;
+        const query = (radius) => {
+            attempts++;
+            const result = G.findDrawingBoundary(entities, point, {
+                ...queryOptions,
+                bounds: {
+                    minX: point.x - radius,
+                    minY: point.y - radius,
+                    maxX: point.x + radius,
+                    maxY: point.y + radius,
+                },
+            });
+            return result && { ...result, search: { attempts, radius } };
+        };
+        for (const radius of radii) {
+            try {
+                const result = query(radius);
+                if (result) return result;
+                safeRadius = radius;
+            } catch (error) {
+                if (error.code !== "CAD_BOUNDARY_LIMIT") throw error;
+                let low = safeRadius,
+                    high = radius;
+                for (let i = 0; i < refinements; i++) {
+                    const middle = (low + high) / 2;
+                    try {
+                        const result = query(middle);
+                        if (result) return result;
+                        low = middle;
+                    } catch (refinementError) {
+                        if (refinementError.code !== "CAD_BOUNDARY_LIMIT")
+                            throw refinementError;
+                        high = middle;
+                    }
+                }
+                throw error;
+            }
+        }
+        return null;
+    };
     root.CADMarkupGeometry = G;
 })(typeof window === "undefined" ? globalThis : window);
