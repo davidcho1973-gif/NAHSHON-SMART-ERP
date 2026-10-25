@@ -526,6 +526,15 @@
         n.dirty = true;
         return n;
     }
+    // DXF raw sections can contain hundreds of thousands of pairs. Passing them
+    // as function arguments exceeds browser call-stack limits; copy as data.
+    function appendRecords(target, records) {
+        for (const record of records) target.push(record);
+    }
+    function replaceRecords(records, index, count, replacement) {
+        const at = index < 0 ? Math.max(0, records.length + index) : Math.min(index, records.length);
+        return records.slice(0, at).concat(replacement, records.slice(at + count));
+    }
     function exportDXF(d) {
         const hasDimensions=d.entities.some(e=>e.type==='ERP_DIMENSION');
         d={...d,entities:d.entities.flatMap(e=>e.type==='ERP_DIMENSION'?e.dirty?dimensionParts(e):e.rawParts.map((raw,i)=>({id:e.id+'-'+i,raw,dirty:false})):e)};
@@ -630,7 +639,7 @@
                 );
             if (isNew || l.color !== l.originalColor)
                 set(420, parseInt(l.color.slice(1), 16));
-            layerRecords.push(...r);
+            appendRecords(layerRecords, r);
         }
         if (table >= 0) {
             let headerEnd = table + 2;
@@ -639,10 +648,7 @@
             const count = head.find((p) => p[0] === 70);
             if (count) count[1] = String(Object.keys(d.layers).length);
             else head.push([70, String(Object.keys(d.layers).length)]);
-            prefix.splice(table, end - table + 1, ...head, ...layerRecords, [
-                0,
-                "ENDTAB",
-            ]);
+            prefix = replaceRecords(prefix, table, end - table + 1, head.concat(layerRecords, [[0, "ENDTAB"]]));
         } else {
             const chunk = [
                 [0, "TABLE"],
@@ -669,16 +675,9 @@
                         tablesEnd++;
                     break;
                 }
-            if (tablesEnd >= 0) prefix.splice(tablesEnd, 0, ...chunk);
+            if (tablesEnd >= 0) prefix = replaceRecords(prefix, tablesEnd, 0, chunk);
             else
-                prefix.splice(
-                    prefix.length - 2,
-                    0,
-                    [0, "SECTION"],
-                    [2, "TABLES"],
-                    ...chunk,
-                    [0, "ENDSEC"],
-                );
+                prefix = replaceRecords(prefix, prefix.length - 2, 0, [[0, "SECTION"], [2, "TABLES"]].concat(chunk, [[0, "ENDSEC"]]));
         }
         let styleName = "Standard",
             styleFound = false;
@@ -721,18 +720,18 @@
                 !(prefix[at][0] === 0 && prefix[at][1] === "ENDSEC")
             )
                 at++;
-            prefix.splice(at, 0, ...records);
+            prefix = replaceRecords(prefix, at, 0, records);
         }
         if(hasDimensions){
             let table=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='TABLE'&&prefix[i+1]?.[1]==='APPID'),end=table;
             if(table>=0){while(end<prefix.length&&!(prefix[end][0]===0&&prefix[end][1]==='ENDTAB'))end++;}
             const exists=prefix.some((p,i)=>p[0]===0&&p[1]==='APPID'&&prefix.slice(i+1,i+9).some(p=>p[0]===2&&p[1]==='ERP_CAD_DIM'));
-            if(!exists){const record=[[0,'APPID'],[5,next()],[100,'AcDbSymbolTableRecord'],[100,'AcDbRegAppTableRecord'],[2,'ERP_CAD_DIM'],[70,'0']];if(table>=0){prefix.splice(end,0,...record);const count=prefix.slice(table,end).find(p=>p[0]===70);if(count)count[1]=String(Number(count[1])+1);}else{let at=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='SECTION'&&prefix[i+1]?.[1]==='TABLES');while(at<prefix.length&&!(prefix[at][0]===0&&prefix[at][1]==='ENDSEC'))at++;prefix.splice(at,0,[0,'TABLE'],[2,'APPID'],[70,'1'],...record,[0,'ENDTAB']);}}
+            if(!exists){const record=[[0,'APPID'],[5,next()],[100,'AcDbSymbolTableRecord'],[100,'AcDbRegAppTableRecord'],[2,'ERP_CAD_DIM'],[70,'0']];if(table>=0){prefix=replaceRecords(prefix,end,0,record);const count=prefix.slice(table,end).find(p=>p[0]===70);if(count)count[1]=String(Number(count[1])+1);}else{let at=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='SECTION'&&prefix[i+1]?.[1]==='TABLES');while(at<prefix.length&&!(prefix[at][0]===0&&prefix[at][1]==='ENDSEC'))at++;prefix=replaceRecords(prefix,at,0,[[0,'TABLE'],[2,'APPID'],[70,'1']].concat(record,[[0,'ENDTAB']]));}}
         }
         let out = [...prefix];
         for (const e of d.entities) {
             if (!e.dirty && e.raw) {
-                out.push(...e.raw);
+                appendRecords(out, e.raw);
                 continue;
             }
             let r = e.raw
@@ -787,7 +786,7 @@
                 if (e.type === "MTEXT")
                     r = r.filter((p) => ![11, 21, 31].includes(p[0]));
                 const textValue=e.type==='MTEXT'?encodeMText(e.text):e.text;
-                if(e.type==='MTEXT'){const encoded=String(encode(textValue));const chunks=encoded.match(/[\s\S]{1,200}/g)||[''];set(1,chunks.pop());const at=r.findIndex(p=>p[0]===1);r.splice(at,0,...chunks.map(chunk=>[3,chunk]));}else set(1,textValue);
+                if(e.type==='MTEXT'){const encoded=String(encode(textValue));const chunks=encoded.match(/[\s\S]{1,200}/g)||[''];set(1,chunks.pop());const at=r.findIndex(p=>p[0]===1);r=replaceRecords(r,at,0,chunks.map(chunk=>[3,chunk]));}else set(1,textValue);
                 if (!r.some((p) => p[0] === 7)) set(7, styleName);
                 set(40, e.height);
                 if(e.type==='MTEXT'){r=r.filter(pair=>pair[0]!==50);const angle=(e.angle||0)*Math.PI/180;set(11,Math.cos(angle));set(21,Math.sin(angle));set(31,0);set(41,e.width||0);set(71,1);set(72,1);}else set(50,e.angle||0);
@@ -815,9 +814,9 @@
                     0,
                     [100, "AcDbArc"],
                 );
-            out.push(...r);
+            appendRecords(out, r);
         }
-        out.push(...suffix);
+        appendRecords(out, suffix);
         const seed = out.findIndex((p) => p[0] === 9 && p[1] === "$HANDSEED");
         if (seed >= 0 && out[seed + 1]?.[0] === 5) out[seed + 1][1] = next();
         return (
