@@ -287,6 +287,8 @@
 
     function entityColor(e){return e.color!==undefined&&e.color!==null?'#'+e.color.toString(16).padStart(6,'0'):e.aci>0&&e.aci<256?C.aci(e.aci):doc.layers[e.layer]?.color||'#e2e8f0';}
     function inspector(){
+        // Unit selections must wait for the same drawing/save transaction as geometry edits.
+        for(const id of ['dimension-unit','source-unit'])$(id).disabled=!doc||busy||!!gesture;
         const es=doc?doc.entities.filter(e=>selected.has(e.id)):[],first=es[0];
         const key=JSON.stringify([canManage,busy,...es.map(e=>[e.id,e.color,e.aci,e.lineWeight,e.lineType,e.text,e.height,e.angle,doc.layers[e.layer]?.locked,doc.layers[e.layer]?.color,doc.layers[e.layer]?.lineWeight])]);
         if(key===inspectorKey)return;inspectorKey=key;styleEdits.clear();textEdits.clear();

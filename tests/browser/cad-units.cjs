@@ -22,6 +22,7 @@ const point = (actual, x, y) => { near(actual.x, x); near(actual.y, y); };
             C.newEntity('LWPOLYLINE', { p: { x: 120, y: 30 }, points: [{ x: 120, y: 30 }, { x: 170, y: 30 }, { x: 170, y: 70 }, { x: 120, y: 70 }], closed: true }),
         );
         let drawing = { id: 9, title: 'Annotation fixture', site_id: 1, revision: 1, dxf: C.exportDXF(initial), canManage: true, warnings: [] }, writes = 0;
+        let holdNextLoad=false,releaseLoad=null;
         const html = fs.readFileSync('resources/views/cad/index.blade.php', 'utf8')
             .replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link[^>]*>/g, '<link rel="stylesheet" href="/cad-editor.css">')
             .replace('{{ csrf_token() }}', 'synthetic').replaceAll('{{ \\App\\Support\\Org::name() }}', 'SYNTHETIC ERP').replace('</body>', '<script src="/cad-core.js"></script><script src="/cad-fidelity.js"></script><script src="/cad-markup.js"></script><script src="/cad-markup-tools.js"></script><script src="/cad-editor.js"></script></body>');
@@ -33,7 +34,7 @@ const point = (actual, x, y) => { near(actual.x, x); near(actual.y, y); };
             if (url.pathname === '/cad-editor.css') return route.fulfill({ contentType: 'text/css', body: fs.readFileSync('public/css/cad-editor.css', 'utf8') });
             if (url.pathname === '/admin-api/cad/capabilities') json = { dwgRead: false, dwgWrite: false, message: 'Synthetic DXF' };
             else if (url.pathname === '/admin-api/cad') json = { canManage: true, sites: [{ id: 1, name: 'Synthetic Site' }], drawings: [drawing] };
-            else if (url.pathname === '/admin-api/cad/9' && method === 'GET') json = drawing;
+            else if (url.pathname === '/admin-api/cad/9' && method === 'GET') {if(holdNextLoad){holdNextLoad=false;await new Promise(resolve=>{releaseLoad=resolve;});}json = drawing;}
             else if (url.pathname === '/admin-api/cad/9/history') json = { ...drawing, canManage: false };
             else if (url.pathname === '/admin-api/cad/9' && method === 'PUT') {
                 const data = route.request().postDataJSON();
@@ -90,7 +91,10 @@ const point = (actual, x, y) => { near(actual.x, x); near(actual.y, y); };
             assert.deepEqual(entities().filter(e=>e.type!=='ERP_DIMENSION').map(e=>e.raw),originalRaw);
         }
         // Reload must restore display units from the saved DXF, without browser preference.
-        await page.evaluate(()=>localStorage.clear());await page.locator('#reload').click();
+        await page.evaluate(()=>localStorage.clear());holdNextLoad=true;await page.locator('#reload').click();
+        await expect(page.locator('#dimension-unit')).toBeDisabled();await expect(page.locator('#source-unit')).toBeDisabled();
+        await expect.poll(()=>typeof releaseLoad).toBe('function');releaseLoad();
+        await expect(page.locator('#dimension-unit')).toBeEnabled();
         await expect(page.locator('#dimension-unit')).toHaveValue('ft');
         await page.locator('#dimension-unit').selectOption('in');
         await page.locator('#undo').click();await expect(page.locator('#dimension-unit')).toHaveValue('ft');
