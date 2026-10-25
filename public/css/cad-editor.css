@@ -303,3 +303,4 @@ body[data-workspace=markup] .cad-only,body[data-workspace=cad] .markup-only {dis
 #tool-buttons button:is([data-tool=move],[data-tool=copy],[data-tool=rotate],[data-tool=scale],[data-tool=mirror]) {--cad-accent:#c4b5fd;}
 
 #source-unit-control[hidden] {display:none;}
+@media(max-width:720px){#tool-buttons button{font-size:10px;padding-inline:1px;}#tool-buttons button>span:last-child{word-break:keep-all;}}
