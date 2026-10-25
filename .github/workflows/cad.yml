@@ -12,6 +12,7 @@ on:
       - 'tests/Fixtures/cad-presentation.*'
       - 'tests/cad-converter/**'
       - 'tests/js/cad-core.test.mjs'
+      - 'tests/js/cad-export-large.test.mjs'
       - 'tests/js/cad-history.test.mjs'
       - 'tests/Fixtures/cad-history.cjs'
       - 'tests/js/cad-markup.test.mjs'
@@ -67,6 +68,7 @@ jobs:
       - name: Browser geometry and DWG bytes roundtrip
         run: |
           node --test tests/js/cad-core.test.mjs
+          node --test tests/js/cad-export-large.test.mjs
           node --test tests/js/cad-history.test.mjs
           node --test tests/js/cad-markup.test.mjs
           node --test tests/js/cad-markup-geometry.test.mjs
