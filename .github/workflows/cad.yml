@@ -13,6 +13,9 @@ on:
       - 'tests/cad-converter/**'
       - 'tests/js/cad-core.test.mjs'
       - 'tests/js/cad-2d-editing.test.mjs'
+      - 'tests/js/cad-native-edit.test.mjs'
+      - 'tests/js/cad-native-dimension.test.mjs'
+      - 'tests/Fixtures/cad-native-edit.cjs'
       - 'tests/js/cad-numeric.test.mjs'
       - 'tests/js/cad-export-large.test.mjs'
       - 'tests/js/cad-history.test.mjs'
@@ -23,6 +26,7 @@ on:
       - 'tests/js/cad-fidelity.test.mjs'
       - 'tests/js/cad-review.test.mjs'
       - 'scripts/test-cad-roundtrip.mjs'
+      - 'scripts/test-cad-native-edit.mjs'
       - 'scripts/build-cad-converter.sh'
       - '.github/workflows/cad.yml'
   workflow_dispatch:
@@ -71,6 +75,8 @@ jobs:
         run: |
           node --test tests/js/cad-core.test.mjs
           node --test tests/js/cad-2d-editing.test.mjs
+          node --test tests/js/cad-native-edit.test.mjs
+          node --test tests/js/cad-native-dimension.test.mjs
           node --test tests/js/cad-numeric.test.mjs
           node --test tests/js/cad-export-large.test.mjs
           node --test tests/js/cad-history.test.mjs
@@ -80,6 +86,7 @@ jobs:
           node --test tests/js/cad-fidelity.test.mjs
           node --test tests/js/cad-review.test.mjs
           node scripts/test-cad-roundtrip.mjs "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll" "$RUNNER_TEMP/cad-roundtrip"
+          node scripts/test-cad-native-edit.mjs "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll" "$RUNNER_TEMP/cad-native-edit"
       - name: Real duplicate book colors and conflicting RGB rejection
         run: dotnet run --project tests/cad-converter/CadCompatibilityTests.csproj -c Release -- "$(command -v dotnet)" "$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll"
       - name: Prepare Laravel

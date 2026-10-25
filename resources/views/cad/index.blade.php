@@ -248,6 +248,25 @@
 <h2>객체 / 레이어</h2>
 <div id="selection">선택 0개</div>
 <p id="selection-properties" role="status">객체를 선택하면 속성이 표시됩니다.</p>
+<fieldset id="native-properties" disabled>
+<legend>해치 · 채우기 · 원본 치수</legend>
+<label>선택 객체 색<input id="native-color" type="color" value="#e2e8f0"></label>
+<button type="button" id="fill-selected">선택 박스·닫힌 선 안쪽 채우기</button>
+<button type="button" id="explode-selected">블록 풀기 · 내부 객체 편집</button>
+<div id="hatch-properties" hidden>
+<label>채우기 불투명도 (10~100%)<input id="hatch-opacity" type="number" min="10" max="100" step="1" value="50"></label>
+<label>원본 패턴 배율<input id="hatch-scale" type="number" min="0.000001" step="any" value="1"></label>
+<label>원본 패턴 각도 (도)<input id="hatch-angle" type="number" step="any" value="0"></label>
+<button type="button" id="apply-hatch">선택 해치·채우기 적용</button>
+<p class="note">채움은 테두리와 별도 객체입니다. 함께 옮기려면 Shift로 테두리와 채움을 함께 선택하세요.</p>
+</div>
+<div id="native-dimension-properties" hidden>
+<label>치수 표시 문자 · &lt;&gt;는 실측값<input id="native-dimension-text" type="text" maxlength="2000" value="&lt;&gt;"></label>
+<label>치수 문자 크기<input id="native-dimension-height" type="number" min="0.001" step="any" value="2.5"></label>
+<button type="button" id="apply-native-dimension">원본 치수 문자 적용</button>
+<p class="note">측정점·치수선·문자는 손잡이로 옮깁니다. 연관 치수는 측정점이 보호됩니다.</p>
+</div>
+</fieldset>
 <fieldset id="text-properties">
 <legend>선택 문자</legend>
 <label>문자 내용<textarea id="text" rows="3">
@@ -276,9 +295,10 @@
 <label>선 굵기 (mm / -1 레이어) <input id="entity-width" type="number" step="0.01" min="-3" max="2.11" value="0.25">
 </label>
 <button id="apply-style">선택 선·도형 색 / 굵기 적용</button>
+
 <div id="layers">
 </div>
-<p class="note">2D 모델 공간 편집. 미지원 객체·3D·곡선 폴리선은 읽기 전용으로 원본 레코드를 보존합니다. 특수 객체와 외부 참조는 원래 CAD에서 검증하세요.</p>
+<p class="note">2D 모델 공간 편집. 3D·미지원 특수 객체는 원본을 보존합니다. 지원 범위는 선택한 객체에 표시됩니다. 특수 객체와 외부 참조는 원래 CAD에서 검증하세요.</p>
 </section>
 <details class="drawing-info">
 <summary>도면 호환성 / 원본 안내</summary>
