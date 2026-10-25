@@ -275,6 +275,64 @@ file_put_contents($argv[5], str_repeat("x", 1025)); echo "{}";');
         $this->assertDatabaseCount('cad_drawing_revisions', 3);
     }
 
+    public function test_construction_guides_survive_revisions_and_recovery_without_changing_cad_bytes(): void
+    {
+        $id = $this->upload()->json('id');
+        $url = '/admin-api/cad/'.$id;
+        $guides = [
+            ['id' => 'guide-line', 'type' => 'line', 'p' => ['x' => 10, 'y' => 20], 'direction' => ['x' => .6, 'y' => .8]],
+            ['id' => 'guide-point', 'type' => 'point', 'p' => ['x' => 40, 'y' => 60]],
+        ];
+        $workspace = ['guides' => $guides, 'guidesVisible' => true];
+        $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'workspace' => $workspace])->assertOk()
+            ->assertJsonPath('workspace.guides.0.direction.x', .6)->assertJsonPath('workspace.guides.1.p.x', 40)
+            ->assertJsonPath('workspace.guidesVisible', true)->assertJsonPath('dxf', self::DXF);
+        $this->putJson($url, ['revision' => 2, 'dxf' => self::DXF])->assertOk()->assertJsonCount(2, 'workspace.guides');
+        $workspace['guides'] = [];
+        $workspace['guidesVisible'] = false;
+        $this->putJson($url, ['revision' => 3, 'dxf' => self::DXF, 'workspace' => $workspace])->assertOk()
+            ->assertJsonPath('workspace.guides', [])->assertJsonPath('workspace.guidesVisible', false);
+        $this->getJson($url.'/history?revision=2')->assertOk()->assertJsonPath('workspace.guides.0.id', 'guide-line');
+        $copyId = $this->postJson($url.'/copies', ['requestKey' => (string) Str::uuid(), 'revision' => 2,
+            'title' => 'Guides recovery', 'dxf' => self::DXF, 'markups' => [], 'workspace' => ['guides' => $guides, 'guidesVisible' => true]])
+            ->assertCreated()->assertJsonCount(2, 'workspace.guides')->json('id');
+        foreach ([$id, $copyId] as $drawingId) {
+            $this->get('/admin-api/cad/'.$drawingId.'/download?format=dxf')->assertOk()->assertContent(self::DXF);
+            $this->get('/admin-api/cad/'.$drawingId.'/download?format=original')->assertStreamedContent(self::DXF);
+        }
+        $viewer = User::factory()->create(['access_role' => 'payroll', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($viewer)->putJson($url, ['revision' => 4, 'dxf' => self::DXF, 'workspace' => ['guides' => $guides]])->assertForbidden();
+        $this->assertDatabaseCount('cad_drawing_revisions', 5);
+    }
+
+    public function test_invalid_or_unbounded_guides_are_rejected_without_creating_a_revision(): void
+    {
+        $id = $this->upload()->json('id');
+        $point = ['id' => 'point', 'type' => 'point', 'p' => ['x' => 0, 'y' => 0]];
+        $line = ['id' => 'line', 'type' => 'line', 'p' => ['x' => 0, 'y' => 0], 'direction' => ['x' => 1, 'y' => 0]];
+        $invalid = [
+            ['guides' => ['named' => $point]],
+            ['guides' => [$point, $point]],
+            ['guides' => [array_replace($point, ['id' => '<script>'])]],
+            ['guides' => [array_replace($point, ['type' => 'solid'])]],
+            ['guides' => [array_replace($point, ['p' => ['x' => 1e10, 'y' => 0]])]],
+            ['guides' => [array_replace($point, ['p' => ['x' => 0]])]],
+            ['guides' => [array_replace($point, ['direction' => ['x' => 1, 'y' => 0]])]],
+            ['guides' => [array_replace($point, ['quantity' => 100])]],
+            ['guides' => [array_diff_key($line, ['direction' => 1])]],
+            ['guides' => [array_replace($line, ['direction' => ['x' => 0, 'y' => 0]])]],
+            ['guides' => [array_replace($line, ['direction' => ['x' => .5, 'y' => .5]])]],
+            ['guides' => [array_replace($line, ['direction' => ['x' => 1]])]],
+            ['guides' => [array_replace($line, ['direction' => ['x' => 1, 'y' => 0, 'z' => 0]])]],
+            ['guidesVisible' => 'yes'],
+            ['guides' => array_map(fn ($n) => array_replace($point, ['id' => 'p-'.$n]), range(1, 257))],
+        ];
+        foreach ($invalid as $workspace) {
+            $this->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF, 'workspace' => $workspace])->assertUnprocessable();
+        }
+        $this->assertDatabaseCount('cad_drawing_revisions', 1);
+    }
+
     public function test_invalid_hole_topology_unknown_layers_and_false_scale_are_rejected_atomically(): void
     {
         $id = $this->upload()->json('id');

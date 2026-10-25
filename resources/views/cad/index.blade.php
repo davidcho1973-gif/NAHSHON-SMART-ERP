@@ -86,6 +86,14 @@
 <h2>그리기 / 편집</h2>
 <div id="tool-buttons">
 </div>
+<section id="tape-panel" aria-label="줄자와 수치 그리기">
+<label>줄자 모드<select id="tape-mode"><option value="distance">거리 측정 · 저장 안 함</option><option value="parallel">평행 안내선 · 기준 선 클릭</option><option value="point">안내점 · 시작점 클릭</option></select></label>
+<label><input id="direction-inference" type="checkbox" checked> 자동 방향 추론 (2D XY)</label><label>각도 간격 °<input id="inference-step" type="number" min="0" max="180" value="15" step="1"></label><p class="note">가로 X 빨강 · 세로 Y 초록 · 기준선 평행/직각 파랑. 3° 이내 자동 맞춤. → X, ←/↑ Y, ↓ 해제, Shift 현재 방향 고정. 1200mm&lt;80 으로 정확한 80°.</p>
+
+<p id="numeric-help" class="note">선: 1200mm · 사각형: 1200mm,800mm · 원: 반지름 또는 D500mm. 캔버스에서 바로 입력 후 Enter. Esc 취소.</p>
+<label><input id="guide-visible" type="checkbox" checked> 안내선·안내점 보기 / 스냅</label><button id="guide-clear" type="button">안내선·안내점 모두 삭제</button><div id="guide-list"></div>
+<details><summary>줄자 사용 안내</summary><p class="note">T: 줄자. 거리: 두 점 클릭. 평행선: 선·폴리선의 선분 클릭 → 옆으로 이동 → 클릭 또는 거리 입력. 안내점: 시작점 → 방향 → 거리 입력 또는 클릭. 방향키 → X / ↑ Y, ↓ 잠금 해제. Shift: 가까운 축. 끝점·중점·중심과 안내선의 점·교차점에 스냅됩니다.</p><p class="note">안내선은 저장·실행 취소할 수 있지만 DXF·DWG·수량에는 포함하지 않습니다. 실제 단위는 원본 기준을 먼저 지정하세요. 전체 모델 크기는 바꾸지 않습니다.</p><button id="tape-calibration" type="button">표시 면적·길이의 단위·축척 설정 열기</button></details>
+</section>
 <label>치수 표시 단위<select id="dimension-unit" aria-label="치수 표시 단위">
 <option value="drawing">원본 도면 단위</option>
 <option value="in">인치 (in)</option>
@@ -166,6 +174,7 @@
 </div>
 <canvas id="canvas" tabindex="0" aria-label="CAD 도면 편집 영역: 휠 확대, 가운데 버튼 화면 이동, Shift 선택 추가">
 </canvas>
+<div id="measurement-hud" class="cad-only" aria-label="길이와 방향 입력"><output id="tape-readout" aria-live="polite"></output><label><span id="numeric-label">그리는 길이</span><input id="numeric-length" type="text" autocomplete="off" aria-describedby="numeric-help" placeholder="방향을 가리키고 길이 입력"></label></div>
 <div id="annotation-readout" role="status" aria-live="polite">
 </div>
 <button id="drawing-fidelity" hidden></button>
