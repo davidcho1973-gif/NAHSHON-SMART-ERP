@@ -7,4 +7,6 @@ return [
     'converter_binary' => env('CAD_CONVERTER_BINARY', base_path('services/cad-converter/publish/Nahshon.CadConverter')),
     'dotnet_binary' => env('CAD_DOTNET_BINARY', 'dotnet'),
     'converter_timeout' => 60,
+    // Actual heap is also limited by current container headroom. This is not a file-size bound.
+    'converter_heap_mib' => env('CAD_CONVERTER_HEAP_MIB', 256),
 ];
