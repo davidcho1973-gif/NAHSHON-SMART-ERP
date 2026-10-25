@@ -77,6 +77,50 @@
     };
     const displayColor = color => C.canvasColor(color, canvasBackground);
     const styleEdits=new Set(),textEdits=new Set();
+    let unitSettings=null, inputScale=1;
+    const lengthInputs=['x','y','spacing','offset-distance','array-x','array-y','default-text-height','height','text-dialog-height','text-dialog-width'];
+    const lengthValue=id=>$(id).value.trim()===''?NaN:Number($(id).value)/inputScale;
+    const displayLength=value=>Number((value*inputScale).toPrecision(15));
+    const unitKey=()=> 'cad:length-units:'+document.body.dataset.editorOwner+':'+record?.id;
+    function setUnitInputs(settings){
+        const next=C.lengthInputScale(settings);
+        for(const id of lengthInputs){const field=$(id),value=Number(field.value);if(field.value.trim()&&Number.isFinite(value))field.value=Number((value/inputScale*next).toPrecision(15));}
+        inputScale=next;unitSettings=settings;
+        $('dimension-unit').value=settings?.unit||'drawing';
+        const inputUnit=settings?.unit==='ft-in'?'ft (소수 피트)':settings?.unit||'도면 단위';
+        $('length-input-unit').textContent='('+inputUnit+')';
+        for(const id of lengthInputs)$(id).title='길이 입력: '+inputUnit;
+    }
+    function refreshUnitNote(){
+        const source=C.drawingUnit(doc);
+        $('source-unit-control').hidden=!!source||!doc;
+        const basis=source?.name||$('source-unit').selectedOptions[0]?.textContent;
+        $('dimension-unit-note').textContent=(source?'원본 단위: '+basis:($('source-unit').value?'지정한 원본 기준: '+basis:'단위 정보 없음 · 원본 기준을 먼저 선택하세요.'))+' · 전환 시 원본 크기 유지. 치수 변경 후 저장하세요. 기존 CAD 문자·잠긴 치수는 유지됩니다.';
+    }
+    function loadUnits(){
+        let saved=null;try{saved=JSON.parse(localStorage.getItem(unitKey()));}catch(_){}
+        const source=C.drawingUnit(doc), dimension=doc?.entities.find(e=>e.type==='ERP_DIMENSION');
+        let settings=null;try{settings=C.measurementSettings(dimension?dimension.measurement:saved);}catch(_){}
+        $('source-unit').value=Object.keys(C.lengthUnits).find(key=>C.lengthUnits[key]===settings?.mmPerUnit)||'';
+        // A declared DXF unit takes precedence over stale browser preferences.
+        if(source&&settings)settings={...settings,mmPerUnit:source.mmPerUnit};
+        setUnitInputs(settings);inspectorKey='';refreshUnitNote();
+    }
+    function changeUnits(){
+        if(!doc||busy||gesture||$('text-dialog').open){$('dimension-unit').value=unitSettings?.unit||'drawing';return;}
+        const unit=$('dimension-unit').value,source=C.drawingUnit(doc),mmPerUnit=source?.mmPerUnit||C.lengthUnits[$('source-unit').value];
+        if(unit!=='drawing'&&!mmPerUnit){$('dimension-unit').value=unitSettings?.unit||'drawing';refreshUnitNote();status('환산하려면 원본 도면의 기준 단위를 먼저 선택하세요.');return;}
+        const settings=unit==='drawing'?null:C.measurementSettings({unit,mmPerUnit});
+        const changed=doc.entities.filter(e=>e.type==='ERP_DIMENSION'&&canManage&&editable(e)&&JSON.stringify(e.measurement||null)!==JSON.stringify(settings));
+        if(changed.length){snapshot();for(const e of changed){e.measurement=settings?{...settings}:null;e.dirty=true;}}
+        for(const e of measurements)e.measurement=settings?{...settings}:null;
+        setUnitInputs(settings);refreshUnitNote();
+        try{if(settings)localStorage.setItem(unitKey(),JSON.stringify(settings));else localStorage.removeItem(unitKey());}catch(_){}
+        render();
+        status('치수 단위: '+$('dimension-unit').selectedOptions[0].textContent+(changed.length?' · '+changed.length+'개 치수 변경 · 저장 필요':'')+' · 좌표와 실제 길이 유지');
+    }
+    $('dimension-unit').onchange=changeUnits;
+    $('source-unit').onchange=changeUnits;
     const labels = {
         select: "선택",
         line: "선",
@@ -243,6 +287,8 @@
 
     function entityColor(e){return e.color!==undefined&&e.color!==null?'#'+e.color.toString(16).padStart(6,'0'):e.aci>0&&e.aci<256?C.aci(e.aci):doc.layers[e.layer]?.color||'#e2e8f0';}
     function inspector(){
+        // Unit selections must wait for the same drawing/save transaction as geometry edits.
+        for(const id of ['dimension-unit','source-unit'])$(id).disabled=!doc||busy||!!gesture;
         const es=doc?doc.entities.filter(e=>selected.has(e.id)):[],first=es[0];
         const key=JSON.stringify([canManage,busy,...es.map(e=>[e.id,e.color,e.aci,e.lineWeight,e.lineType,e.text,e.height,e.angle,doc.layers[e.layer]?.locked,doc.layers[e.layer]?.color,doc.layers[e.layer]?.lineWeight])]);
         if(key===inspectorKey)return;inspectorKey=key;styleEdits.clear();textEdits.clear();
@@ -250,7 +296,7 @@
         if(first){$('entity-color').value=entityColor(first);$('entity-width').value=first.lineWeight>=0?first.lineWeight/100:(first.lineWeight??-1);$('entity-linetype').value=first.lineType||'BYLAYER';}
         const text=es.find(e=>e.type==='TEXT'||e.type==='MTEXT');
         $('edit-text-dialog').disabled=!text||busy;
-        if(text){$('text').value=text.text;$('height').value=text.height;$('text-color').value=entityColor(text);}
+        if(text){$('text').value=text.text;$('height').value=displayLength(text.height);$('text-color').value=entityColor(text);}
         $('text-properties').disabled=!text||!canManage||busy||!es.some(e=>['TEXT','MTEXT'].includes(e.type)&&editable(e));
         const shapeEnabled=canManage&&!busy&&es.some(e=>!['TEXT','MTEXT'].includes(e.type)&&editable(e));
         $('apply-style').disabled=!shapeEnabled;
@@ -284,9 +330,9 @@
         const allowed=entity?canManage&&editable(entity):!doc.layers[textDraft.layer]?.locked;
         $('text-dialog-title').textContent=entity?'문자 편집':'새 문자 입력';
         $('text-dialog-content').value=entity?.text||'';
-        $('text-dialog-height').value=entity?.height||Number($('default-text-height').value)||2.5;
+        $('text-dialog-height').value=displayLength(entity?.height||lengthValue('default-text-height')||2.5);
         $('text-dialog-color').value=entity?entityColor(entity):$('default-text-color').value;
-        $('text-dialog-width').value=box?.width??entity?.width??0;
+        $('text-dialog-width').value=displayLength(box?.width??entity?.width??0);
         $('text-dialog-error').textContent=allowed?'':'이 문자는 읽기 전용입니다. 복잡한 서식 또는 레이어·접근 권한을 원래 CAD에서 확인하세요.';
         for(const id of ['text-dialog-content','text-dialog-height','text-dialog-width'])$(id).readOnly=!allowed||(id==='text-dialog-width'&&entity?.type==='TEXT');
         $('text-dialog-color').disabled=!allowed;$('text-dialog-confirm').disabled=!allowed;
@@ -294,7 +340,7 @@
     }
     function commitText(){
         if(!textDraft||busy)return;
-        const original=doc.entities.find(e=>e.id===textDraft.entityId),content=$('text-dialog-content').value,height=Number($('text-dialog-height').value),width=Number($('text-dialog-width').value),color=parseInt($('text-dialog-color').value.slice(1),16);
+        const original=doc.entities.find(e=>e.id===textDraft.entityId),content=$('text-dialog-content').value,height=lengthValue('text-dialog-height'),width=lengthValue('text-dialog-width'),color=parseInt($('text-dialog-color').value.slice(1),16);
         if(!canManage||(original&&!editable(original))||doc.layers[textDraft.layer]?.locked)return;
         if(!content.trim()||!Number.isFinite(height)||height<=0||!Number.isFinite(width)||width<0){$('text-dialog-error').textContent='문자 내용과 양수 크기, 0 이상 박스 폭을 입력하세요.';return;}
         if(original?.type==='TEXT'&&content.includes('\n')){$('text-dialog-error').textContent='기존 한 줄 문자는 줄바꿈을 지원하지 않습니다. 여러 줄 문자는 새 문자로 작성하세요.';return;}
@@ -314,7 +360,7 @@
     $('edit-text-dialog').onclick=()=>{const entity=doc?.entities.find(e=>selected.has(e.id)&&['TEXT','MTEXT'].includes(e.type));if(entity)openTextEditor(entity);};
     function annotationPreview(){
         if(!['measure','dimension'].includes(tool)||!points.length||!hoverPoint)return null;
-        try{const a=points[0],b=points[1]||hoverPoint,p=points.length>1?hoverPoint:{x:(a.x+b.x)/2,y:(a.y+b.y)/2};return C.newDimension(a,b,p,{mode:$('dimension-mode').value,height:Number($('default-text-height').value)||2.5,color:0x67e8f9,layer:$('layer').value});}catch(_){return null;}
+        try{const a=points[0],b=points[1]||hoverPoint,p=points.length>1?hoverPoint:{x:(a.x+b.x)/2,y:(a.y+b.y)/2};return C.newDimension(a,b,p,{measurement:unitSettings?{...unitSettings}:null,mode:$('dimension-mode').value,height:lengthValue('default-text-height')||2.5,color:0x67e8f9,layer:$('layer').value});}catch(_){return null;}
     }
 
     function render() {
@@ -328,7 +374,7 @@
         ctx.clearRect(0, 0, r.width, r.height);
         ctx.fillStyle = printing || canvasBackground === 'white' ? '#ffffff' : '#0a1020';
         ctx.fillRect(0,0,r.width,r.height);
-        const spacing = Number($("spacing").value);
+        const spacing = lengthValue('spacing');
         if (!printing && $("grid").checked && spacing > 0 && spacing * scale > 8) {
             ctx.strokeStyle = canvasBackground === 'white' ? '#e2e8f0' : '#202c40';
             ctx.lineWidth = 1;
@@ -367,8 +413,8 @@
         if(!printing&&tool==='select'&&!busy)for(const e of [...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e)].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient))){for(const grip of C.grips(e)){const p=screen(grip.point);ctx.fillStyle='#101827';ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.fillRect(p.x-4,p.y-4,8,8);ctx.strokeRect(p.x-4,p.y-4,8,8);}}
         if(!printing&&snapMark){const marker=screen(snapMark);ctx.strokeStyle=displayColor('#ffb347');ctx.lineWidth=2;ctx.setLineDash([]);ctx.strokeRect(marker.x-6,marker.y-6,12,12);ctx.beginPath();ctx.moveTo(marker.x-10,marker.y);ctx.lineTo(marker.x+10,marker.y);ctx.moveTo(marker.x,marker.y-10);ctx.lineTo(marker.x,marker.y+10);ctx.stroke();}
         canvas.dataset.snapActive=String(!!snapMark);if(snapMark){canvas.dataset.snapX=snapMark.x;canvas.dataset.snapY=snapMark.y;}
-        const measured=annotation||measurements.find(e=>selected.has(e.id));
-        $('annotation-readout').textContent=measured?'거리 '+C.dimensionLayout(measured).label+' 도면 단위 · '+(points.length===2?'치수 위치를 지정하세요':measured.transient?'화면 측정 · 저장되지 않음':'끝점/꼭지점 자동 스냅'):'';
+        const measured=annotation||measurements.find(e=>selected.has(e.id))||doc?.entities.find(e=>e.type==='ERP_DIMENSION'&&selected.has(e.id));
+        $('annotation-readout').textContent=measured?'거리 '+C.dimensionLayout(measured).label+(measured.measurement?' · ':' 도면 단위 · ')+(points.length===2?'치수 위치를 지정하세요':measured.transient?'화면 측정 · 저장되지 않음':'끝점/꼭지점 자동 스냅'):'';
 
         if(aiPreview){ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=displayColor('#77ffb3');ctx.lineWidth=2;for(const id of aiPreview.affectedIds){const entity=aiPreview.document.entities.find(e=>e.id===id);if(!entity)continue;const paths=entity.type==='ERP_DIMENSION'?C.dimensionParts(entity).map(C.geometry):[C.geometry(entity)];for(const path of paths){ctx.beginPath();path.forEach((p,i)=>{const s=screen(p);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y);});ctx.stroke();}}ctx.restore();}
         inspector();aiControls();
@@ -429,7 +475,7 @@
         points = [];
         document
             .querySelectorAll("[data-tool]")
-            .forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
+            .forEach((b) => {b.classList.toggle("active", b.dataset.tool === t);b.setAttribute("aria-pressed",String(b.dataset.tool===t));});
         if (t === "delete") {
             measurements=measurements.filter(e=>!selected.has(e.id));
             if (!canManage){selected.clear();tool='select';render();return;}
@@ -442,13 +488,15 @@
                 selected.clear();
             }
             tool = "select";
+            document.querySelectorAll("[data-tool]").forEach(b=>{b.classList.toggle("active",b.dataset.tool===tool);b.setAttribute("aria-pressed",String(b.dataset.tool===tool));});
         }
         render();
     }
+    const cadToolArt={"select":"<path d=\"M5 3l14 10-7 1-3 7z\" fill=\"currentColor\"/>","line":"<path d=\"M4 20L20 4\"/><circle cx=\"4\" cy=\"20\" r=\"2\"/><circle cx=\"20\" cy=\"4\" r=\"2\"/>","polyline":"<path d=\"M3 18l6-12 6 12 6-12\"/><path d=\"M2 17h2v2H2zM8 5h2v2H8zM14 17h2v2h-2zM20 5h2v2h-2z\"/>","rectangle":"<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"1\"/>","circle":"<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M10 12h4m-2-2v4\"/>","arc":"<path d=\"M3 18a9 9 0 0 1 18 0\"/><circle cx=\"3\" cy=\"18\" r=\"1.5\"/><circle cx=\"21\" cy=\"18\" r=\"1.5\"/>","text":"<path d=\"M4 5h16M12 5v15m-4 0h8M4 5v3m16-3v3\"/>","dimension":"<path d=\"M3 4v16M21 4v16M3 12h18m-14-3-4 3 4 3m10-6 4 3-4 3\"/>","measure":"<path d=\"M3 17L17 3l4 4L7 21zM7 13l3 3m1-7 3 3m1-7 3 3\"/>","move":"<path d=\"M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4m12-8 4 4-4 4\"/>","copy":"<rect x=\"8\" y=\"8\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M16 8V3H3v13h5\"/>","rotate":"<path d=\"M4 9a8 8 0 1 1 0 7M4 3v6h6\"/>","scale":"<rect x=\"3\" y=\"13\" width=\"8\" height=\"8\"/><path d=\"M3 9V3h18v18h-6M11 13l10-10m-6 0h6v6\"/>","mirror":"<path d=\"M12 2v3m0 3v3m0 3v3m0 3v2M8 5L2 19h6zM16 5l6 14h-6z\"/>","delete":"<path d=\"M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7\"/>"};
     Object.entries(labels).forEach(([k, l]) => {
         const b = document.createElement("button");
-        b.textContent = l;
-        if(k==='select'){b.innerHTML='<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M5 3L19 13L12 14L9 21Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/></svg><span>선택</span>';b.setAttribute('aria-label','선택');}
+        b.innerHTML='<span class="cad-tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false">'+cadToolArt[k]+'</svg></span><span>'+l+'</span>';
+        b.setAttribute('aria-label',l);b.title=l;b.setAttribute('aria-pressed',String(k===tool));
         b.dataset.tool = k;
         b.onclick = () => setTool(k);
         $("tool-buttons").append(b);
@@ -483,7 +531,7 @@
         if(['dimension','measure'].includes(tool)){
             if(tool==='dimension'&&(!canManage||doc.layers[$('layer').value]?.locked)){status('읽기 전용 또는 레이어 잠금입니다.');return;}
             points.push(p);hoverPoint=p;
-            if(points.length===3){try{const e=C.newDimension(points[0],points[1],points[2],{mode:$('dimension-mode').value,height:Number($('default-text-height').value)||2.5,color:parseInt($('default-color').value.slice(1),16),layer:$('layer').value});selected.clear();selected.add(e.id);if(tool==='measure'){e.transient=true;measurements.push(e);}else{snapshot();doc.entities.push(e);}points=[];hoverPoint=null;}catch(error){points.pop();status(error.message);}}
+            if(points.length===3){try{const e=C.newDimension(points[0],points[1],points[2],{measurement:unitSettings?{...unitSettings}:null,mode:$('dimension-mode').value,height:lengthValue('default-text-height')||2.5,color:parseInt($('default-color').value.slice(1),16),layer:$('layer').value});selected.clear();selected.add(e.id);if(tool==='measure'){e.transient=true;measurements.push(e);}else{snapshot();doc.entities.push(e);}points=[];hoverPoint=null;}catch(error){points.pop();status(error.message);}}
             render();return;
         }
         if(tool==='text'){openTextEditor(null,{p,width:0});return;}
@@ -590,7 +638,7 @@
     canvas.onpointermove=e=>{
         if(pan&&pan.pointerId===e.pointerId){origin={x:pan.ox+e.clientX-pan.x,y:pan.oy+e.clientY-pan.y};render();return;}
         const excluded=new Set(gesture?.originals?.map(e=>e.id)||[]),p=snap(world(e),excluded);hoverPoint=p;
-        $('x').value=p.x.toFixed(4);$('y').value=p.y.toFixed(4);
+        $('x').value=displayLength(p.x);$('y').value=displayLength(p.y);
         if(!gesture||gesture.pointerId!==e.pointerId){if(['measure','dimension'].includes(tool))render();canvas.style.cursor=tool==='select'?(gripAt(world(e))?'nwse-resize':'default'):'crosshair';return;}
         if((!canManage&&!gesture.originals?.every(e=>e.transient))||busy){cancelGesture();return;}
         if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)<4&&!gesture.moved)return;
@@ -743,6 +791,7 @@
         cadBaseline = C.exportDXF(parsed);
         markup?.reset();
         record = j;
+        loadUnits();
         canManage = !!j.canManage && parsed.acadVersion >= 1015 && !proofMode && !j.reference;
         canAnnotate = !!j.canManage && !proofMode;
         dirty = false;
@@ -952,7 +1001,7 @@
         }
     };
     $("coordinate").onclick = () => {
-        const p = { x: Number($("x").value), y: Number($("y").value) };
+        const p = { x: lengthValue('x'), y: lengthValue('y') };
         if (Number.isFinite(p.x) && Number.isFinite(p.y)) point(p);
     };
     $("fit").onclick = fit;
@@ -961,6 +1010,7 @@
         if (undo.length) {
             redo.push(C.copyDocument(doc));
             doc = undo.pop();
+            loadUnits();
             markup?.changed();
             selected.clear();
             mark();
@@ -973,6 +1023,7 @@
         if (redo.length) {
             undo.push(C.copyDocument(doc));
             doc = redo.pop();
+            loadUnits();
             markup?.changed();
             selected.clear();
             mark();
@@ -988,7 +1039,7 @@
                     editable(e) &&
                     ["TEXT", "MTEXT"].includes(e.type),
             ),
-            h = Number($("height").value);
+            h = lengthValue('height');
         if(textEdits.has('text')&&$('text').value.includes('\n')&&es.some(e=>e.type==='TEXT')){status('기존 한 줄 문자는 줄바꿈을 지원하지 않습니다. 새 여러 줄 문자로 작성하세요.');return;}
         if(!textEdits.size){status('문자 내용·크기·색 중 변경할 값을 입력하세요.');return;}
         if (es.length && (!textEdits.has('height')||(Number.isFinite(h)&&h>0))) {
@@ -1074,7 +1125,7 @@
     $("offset").onclick = () =>
         operation((es) => {
             const added = es.map((e) =>
-                C.offset(e, Number($("offset-distance").value)),
+                C.offset(e, lengthValue('offset-distance')),
             );
             return () => doc.entities.push(...added);
         });
@@ -1086,7 +1137,7 @@
                 const n = C.trim(
                     es[0],
                     es[1],
-                    { x: Number($("x").value), y: Number($("y").value) },
+                    { x: lengthValue('x'), y: lengthValue('y') },
                     kind === "extend",
                 );
                 return () => {
@@ -1101,8 +1152,8 @@
                 es,
                 Number($("rows").value),
                 Number($("cols").value),
-                Number($("array-x").value),
-                Number($("array-y").value),
+                lengthValue('array-x'),
+                lengthValue('array-y'),
             );
             return () => doc.entities.push(...added);
         });
@@ -1310,7 +1361,7 @@
             try{
                 if(aiSession)await stopAISharing(true,'임시 작업 복구로 AI 공유를 중지했습니다.');
                 snapshot();doc=parsed;doc.markups=C.clone(entry.markups||[]);doc.workspace=C.clone(entry.workspace||{});if(record.reference)doc.reference=C.clone(record.reference);
-                canManage=canAnnotate&&parsed.acadVersion>=1015&&!record.reference;selected.clear();measurements=[];points=[];markup.reset();layers();fit();
+                canManage=canAnnotate&&parsed.acadVersion>=1015&&!record.reference;selected.clear();measurements=[];points=[];loadUnits();markup.reset();layers();fit();
                 $('dirty').textContent='● 임시 작업 복구됨 · 저장 필요';status('임시 작업을 복구했습니다. 확인 후 저장하세요.');return true;
             }finally{busy=false;ioControls();render();}
         },
