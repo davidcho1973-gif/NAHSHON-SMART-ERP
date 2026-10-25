@@ -252,12 +252,15 @@ class ClaimEditingService
                 $sourceId = $sheet->intelligent_document_id;
             }
             $encoded = (string) ($input['image'] ?? '');
-            if (strlen($encoded) > 7000000 || ! str_starts_with($encoded, 'data:image/jpeg;base64,')) {
+            // The 2D studio emits lossless PNG; the older marker emits JPEG. Validate the actual bytes for either producer.
+            if (strlen($encoded) > 7000000 || ! preg_match('#^data:image/(jpeg|png);base64,#', $encoded, $header)) {
                 throw new InvalidArgumentException('표시 도면 이미지 형식을 확인하세요.');
             }
-            $bytes = base64_decode(substr($encoded, 23), true);
+            $mime = 'image/'.$header[1];
+            $extension = $header[1] === 'png' ? 'png' : 'jpg';
+            $bytes = base64_decode(substr($encoded, strlen($header[0])), true);
             $size = $bytes === false ? false : @getimagesizefromstring($bytes);
-            if (! $size || ($size['mime'] ?? '') !== 'image/jpeg' || $size[0] * $size[1] > 16000000) {
+            if (! $size || ($size['mime'] ?? '') !== $mime || $size[0] * $size[1] > 16000000) {
                 throw new InvalidArgumentException('표시 도면 이미지 크기를 확인하세요.');
             }
             $path = tempnam(sys_get_temp_dir(), 'claim-drawing-');
@@ -269,7 +272,7 @@ class ClaimEditingService
                     throw new InvalidArgumentException('표시 도면을 저장하지 못했습니다.');
                 }
                 $name = preg_replace('/[^A-Za-z0-9_-]/', '-', (string) ($input['sheetNo'] ?? 'drawing'));
-                $file = new UploadedFile($path, substr($name, 0, 60).'-marked-draft.jpg', 'image/jpeg', null, true);
+                $file = new UploadedFile($path, substr($name, 0, 60).'-marked-draft.'.$extension, $mime, null, true);
                 $result = app(DocumentIntake::class)->ingest($file,
                     ['company_id' => $line->contract->company_id, 'site_id' => $line->contract->site_id, 'project_id' => $line->contract->project_id],
                     ['uploaded_by' => auth()->id(), 'source' => 'evidence_batch', 'project_contract_id' => $line->project_contract_id]);

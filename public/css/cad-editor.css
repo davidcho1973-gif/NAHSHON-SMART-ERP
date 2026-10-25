@@ -288,3 +288,18 @@ body[data-workspace=markup] .cad-only,body[data-workspace=cad] .markup-only {dis
 .cad-review-dialog{width:min(1500px,96vw);max-width:96vw}.review-canvases{display:flex;gap:12px}.review-canvases canvas{width:calc(50% - 6px);min-width:0;object-fit:contain;cursor:crosshair;border:1px solid #38506a}.review-canvases canvas[hidden]{display:none}.review-canvases canvas:only-child,.review-canvases canvas[hidden]+canvas{width:100%}#cr-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}#cr-controls input[type=number]{width:100px}.review-list{max-height:220px;overflow:auto}.review-list label{display:flex;align-items:center;gap:8px;margin:5px 0}.review-list label button{margin-left:auto}.review-list input[type=checkbox]{width:auto}#cad-review-tools button{width:100%;margin:4px 0}
 .cad-workflow-dialog{width:min(1100px,95vw);max-width:95vw}#cw-body{max-height:70vh;overflow:auto;padding:4px 10px 10px 0}#cw-body>label{display:block;margin:8px 0}#cw-body select,#cw-body input:not([type=checkbox]),#cw-body textarea{width:100%;box-sizing:border-box}#cw-body textarea{min-height:78px}#cw-body a{display:inline-block;margin:6px 12px 6px 0;color:#67e8f9}.cad-business-card{border:1px solid #39506b;border-radius:8px;padding:12px;margin:10px 0;background:#152338}.cad-business-card p{white-space:pre-wrap}.cad-business-card img{display:block;max-width:220px;max-height:150px;object-fit:contain}.cad-business-form{border-top:1px solid #39506b;padding-top:14px;margin-top:18px}.cad-business-form label{display:block;margin:10px 0}.cad-business-form button{margin:5px 8px 5px 0}.purchase-draft-line{display:grid;grid-template-columns:2fr 2fr 1fr 1fr auto;gap:8px;align-items:end}#cw-tabs button[aria-pressed=true]{background:#0e7490;border-color:#67e8f9}#cad-workflow-overlay input[type=checkbox]{width:auto}@media(max-width:700px){.purchase-draft-line{grid-template-columns:1fr 1fr}.review-canvases{flex-wrap:wrap}.review-canvases canvas{width:100%}}
 #pk-body{max-height:72vh;overflow:auto}#pk-body label{display:block;margin:10px 0}#pk-body input:not([type=checkbox]),#pk-body textarea,#pk-body select{display:block;width:100%;box-sizing:border-box}#pk-body input[type=checkbox]{width:auto}#pk-body a{display:inline-block;margin:8px 12px 8px 0;color:#67e8f9}#pk-body .cad-business-card p{overflow-wrap:anywhere}#pk-body textarea{min-height:80px}
+
+/* Native CAD tools use pictograms with persistent readable labels. */
+#tool-buttons button {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:65px;padding:7px 3px;font-size:11px;line-height:1.3;}
+#tool-buttons .cad-tool-icon {display:flex;align-items:center;justify-content:center;width:29px;height:27px;color:var(--cad-accent,#80d8ff);}
+#tool-buttons .cad-tool-icon svg {width:24px;height:24px;}
+#tool-buttons button[aria-pressed=true] {border-color:#67e8f9;box-shadow:inset 0 0 0 1px #67e8f955;}
+#tool-buttons button[data-tool=delete] {--cad-accent:#fda4af;}
+#dimension-unit,#source-unit {width:100%;margin-top:3px;}
+#dimension-unit-note {line-height:1.5;overflow-wrap:anywhere;}
+#length-input-unit {font-size:11px;font-weight:400;}
+
+#tool-buttons button:is([data-tool=text],[data-tool=dimension],[data-tool=measure]) {--cad-accent:#fcd34d;}
+#tool-buttons button:is([data-tool=move],[data-tool=copy],[data-tool=rotate],[data-tool=scale],[data-tool=mirror]) {--cad-accent:#c4b5fd;}
+
+#source-unit-control[hidden] {display:none;}
