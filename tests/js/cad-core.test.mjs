@@ -179,14 +179,14 @@ test("reject malformed/binary DXF", () => {
     assert.throws(() => C.parse("0\nSECTION\n2\nENTITIES"));
 });
 
-test("bulged polylines preserved as read only; straight polylines editable", () => {
+test("bulged polylines preserve raw records and support safe 2D transforms", () => {
     const source = fixture.replace(
         "0\r\nCUSTOM_OBJECT",
         "0\r\nLWPOLYLINE\r\n90\r\n2\r\n10\r\n0\r\n20\r\n0\r\n42\r\n1\r\n10\r\n10\r\n20\r\n0\r\n0\r\nCUSTOM_OBJECT",
     );
     const d = C.parse(source);
-    assert.equal(d.entities[1].editable, false);
-    assert.equal(C.exportDXF(d), source);
+    assert.equal(d.entities[1].editable, true);
+    assert.equal(C.exportDXF(d), source);assert.equal(C.allows(d.entities[1],'resize'),false);
     const straight = C.parse(source.replace("42\r\n1", "42\r\n0"));
     assert.equal(straight.entities[1].editable, true);
 });
@@ -360,7 +360,7 @@ test("editing a line preserves unrelated ACI layer record exactly", () => {
     const raw = C.parse(out).layers.WALL;
     assert.equal(raw.originalColor, d.layers.WALL.originalColor);
 });
-test("width/vertex IDs and special flags polylines are read-only", () => {
+test("width/vertex IDs and 2D flags preserve records during safe editing", () => {
     for (const extra of [
         "40\r\n2",
         "41\r\n3",
@@ -375,25 +375,25 @@ test("width/vertex IDs and special flags polylines are read-only", () => {
                 "\r\n10\r\n0\r\n20\r\n0\r\n10\r\n10\r\n20\r\n0\r\n0\r\nCUSTOM_OBJECT",
         );
         const d = C.parse(source);
-        assert.equal(d.entities[1].editable, false);
+        assert.equal(d.entities[1].editable, true);assert.equal(C.allows(d.entities[1],'move'),true);
         assert.equal(C.exportDXF(d), source);
     }
 });
-test("aligned TEXT and all MTEXT preserve orientation as read-only", () => {
+test("aligned TEXT and plain MTEXT preserve native alignment with limited operations", () => {
     for (const extra of ["72\r\n1", "73\r\n2", "71\r\n2"]) {
         const source = fixture.replace(
             "0\r\nCUSTOM_OBJECT",
             "0\r\nTEXT\r\n1\r\nTest\r\n" + extra + "\r\n0\r\nCUSTOM_OBJECT",
         );
         const d = C.parse(source);
-        assert.equal(d.entities[1].editable, false);
+        assert.equal(d.entities[1].editable, true);
     }
     const source = fixture.replace(
         "0\r\nCUSTOM_OBJECT",
         "0\r\nMTEXT\r\n1\r\nTest\r\n50\r\n1.5707963267948966\r\n0\r\nCUSTOM_OBJECT",
     );
     const d = C.parse(source);
-    assert.equal(d.entities[1].editable, false);
+    assert.equal(d.entities[1].editable, true);
     assert.ok(Math.abs(d.entities[1].angle - 90) < 1e-9);
     assert.equal(C.exportDXF(d), source);
 });

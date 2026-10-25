@@ -69,7 +69,8 @@ test("polyline bulges retain the circular sweep and original DXF records", () =>
         ]),
         doc = C.parse(source),
         ps = C.geometry(doc.entities[0]);
-    assert.equal(doc.entities[0].editable, false);
+    assert.equal(doc.entities[0].editable, true);
+    assert.equal(C.allows(doc.entities[0],'resize'),false);
     assert.ok(ps.some((p) => p.y < -4.99));
     assert.ok(ps.every((p) => Math.abs(Math.hypot(p.x - 5, p.y) - 5) < 1e-8));
     assert.equal(C.exportDXF(doc).replace(/\r\n/g, "\n"), source);

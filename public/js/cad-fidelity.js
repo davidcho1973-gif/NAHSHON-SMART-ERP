@@ -461,7 +461,8 @@
         const blocks = new Map(),
             styles = new Map(),
             warnings = [];
-        let generated = 0;
+        let generated = 0, placedCount = 0, placedPoints = 0;
+        const expandedBlocks = new Map();
         for (let i = 0; i < pairs.length; i++) {
             if (pairs[i][0] === 0 && pairs[i][1] === "STYLE") {
                 let end = i + 1;
@@ -489,6 +490,7 @@
         function expand(name, stack = []) {
             if (stack.includes(name) || stack.length > 8)
                 throw Error("block_recursion");
+            if (expandedBlocks.has(name)) return expandedBlocks.get(name);
             const block = blocks.get(name);
             if (!block) throw Error("external_or_missing_block");
             const parts = [];
@@ -507,13 +509,9 @@
                     e.closed = !!(number(raw, 70) & 1);
                 }
                 if (e.type === "INSERT") {
-                    parts.push(
-                        ...placed(
-                            e,
-                            expand(value(raw, 2), [...stack, name]),
-                            blocks.get(value(raw, 2))?.base,
-                        ),
-                    );
+                    const nested = placed(e, expand(value(raw, 2), [...stack, name]), blocks.get(value(raw, 2))?.base);
+                    if (parts.length + nested.length > 50000) throw Error("block_complexity");
+                    for (const part of nested) parts.push(part);
                     continue;
                 }
                 try {
@@ -529,6 +527,7 @@
                 }
                 if (++generated > 50000) throw Error("block_complexity");
             }
+            expandedBlocks.set(name, parts);
             return parts;
         }
         function placed(insert, parts, base = { x: 0, y: 0 }) {
@@ -548,8 +547,18 @@
                     y: insert.p.y + x * s + y * c,
                 };
             };
+            // Cache definitions, but bound materialized instance parts and points.
+            let pointCount = 0;
+            for (const part of parts) pointCount += root.CADCore.geometry(part).length;
+            if (placedCount + parts.length > 200000 || placedPoints + pointCount > 2000000)
+                throw Error("block_instance_complexity");
+            placedCount += parts.length;
+            placedPoints += pointCount;
             return parts.map((part) => {
                 const e = { ...part };
+                e.sourcePlanarXY = root.CADCore.planarXY ? root.CADCore.planarXY(part) : part.editable;
+                e.blockColorInherited = part.aci === 0 && part.color === null;
+                e.blockLayerInherited = part.layer === "0";
                 delete e.raw;
                 e.layer = part.layer === "0" ? insert.layer : part.layer;
                 if (part.aci === 0 && part.color === null) {
@@ -632,6 +641,12 @@
                             warnings.push({ type: part.type, reason });
                 }
             } catch (error) {
+                if (["INSERT", "DIMENSION"].includes(e.type)) {
+                    // Do not present an incomplete fallback as the complete block.
+                    e.renderParts = [];
+                    e.preview = [];
+                    e.displayGeometry = [];
+                }
                 e.presentationWarnings = [
                     ...(e.presentationWarnings || []),
                     error.message,
