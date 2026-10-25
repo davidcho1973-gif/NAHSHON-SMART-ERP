@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 using ACadSharp;
 using ACadSharp.IO;
 using ACadSharp.Objects;
@@ -54,10 +55,43 @@ try
     var source = Path.GetExtension(input).ToLowerInvariant();
     var target = Path.GetExtension(output).ToLowerInvariant();
     if (source is not (".dwg" or ".dxf") || target is not (".dwg" or ".dxf")) throw new ArgumentException("Only DWG and DXF are supported.");
+    // Do not retain the source object graph while reopening the emitted file.
+    // DWG blocks can expand a small input into hundreds of thousands of objects.
+    var snapshot = WriteDrawing(input, output, source, target, Notify, optionalMetadata, warnings);
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+    GC.Collect();
+    if (!File.Exists(output) || new FileInfo(output).Length == 0 || new FileInfo(output).Length > maxBytes) throw new InvalidDataException("Invalid output size.");
+    var check = target == ".dwg" ? DwgColorCompatibility.Read(output, Notify)
+        : DxfReader.Read(output, new DxfReaderConfiguration { CreateDefaults = true, Failsafe = false, KeepUnknownEntities = true, KeepUnknownNonGraphicalObjects = true }, Notify);
+    if (check.BlockRecords.Sum(b => b.Entities.Count) != snapshot.Entities) throw new InvalidDataException("Entity count changed during serialization; conversion refused.");
+    if (!snapshot.Geometry.OrderBy(x => x.Key).SequenceEqual(GeometryInventory(check).OrderBy(x => x.Key)))
+        throw new InvalidDataException("Entity types, block membership or display colors changed during serialization; conversion refused.");
+    var outputTypes = Inventory(check).GroupBy(ResourceKey).ToDictionary(g => g.Key, g => g.Count());
+    foreach (var (key, required) in snapshot.Resources)
+        if (outputTypes.GetValueOrDefault(key) < required) throw new InvalidDataException("Object inventory decreased during serialization: " + key);
+    warnings.Insert(0, "DWG/DXF conversion may change custom/proxy objects, layouts, fonts and external references. Original is preserved; verify the exported drawing in your CAD program.");
+    Console.WriteLine(JsonSerializer.Serialize(new { warnings = warnings.Distinct().Take(100), entities = check.Entities.Count, engine = "ACadSharp 3.8.0", outputVersion = "AC1032" }));
+    return 0;
+}
+catch (Exception e)
+{
+    // No stack traces, paths or document content are sent to browser users by the PHP bridge.
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { error = e.GetType().Name, message = e.Message }));
+    return 2;
+}
+
+[MethodImpl(MethodImplOptions.NoInlining)]
+static ConversionSnapshot WriteDrawing(string input, string output, string source, string target,
+    NotificationEventHandler notify, HashSet<string> optionalMetadata, List<string> warnings)
+{
     CadDocument document = source == ".dwg"
-        ? DwgColorCompatibility.Read(input, Notify)
-        : DxfReader.Read(input, new DxfReaderConfiguration { CreateDefaults = true, Failsafe = false, KeepUnknownEntities = true, KeepUnknownNonGraphicalObjects = true }, Notify);
-    var inputEntities = document.BlockRecords.SelectMany(b => b.Entities).ToList();
+        ? DwgColorCompatibility.Read(input, notify)
+        : DxfReader.Read(input, new DxfReaderConfiguration { CreateDefaults = true, Failsafe = false, KeepUnknownEntities = true, KeepUnknownNonGraphicalObjects = true }, notify);
+    // Both writers skip solids. Refuse before writing a large, incomplete DXF.
+    if (document.BlockRecords.SelectMany(b => b.Entities).Any(e => e is Solid3D or CadBody or Region))
+        throw new InvalidDataException("Unsupported 3D solid entities cannot be preserved by the writer.");
+    var entityCount = document.BlockRecords.Sum(b => b.Entities.Count);
     var inputObjects = Inventory(document).ToList();
     var unsafeObjects = new HashSet<string> { "EvaluationGraph", "BlockRepresentationData", "DynamicBlockPurgePreventer" };
     var defaultMaterials = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Global", "ByLayer", "ByBlock" };
@@ -87,37 +121,17 @@ try
     // UTF-8 DXF and DWG 2018 are the explicit interchange version, including old source drawings.
     document.Header.Version = ACadVersion.AC1032;
     var inputGeometry = GeometryInventory(document);
-    if (target == ".dwg") DwgWriter.Write(output, document, notification: Notify);
-    else DxfWriter.Write(output, document, binary: false, notification: Notify);
-    if (!File.Exists(output) || new FileInfo(output).Length == 0 || new FileInfo(output).Length > maxBytes) throw new InvalidDataException("Invalid output size.");
-    // Reopen actual emitted bytes, never report a successful file extension alone.
-    var check = target == ".dwg" ? DwgReader.Read(output, Notify) : DxfReader.Read(output, Notify);
-    if (check.BlockRecords.SelectMany(b => b.Entities).Count() != inputEntities.Count) throw new InvalidDataException("Entity count changed during serialization; conversion refused.");
-    if (!inputGeometry.OrderBy(x => x.Key).SequenceEqual(GeometryInventory(check).OrderBy(x => x.Key)))
-        throw new InvalidDataException("Entity types, block membership or display colors changed during serialization; conversion refused.");
-    // DXF may assign an anonymous dictionary its parent key as Name; handles
-    // identify the actual container across formats without confusing that rename.
-    string ResourceKey(CadObject o) => o.GetType().FullName + (o is CadDictionary or XRecord ? "|" + o.Handle : "");
-    var outputTypes = Inventory(check).GroupBy(ResourceKey).ToDictionary(g => g.Key, g => g.Count());
-    foreach (var group in inputObjects.GroupBy(ResourceKey))
-        if (outputTypes.GetValueOrDefault(group.Key) < group.Count())
-        {
-            // The library synthesizes the three default 3D materials when reading DWG.
-            // They are outside this 2D editor; explicitly disclose their omission.
-            if (group.All(o => o is Material m && defaultMaterials.Contains(m.Name)))
-                warnings.Add("Default 3D rendering materials are omitted by 2D DXF interchange; 2D geometry is preserved.");
-            else if (outputTypes.GetValueOrDefault(group.Key) < group.Count(o => !Optional(o))) throw new InvalidDataException("Object inventory decreased during serialization: " + group.Key);
-        }
-    warnings.Insert(0, "DWG/DXF conversion may change custom/proxy objects, layouts, fonts and external references. Original is preserved; verify the exported drawing in your CAD program.");
-    Console.WriteLine(JsonSerializer.Serialize(new { warnings = warnings.Distinct().Take(100), entities = check.Entities.Count, engine = "ACadSharp 3.8.0", outputVersion = "AC1032" }));
-    return 0;
+    var resources = inputObjects.GroupBy(ResourceKey).ToDictionary(g => g.Key,
+        g => g.Count(o => !(o is Material m && defaultMaterials.Contains(m.Name)) && !Optional(o)));
+    if (inputObjects.OfType<Material>().Any())
+        warnings.Add("Default 3D rendering materials may be omitted by 2D DXF interchange; original is preserved.");
+    if (target == ".dwg") DwgWriter.Write(output, document, notification: notify);
+    else DxfWriter.Write(output, document, binary: false, notification: notify);
+    return new ConversionSnapshot(entityCount, inputGeometry, resources);
 }
-catch (Exception e)
-{
-    // No stack traces, paths or document content are sent to browser users by the PHP bridge.
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { error = e.GetType().Name, message = e.Message }));
-    return 2;
-}
+
+// Handles identify containers across the DXF reader's anonymous dictionary rename.
+static string ResourceKey(CadObject o) => o.GetType().FullName + (o is CadDictionary or XRecord ? "|" + o.Handle : "");
 
 static Dictionary<string, int> GeometryInventory(CadDocument document) =>
     document.BlockRecords.SelectMany(block => block.Entities.Select(entity =>
@@ -148,3 +162,5 @@ static IEnumerable<CadObject> Inventory(CadDocument document)
         if (item is BlockRecord block) foreach (var entity in block.Entities) queue.Enqueue(entity);
     }
 }
+
+record ConversionSnapshot(int Entities, Dictionary<string, int> Geometry, Dictionary<string, int> Resources);

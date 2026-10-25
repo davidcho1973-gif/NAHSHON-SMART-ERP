@@ -118,6 +118,27 @@ try
     Assert(rejectedInput.code != 0 && rejectedInput.error.Contains("Input size exceeds limit"), "Native input must enforce the passed limit.");
     var rejectedOutput = ConvertLarge(largeDwg, Path.Combine(directory, "oversize-output.dxf"), new FileInfo(largeDwg).Length + 1024);
     Assert(rejectedOutput.code != 0 && rejectedOutput.error.Contains("Invalid output size"), "Native output must enforce the passed limit.");
+    // Exercise the actual .NET allocator under the same process-only budget
+    // used by PHP; a file byte limit cannot protect a shared web container.
+    var bounded = new ProcessStartInfo(args[0]) { RedirectStandardOutput = true, RedirectStandardError = true };
+    if (args.Length > 1) bounded.ArgumentList.Add(args[1]);
+    foreach (var arg in new[] { "convert", "--input", largeDwg, "--output", Path.Combine(directory, "bounded.dxf") }) bounded.ArgumentList.Add(arg);
+    bounded.Environment["DOTNET_GCHeapHardLimit"] = "4000000"; // 64 MiB, hexadecimal.
+    using var boundedProcess = Process.Start(bounded)!;
+    var boundedOut = boundedProcess.StandardOutput.ReadToEndAsync();
+    var boundedErr = boundedProcess.StandardError.ReadToEndAsync();
+    Assert(boundedProcess.WaitForExit(60000), "Budgeted conversion must finish or refuse within a minute.");
+    Assert(boundedProcess.ExitCode != 0, "Large conversion must refuse the small heap budget.");
+    var boundedError = boundedErr.GetAwaiter().GetResult();
+    Assert(boundedError.Contains("OutOfMemoryException") || boundedError.Contains("Out of memory."), "Expected a recognizable memory refusal: " + boundedError);
+    var solidDxf = Path.Combine(directory, "solid.dxf");
+    File.WriteAllText(solidDxf, "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\n3DSOLID\n5\nF0\n100\nAcDbEntity\n8\n0\n100\nAcDbModelerGeometry\n70\n1\n100\nAcDb3dSolid\n0\nENDSEC\n0\nEOF\n");
+    Assert(DxfReader.Read(solidDxf, Strict).Entities.Single() is Solid3D, "Fixture must contain a real solid object.");
+    var solidOutput = Path.Combine(directory, "solid.dwg");
+    var solidResult = ConvertLarge(solidDxf, solidOutput, 64 * 1024 * 1024);
+    Assert(solidResult.code != 0 && solidResult.error.Contains("Unsupported 3D solid entities"), "Solid must be refused explicitly.");
+    Assert(!File.Exists(solidOutput), "Unsupported geometry must be refused before emitting a partial drawing.");
+    Console.WriteLine("PASS: bounded native heap and explicit 3D solid refusal before writing.");
     Console.WriteLine("PASS: >20 MiB DXF input/output, real DWG roundtrip, metadata preservation and configured input/output limits.");
     Console.WriteLine("PASS: real DWG duplicate book colors, conflicting RGB rejection, presentation warning, geometry and RGB preservation.");
 }

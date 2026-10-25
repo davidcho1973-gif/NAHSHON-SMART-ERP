@@ -7,6 +7,17 @@ use PHPUnit\Framework\TestCase;
 
 class CadConverterFailureTest extends TestCase
 {
+    public function test_memory_and_solid_failures_are_distinct_and_do_not_leak_details(): void
+    {
+        $converter = new CadConverter;
+        foreach ([json_encode(['error' => 'OutOfMemoryException', 'message' => '/private/drawing']), 'Out of memory.'] as $error) {
+            $failure = $converter->conversionFailure($error);
+            $this->assertSame('memory_budget', $failure['reason']);
+            $this->assertStringNotContainsString('/private', $failure['message']);
+        }
+        $this->assertSame('unsupported_3d', $converter->conversionFailure(json_encode(['message' => 'Unsupported 3D solid entities cannot be preserved by the writer.']))['reason']);
+    }
+
     public function test_untrusted_native_error_details_never_reach_the_browser(): void
     {
         $converter = new CadConverter;
