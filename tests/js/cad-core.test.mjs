@@ -472,3 +472,28 @@ test('AI actions refuse locked hidden readonly outside scope and unknown paramet
 test('AI additions and partial text edits persist without rewriting unrelated text properties',()=>{const d=C.parse(fixture),id=d.entities[0].id,options={canManage:true,sharedIds:[id],sharedLayers:['WALL'],expectedHash:'a'.repeat(64),currentHash:'a'.repeat(64),transactionId:'test'};const result=C.applyAIActions(d,[{type:'add_text',p:{x:5,y:6},text:'note',height:3,width:20,layer:'WALL',color:'#ff8800'},{type:'add_rectangle',p:{x:0,y:0},q:{x:3,y:4},layer:'WALL'},{type:'add_dimension',p:{x:0,y:0},q:{x:10,y:0},placement:{x:0,y:5},height:2,mode:'horizontal',layer:'WALL'}],options);const text=result.document.entities.find(e=>e.type==='MTEXT');const changed=C.applyAIActions(result.document,[{type:'text',entityIds:[text.id],color:'#001122'}],{...options,sharedIds:[text.id]});assert.equal(changed.document.entities.find(e=>e.id===text.id).text,'note');assert.equal(changed.document.entities.find(e=>e.id===text.id).height,3);const again=C.parse(C.exportDXF(changed.document));assert.ok(again.entities.some(e=>e.type==='ERP_DIMENSION'));assert.ok(again.entities.some(e=>e.text==='note'));});
 test('AI nonplanar geometry stays unavailable rather than publishing projected quantities',()=>{const d=C.parse(fixture),e=d.entities[0];e.raw=[...e.raw,[31,'5']];e.editable=false;assert.equal(C.aiGeometry(e),null);assert.equal(C.quantities(e).available,false);assert.equal(C.quantities(e).length,null);});
 test('AI action counts and shared context bytes are bounded',()=>{const d=C.parse(fixture),id=d.entities[0].id,options={canManage:true,sharedIds:[id],sharedLayers:['WALL'],expectedHash:'a'.repeat(64),currentHash:'a'.repeat(64)};assert.throws(()=>C.applyAIActions(d,Array.from({length:101},()=>({type:'delete',entityIds:[id]})),options));d.entities=Array.from({length:2001},(_,i)=>({...C.newEntity('POINT',{p:{x:i,y:0}}),id:'p'+i}));assert.throws(()=>C.aiContext(d,{scope:'visible',unit:'drawing',documentHash:'a'.repeat(64)}));});
+
+test('dimension unit conversion keeps native geometry and survives DXF reopen',()=>{
+    const d=C.parse(fixture),original=C.exportDXF(d),p={x:0,y:0},q={x:66,y:0},placement={x:0,y:12};
+    for(const [unit,label] of [['in','66.000 in'],['ft','5.500 ft'],['ft-in',"5' 6\""],['mm','1676.400 mm']]){
+        const e=C.newDimension(p,q,placement,{measurement:{unit,mmPerUnit:25.4}});
+        const before=JSON.stringify([e.p,e.q,e.placement,e.height]);
+        d.entities.push(e);const out=C.exportDXF(d),again=C.parse(out),saved=again.entities.at(-1);
+        assert.equal(saved.type,'ERP_DIMENSION');assert.equal(C.dimensionLayout(saved).label,label);
+        assert.equal(JSON.stringify([saved.p,saved.q,saved.placement,saved.height]),before);
+        assert.equal(C.exportDXF(again),out);d.entities.pop();
+    }
+    assert.equal(C.exportDXF(d),original);
+    assert.equal(C.formatLength(1676.4,{unit:'ft',mmPerUnit:1}),'5.500 ft');
+    assert.equal(C.formatLength(5.5,{unit:'in',mmPerUnit:304.8}),'66.000 in');
+    assert.equal(C.formatLength(11.999999,{unit:'ft-in',mmPerUnit:25.4}),"1' 0\"");
+    assert.equal(C.formatLength(-66,{unit:'ft-in',mmPerUnit:25.4}),"-5' 6\"");
+    assert.equal(C.lengthInputScale({unit:'ft-in',mmPerUnit:25.4}),1/12);
+});
+test('drawing unit detection never guesses unknown or unitless DXF',()=>{
+    const doc=code=>({prefix:[[9,'$INSUNITS'],[70,String(code)]]});
+    assert.equal(C.drawingUnit(doc(1)).mmPerUnit,25.4);assert.equal(C.drawingUnit(doc(2)).mmPerUnit,304.8);
+    assert.equal(C.drawingUnit(doc(4)).mmPerUnit,1);assert.equal(C.drawingUnit(doc(21)).mmPerUnit,1200000/3937);
+    for(const value of [doc(0),doc(999),{prefix:[]},{prefix:[[9,'$INSUNITS'],[9,'$LUNITS'],[70,1]]}])assert.equal(C.drawingUnit(value),null);
+    for(const measurement of [{unit:'bad',mmPerUnit:1},{unit:'ft',mmPerUnit:0},{unit:'ft',mmPerUnit:Infinity},{unit:'ft',mmPerUnit:-1}])assert.throws(()=>C.newDimension({x:0,y:0},{x:5,y:0},{x:0,y:3},{measurement}));
+});

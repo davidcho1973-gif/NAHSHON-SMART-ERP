@@ -107,7 +107,7 @@ const annotations = C.parse('0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n0\nE
 const annotationLayer = '천장_배관_기성치수_'.repeat(10);
 annotations.layers[annotationLayer] = {color:'#22bb88', visible:true, locked:false};
 for (const mode of ['aligned', 'horizontal', 'vertical']) {
-    annotations.entities.push(C.newDimension({x:10,y:20}, {x:40,y:60}, {x:-15,y:90}, {mode,height:3,color:0x22bb88,layer:annotationLayer}));
+    annotations.entities.push(C.newDimension({x:10,y:20}, {x:40,y:60}, {x:-15,y:90}, {mode,height:3,color:0x22bb88,layer:annotationLayer,measurement:{unit:{aligned:'in',horizontal:'ft',vertical:'ft-in'}[mode],mmPerUnit:25.4}}));
 }
 const note = '한글 여러 줄\nsecond \\P {literal}\n' + '현장 메모 '.repeat(80);
 annotations.entities.push(C.newEntity('MTEXT', {p:{x:80,y:100},text:note,height:3,width:36,angle:30,color:0x40aaee,plainText:true}));
@@ -120,6 +120,7 @@ assert.equal(dimensions.length, 3, 'Complete annotations remain editable after r
 for (const dim of dimensions) {
     assert.equal(dim.layer, annotationLayer);
     assert.ok(Math.abs(C.dimensionLayout(dim).value - {aligned:50,horizontal:30,vertical:40}[dim.mode]) < 1e-8);
+    assert.equal(C.dimensionLayout(dim).label,{aligned:'50.000 in',horizontal:'2.500 ft',vertical:"3' 4\""}[dim.mode]);
 }
 const reopenedNote = reopenedAnnotations.entities.find(e => e.type === 'MTEXT');
 assert.equal(reopenedNote.text, note);

@@ -86,6 +86,19 @@
 <h2>그리기 / 편집</h2>
 <div id="tool-buttons">
 </div>
+<label>치수 표시 단위<select id="dimension-unit" aria-label="치수 표시 단위">
+<option value="drawing">원본 도면 단위</option>
+<option value="in">인치 (in)</option>
+<option value="ft">피트 (ft)</option>
+<option value="ft-in">피트 + 인치 (ft-in)</option>
+<option value="mm">밀리미터 (mm)</option>
+<option value="cm">센티미터 (cm)</option>
+<option value="m">미터 (m)</option>
+</select></label>
+<label id="source-unit-control" hidden>원본 1단위의 기준<select id="source-unit" aria-label="원본 도면 기준 단위">
+<option value="">기준 단위 선택</option><option value="in">1 인치</option><option value="ft">1 피트</option><option value="mm">1 mm</option><option value="cm">1 cm</option><option value="m">1 m</option>
+</select></label>
+<p id="dimension-unit-note" class="note" role="status"></p>
 <label>치수 방향<select id="dimension-mode">
 <option value="aligned">정렬 · 실제 거리</option>
 <option value="horizontal">수평 거리</option>
@@ -105,7 +118,7 @@
 <label>새 글자 색<input id="default-text-color" type="color" value="#e2e8f0">
 </label>
 </details>
-<h2>수치 입력</h2>
+<h2>수치 입력 <small id="length-input-unit">(도면 단위)</small></h2>
 <label>X <input id="x" type="number" step="any" value="0">
 </label>
 <label>Y <input id="y" type="number" step="any" value="0">
