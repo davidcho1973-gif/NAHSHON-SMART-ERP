@@ -559,6 +559,10 @@
                 e.sourcePlanarXY = root.CADCore.planarXY ? root.CADCore.planarXY(part) : part.editable;
                 e.blockColorInherited = part.aci === 0 && part.color === null;
                 e.blockLayerInherited = part.layer === "0";
+                e.explodeRaw=part.raw||part.explodeRaw;
+                e.blockExplodable=part.blockExplodable!==false && sx>0 && sy>0 && Math.abs(sx-sy)<1e-9 && !part.raw?.some(p=>[102,360,1001].includes(p[0]));
+                e.blockScale=(part.blockScale||1)*sx;
+                e.blockElevation=(part.blockElevation||number(part.raw||[],part.type==='LWPOLYLINE'?38:30))+number(r,30);
                 delete e.raw;
                 e.layer = part.layer === "0" ? insert.layer : part.layer;
                 if (part.aci === 0 && part.color === null) {
@@ -578,6 +582,11 @@
                             "mirrored_text_substitution",
                         ];
                 } else {
+                    e.p=transform(part.p);
+                    if(part.q)e.q=transform(part.q);
+                    if(part.points)e.points=part.points.map(p=>({...p,...transform(p)}));
+                    if(part.radius!==undefined)e.radius=part.radius*Math.abs(sx);
+                    if(part.type==='ARC'){e.start=part.start+angle*180/Math.PI;e.end=part.end+angle*180/Math.PI;}
                     e.displayGeometry =
                         root.CADCore.geometry(part).map(transform);
                     if (e.hatch)
@@ -698,6 +707,7 @@
                   : true;
         });
         ctx.save();
+        ctx.globalAlpha *= e.opacity ?? ((number(e.raw||[],440)&0x2000000)?(number(e.raw||[],440)&255)/255:1);
         ctx.beginPath();
         for (const ring of rings) {
             ring.map(screen).forEach((p, i) =>

@@ -75,7 +75,7 @@ test("polyline bulges retain the circular sweep and original DXF records", () =>
     assert.ok(ps.every((p) => Math.abs(Math.hypot(p.x - 5, p.y) - 5) < 1e-8));
     assert.equal(C.exportDXF(doc).replace(/\r\n/g, "\n"), source);
 });
-test("native hatch rings retain their holes and are presentation-only", () => {
+test("native hatch rings retain their holes and support safe native editing", () => {
     const loop = (ps) => [
         [92, 2],
         [72, 0],
@@ -112,7 +112,8 @@ test("native hatch rings retain their holes and are presentation-only", () => {
         e = doc.entities[0];
     assert.equal(e.hatch.rings.length, 2);
     assert.equal(e.hatch.solid, true);
-    assert.equal(e.editable, false);
+    assert.equal(C.allows(e,'style'), true);
+    assert.equal(C.allows(e,'move'), true);
     assert.ok(C.geometry(e).length > 4);
     assert.equal(C.exportDXF(doc).replace(/\r\n/g, "\n"), source);
 });
