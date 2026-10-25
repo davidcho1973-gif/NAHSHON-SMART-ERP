@@ -131,6 +131,7 @@
         text: "문자",
         dimension: "거리 치수",
         measure: "거리 측정",
+        tape: "줄자 · 안내선",
         move: "이동",
         copy: "복사",
         rotate: "회전",
@@ -156,7 +157,7 @@
         $('sites').disabled=busy||inClaim||proofMode;$('drawings').disabled=busy||proofMode;
         $('upload').disabled=busy||!uploadAllowed||proofMode||!capabilitiesReady;
         $('save').disabled=busy||!canAnnotate||!record;$('reload').disabled=busy||!record;
-        $('history').disabled=busy||proofMode||!record;$('print-markups').disabled=busy||!record?.canExport;inspector();markup?.refresh();
+        $('history').disabled=busy||proofMode||!record;$('print-markups').disabled=busy||!record?.canExport;inspector();markup?.refresh();if(doc)refreshGuideControls();
         reviewWorkbench?.refresh();workflow?.refresh();packets?.refresh();
     }
     function startIO(kind,title){
@@ -276,12 +277,16 @@
     }
     function snap(p, exclude = new Set()) {
         snapMark=null;
-        if($('snap').checked||['measure','dimension'].includes(tool)){
+        if($('snap').checked||['measure','dimension','tape'].includes(tool)){
             let best=12/scale;for(const e of entities()){if(exclude.has(e.id))continue;for(const q of C.snapPoints(e)){const distance=C.distance(p,q);if(distance<best){best=distance;snapMark={...q};}}}
-            if(snapMark)p={...snapMark};
+            if(guides().length&&doc?.workspace?.guidesVisible!==false){const q=C.guideSnap(p,guides(),12/scale,sourceEdges(p));if(q&&(!snapMark||q.kind!=='guide-projection'||C.distance(p,q)<C.distance(p,snapMark)))snapMark={...q};}
+            if(snapMark)p={x:snapMark.x,y:snapMark.y};
         }
         const orthoAnchor=points.length&&['line','polyline','move','copy'].includes(tool)?points.at(-1):gesture?.kind==='draw'&&gesture.tool==='line'?gesture.start:gesture?.kind==='move'?gesture.start:null;
         if($('ortho').checked&&orthoAnchor){if(Math.abs(p.x-orthoAnchor.x)>Math.abs(p.y-orthoAnchor.y))p.y=orthoAnchor.y;else p.x=orthoAnchor.x;}
+        const anchor=gesture?.kind==='draw'&&gesture.tool==='line'?gesture.start:points.length&&['line','polyline','tape'].includes(tool)?points.at(-1):null;
+        inference=null;
+        if(anchor&&!(tool==='tape'&&$('tape-mode').value==='parallel')){const lock=axisLock??shiftLock;if(!snapMark||lock!==null){const found=C.inferDirection(anchor,p,{enabled:$('direction-inference').checked,lock,reference:referenceAngle,step:Number($('inference-step').value)||0});if(found.kind){inference=found;p=found.point;if(lock!==null)snapMark=null;}}}
         return p;
     }
 
@@ -445,6 +450,7 @@
                 move: "기준점 → 목적점",
                 copy: "기준점 → 목적점",
             }[tool] || "점을 순서대로 지정 · Esc 취소");
+        renderGuides();
         markup?.render(ctx,{paper:printing,background:canvasBackground,color:printing?undefined:displayColor});
         if(!printing)workflow?.renderOverlay(ctx,screen);
         ctx.restore();
@@ -470,7 +476,7 @@
     function setTool(t) {
         if (!doc || busy) return;
         cancelGesture();
-        tool = t;
+        tool = t;axisLock=null;shiftLock=null;inference=null;tapeEdge=null;referenceAngle=null;$('numeric-length').value='';
         canvas.style.cursor=t==='select'?'default':'crosshair';
         points = [];
         document
@@ -493,6 +499,7 @@
         render();
     }
     const cadToolArt={"select":"<path d=\"M5 3l14 10-7 1-3 7z\" fill=\"currentColor\"/>","line":"<path d=\"M4 20L20 4\"/><circle cx=\"4\" cy=\"20\" r=\"2\"/><circle cx=\"20\" cy=\"4\" r=\"2\"/>","polyline":"<path d=\"M3 18l6-12 6 12 6-12\"/><path d=\"M2 17h2v2H2zM8 5h2v2H8zM14 17h2v2h-2zM20 5h2v2h-2z\"/>","rectangle":"<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"1\"/>","circle":"<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M10 12h4m-2-2v4\"/>","arc":"<path d=\"M3 18a9 9 0 0 1 18 0\"/><circle cx=\"3\" cy=\"18\" r=\"1.5\"/><circle cx=\"21\" cy=\"18\" r=\"1.5\"/>","text":"<path d=\"M4 5h16M12 5v15m-4 0h8M4 5v3m16-3v3\"/>","dimension":"<path d=\"M3 4v16M21 4v16M3 12h18m-14-3-4 3 4 3m10-6 4 3-4 3\"/>","measure":"<path d=\"M3 17L17 3l4 4L7 21zM7 13l3 3m1-7 3 3m1-7 3 3\"/>","move":"<path d=\"M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4m12-8 4 4-4 4\"/>","copy":"<rect x=\"8\" y=\"8\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M16 8V3H3v13h5\"/>","rotate":"<path d=\"M4 9a8 8 0 1 1 0 7M4 3v6h6\"/>","scale":"<rect x=\"3\" y=\"13\" width=\"8\" height=\"8\"/><path d=\"M3 9V3h18v18h-6M11 13l10-10m-6 0h6v6\"/>","mirror":"<path d=\"M12 2v3m0 3v3m0 3v3m0 3v2M8 5L2 19h6zM16 5l6 14h-6z\"/>","delete":"<path d=\"M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7\"/>"};
+    cadToolArt.tape=cadToolArt.measure;
     Object.entries(labels).forEach(([k, l]) => {
         const b = document.createElement("button");
         b.innerHTML='<span class="cad-tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false">'+cadToolArt[k]+'</svg></span><span>'+l+'</span>';
@@ -519,8 +526,67 @@
             render();
         }
     }
+    let rawHover=null,tapeEdge=null,tapeMeasurement=null,axisLock=null,shiftLock=null,inference=null,referenceAngle=null,guidePanelKey='',edgeCache=null;
+    function numericSettings(){return {unit:unitSettings?.unit||'drawing',mmPerUnit:C.drawingUnit(doc)?.mmPerUnit||C.lengthUnits[$('source-unit').value]||doc?.workspace?.measurement?.metersPerUnit*1000||null};}
+    function sourceEdges(point){
+        const visibility=JSON.stringify(Object.entries(doc.layers).map(([name,layer])=>[name,layer.visible]));
+        if(edgeCache?.source!==doc||edgeCache.version!==aiVersion||edgeCache.visibility!==visibility){
+            const edges=[];let visited=0,limited=false;
+            const add=(p,q)=>{if(edges.length>=100000){limited=true;return;}if(p&&q&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(q.x)&&Number.isFinite(q.y))edges.push({p,q,minX:Math.min(p.x,q.x),maxX:Math.max(p.x,q.x),minY:Math.min(p.y,q.y),maxY:Math.max(p.y,q.y)});};
+            const collect=e=>{if(limited)return;if(++visited>200000){limited=true;return;}if(e.hidden||e.paper||doc.layers[e.layer]?.visible===false)return;if(e.type==='INSERT'&&e.renderParts){e.renderParts.forEach(collect);return;}if(e.type==='LINE'){const path=e.displayGeometry||[e.p,e.q];if(path.length===2)add(path[0],path[1]);}else if(['LWPOLYLINE','POLYLINE'].includes(e.type)&&!e.points?.some(p=>p.bulge)){const ps=e.displayGeometry||e.points||[];if(ps.length>100000){limited=true;return;}for(let i=1;i<ps.length;i++)add(ps[i-1],ps[i]);if(e.closed&&ps.length>2)add(ps.at(-1),ps[0]);}};
+            entities().forEach(collect);
+            if(limited){edgeCache={source:doc,version:aiVersion,visibility,edges:[],grid:new Map(),long:[],cell:1};status('줄자 기준선 검색 한도를 넘었습니다. 불필요한 레이어를 숨기고 다시 시도하세요.');return [];}
+            const bounds=edges.reduce((b,e)=>({minX:Math.min(b.minX,e.minX),maxX:Math.max(b.maxX,e.maxX),minY:Math.min(b.minY,e.minY),maxY:Math.max(b.maxY,e.maxY)}),{minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity}),cell=Math.max((Math.max(bounds.maxX-bounds.minX,bounds.maxY-bounds.minY)||64)/64,1e-6),grid=new Map(),long=[];let references=0;
+            edges.forEach((e,id)=>{const x0=Math.floor(e.minX/cell),x1=Math.floor(e.maxX/cell),y0=Math.floor(e.minY/cell),y1=Math.floor(e.maxY/cell);const cells=(x1-x0+1)*(y1-y0+1);if(cells>256||references+cells>500000){long.push(id);return;}references+=cells;for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const key=x+','+y;if(!grid.has(key))grid.set(key,[]);grid.get(key).push(id);}});
+            edgeCache={source:doc,version:aiVersion,visibility,edges,grid,long,cell};
+        }
+        if(!point)return edgeCache.edges;
+        const {edges,grid,long,cell}=edgeCache,tolerance=12/scale,x0=Math.floor((point.x-tolerance)/cell),x1=Math.floor((point.x+tolerance)/cell),y0=Math.floor((point.y-tolerance)/cell),y1=Math.floor((point.y+tolerance)/cell),ids=new Set(long);
+        if((x1-x0+1)*(y1-y0+1)>4096){for(let i=0;i<edges.length;i++)ids.add(i);}else for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)for(const id of grid.get(x+','+y)||[])ids.add(id);
+        return [...ids].map(id=>edges[id]).filter(e=>e.minX<=point.x+tolerance&&e.maxX>=point.x-tolerance&&e.minY<=point.y+tolerance&&e.maxY>=point.y-tolerance).map(e=>({...e,distance:C.segmentDistance(point,e.p,e.q)})).filter(e=>e.distance<tolerance).sort((a,b)=>a.distance-b.distance).slice(0,64);
+    }
+    function nearestTapeEdge(p){let edge=null,best=12/scale;for(const candidate of sourceEdges(p)){const d=C.segmentDistance(p,candidate.p,candidate.q);if(d<best&&C.distance(candidate.p,candidate.q)>1e-10){edge=candidate;best=d;}}return edge;}
+    function guides(){return doc?.workspace?.guides||[];}
+    function guideWritable(){return !!doc&&canAnnotate&&!busy&&!gesture;}
+    function addGuide(data){if(!guideWritable())throw Error('읽기 전용이거나 저장 중에는 안내선을 수정할 수 없습니다.');if(guides().length>=256)throw Error('안내선·안내점은 최대 256개입니다.');if(!Number.isFinite(data.p.x)||!Number.isFinite(data.p.y)||Math.abs(data.p.x)>1e9||Math.abs(data.p.y)>1e9)throw Error('안내 좌표 범위를 확인하세요.');snapshot();doc.workspace=doc.workspace||{};doc.workspace.guides=[...guides(),{id:C.uid(),...data}];doc.workspace.guidesVisible=true;points=[];tapeEdge=null;$('numeric-length').value='';render();status('안내를 추가했습니다. 저장하면 다음에 다시 사용할 수 있습니다.');}
+    function tapePoint(p){
+        const mode=$('tape-mode').value;
+        if(!points.length){if(mode==='parallel'){tapeEdge=nearestTapeEdge(p);if(!tapeEdge){status('기준이 될 직선 또는 직선 폴리선의 선분을 클릭하세요.');return;}const dx=tapeEdge.q.x-tapeEdge.p.x,dy=tapeEdge.q.y-tapeEdge.p.y,t=((p.x-tapeEdge.p.x)*dx+(p.y-tapeEdge.p.y)*dy)/(dx*dx+dy*dy);points=[{x:tapeEdge.p.x+t*dx,y:tapeEdge.p.y+t*dy}];}else points=[p];referenceAngle=nearestTapeEdge(p);referenceAngle=referenceAngle?Math.atan2(referenceAngle.q.y-referenceAngle.p.y,referenceAngle.q.x-referenceAngle.p.x)*180/Math.PI:null;hoverPoint=p;render();return;}
+        try{if(mode==='distance'){if(C.distance(points[0],p)<1e-10)throw Error('서로 다른 두 점을 지정하세요.');tapeMeasurement={p:points[0],q:p};points=[];render();return;}
+            if(mode==='point')addGuide({type:'point',p});
+            else {const d=C.distance(tapeEdge.p,tapeEdge.q),direction={x:(tapeEdge.q.x-tapeEdge.p.x)/d,y:(tapeEdge.q.y-tapeEdge.p.y)/d},normal={x:-direction.y,y:direction.x},offset=(p.x-tapeEdge.p.x)*normal.x+(p.y-tapeEdge.p.y)*normal.y;if(Math.abs(offset)<1e-10)throw Error('기준 선에서 떨어진 곳을 지정하세요.');addGuide({type:'line',p:{x:tapeEdge.p.x+normal.x*offset,y:tapeEdge.p.y+normal.y*offset},direction});}
+        }catch(error){status(error.message);}
+    }
+    function numericAnchor(){return gesture?.kind==='draw'?gesture.start:points.at(-1);}
+    function numericResult(){const a=numericAnchor();if(!a||!hoverPoint)throw Error('시작점을 클릭하고 마우스로 방향을 가리키세요.');if(tool==='tape'&&$('tape-mode').value==='parallel'){if(!tapeEdge)throw Error('기준 선을 먼저 클릭하세요.');const distance=C.parseLengthInput($('numeric-length').value,numericSettings()),d=C.distance(tapeEdge.p,tapeEdge.q),n={x:-(tapeEdge.q.y-tapeEdge.p.y)/d,y:(tapeEdge.q.x-tapeEdge.p.x)/d},side=(hoverPoint.x-a.x)*n.x+(hoverPoint.y-a.y)*n.y<0?-1:1;return {p:a,q:{x:a.x+n.x*distance*side,y:a.y+n.y*distance*side}};}return C.numericDrawing(tool,a,hoverPoint,$('numeric-length').value,numericSettings());}
+    function commitNumeric(){if(!doc||busy||!['line','polyline','rectangle','circle','tape'].includes(tool))return;try{const result=numericResult();if(tool==='tape')tapePoint(result.q);else{if(!canManage||doc.layers[$('layer').value]?.locked)throw Error('읽기 전용 또는 레이어 잠금입니다.');if(gesture)cancelGesture();if(!points.length)points=[result.p];point(result.q);}$('numeric-length').value='';canvas.focus();render();}catch(error){status(error.message);}}
+    function refreshGuideControls(){
+        if(!doc)return;const visible=doc.workspace?.guidesVisible!==false;
+        const mode=$('tape-mode').value,labels={line:['선 길이','1200mm 또는 1200mm<80'],polyline:['다음 선분 길이','1200mm · Enter로 다음 점'],rectangle:['사각형 폭,높이','1200mm,800mm · ,800mm'],circle:['원 반지름 / D 지름','250mm 또는 D500mm'],tape:mode==='parallel'?['안내선 간격','기준 선에서 300mm']:mode==='point'?['안내점 거리','500mm 또는 500mm<80']:['측정 거리','두 번째 점까지 길이']};
+        $('numeric-label').textContent=labels[tool]?.[0]||'길이 입력';$('numeric-length').placeholder=labels[tool]?.[1]||'그리기 도구를 선택하세요';$('numeric-length').disabled=busy||!labels[tool]||(tool!=='tape'&&!canManage);
+        const key=JSON.stringify([guides(),visible,canAnnotate,busy]);if(key!==guidePanelKey){guidePanelKey=key;$('guide-visible').checked=visible;$('guide-visible').disabled=!canAnnotate||busy;$('guide-clear').disabled=!canAnnotate||busy||!guides().length;$('guide-list').replaceChildren();for(const [i,g]of guides().entries()){const button=document.createElement('button');button.textContent=(g.type==='line'?'안내선 ':'안내점 ')+(i+1)+' 삭제';button.disabled=!canAnnotate||busy;button.onclick=()=>{if(!guideWritable())return;snapshot();doc.workspace.guides=guides().filter(item=>item.id!==g.id);render();};$('guide-list').append(button);}}
+        return visible;
+    }
+    function renderGuides(){
+        const visible=refreshGuideControls();if(!doc)return;
+        if(printing)return;ctx.save();ctx.strokeStyle='#eabf63';ctx.fillStyle='#eabf63';ctx.lineWidth=1;ctx.setLineDash([6,5]);
+        const line=(a,b)=>{const u=screen(a),v=screen(b);ctx.beginPath();ctx.moveTo(u.x,u.y);ctx.lineTo(v.x,v.y);ctx.stroke();};
+        if(visible)for(const g of guides()){if(g.type==='point'){const p=screen(g.p);ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.stroke();}else{const length=(canvas.clientWidth+canvas.clientHeight)/scale+Math.hypot(g.p.x-(canvas.clientWidth/2-origin.x)/scale,g.p.y-(origin.y-canvas.clientHeight/2)/scale);line({x:g.p.x-g.direction.x*length,y:g.p.y-g.direction.y*length},{x:g.p.x+g.direction.x*length,y:g.p.y+g.direction.y*length});}}
+        const a=numericAnchor();let cursor=hoverPoint,viewInference=inference;if($('numeric-length').value&&a)try{cursor=numericResult().q;if($('numeric-length').value.includes('<'))viewInference={angle:Math.atan2(cursor.y-a.y,cursor.x-a.x)*180/Math.PI,kind:'angle'};}catch(_){}
+        if(tool==='tape'){let m=points.length&&cursor?{p:points[0],q:cursor}:tapeMeasurement;if(m&&points.length&&tapeEdge&&$('tape-mode').value==='parallel'){const d=C.distance(tapeEdge.p,tapeEdge.q),n={x:-(tapeEdge.q.y-tapeEdge.p.y)/d,y:(tapeEdge.q.x-tapeEdge.p.x)/d},offset=(cursor.x-points[0].x)*n.x+(cursor.y-points[0].y)*n.y;m={p:points[0],q:{x:points[0].x+n.x*offset,y:points[0].y+n.y*offset}};}if(m){line(m.p,m.q);$('tape-readout').textContent='거리 '+C.formatLength(C.distance(m.p,m.q),unitSettings)+(unitSettings?'':' 도면 단위')+(viewInference?' · '+viewInference.angle.toFixed(1)+'°':'');}else{const edge=hoverPoint&&nearestTapeEdge(hoverPoint);$('tape-readout').textContent=edge?'선 길이 '+C.formatLength(C.distance(edge.p,edge.q),unitSettings):'시작점 또는 기준 선을 클릭하세요.';}}
+        else $('tape-readout').textContent=viewInference?'방향 '+viewInference.angle.toFixed(1)+'° · '+({x:'X 가로',y:'Y 세로',parallel:'기준선 평행',perpendicular:'기준선 직각',locked:'방향 잠금',angle:'각도 간격'}[viewInference.kind]||'자유'):'';
+        if(a&&cursor&&['line','polyline','rectangle','circle','tape'].includes(tool)){ctx.strokeStyle=viewInference&&(viewInference.kind==='x'||viewInference.kind==='locked'&&Math.abs(viewInference.angle%180)<1e-8)?'#ff7777':viewInference&&(viewInference.kind==='y'||viewInference.kind==='locked'&&Math.abs(Math.abs(viewInference.angle%180)-90)<1e-8)?'#6fe3a1':'#80bfff';if(viewInference){const angle=viewInference.angle*Math.PI/180,L=(canvas.clientWidth+canvas.clientHeight)/scale;ctx.globalAlpha=.45;line({x:a.x-Math.cos(angle)*L,y:a.y-Math.sin(angle)*L},{x:a.x+Math.cos(angle)*L,y:a.y+Math.sin(angle)*L});ctx.globalAlpha=1;}if(tool==='tape'&&tapeEdge&&$('tape-mode').value==='parallel'){const d=C.distance(tapeEdge.p,tapeEdge.q),u={x:(tapeEdge.q.x-tapeEdge.p.x)/d,y:(tapeEdge.q.y-tapeEdge.p.y)/d},n={x:-u.y,y:u.x},offset=(cursor.x-a.x)*n.x+(cursor.y-a.y)*n.y,p={x:a.x+n.x*offset,y:a.y+n.y*offset},L=(canvas.clientWidth+canvas.clientHeight)/scale;line({x:p.x-u.x*L,y:p.y-u.y*L},{x:p.x+u.x*L,y:p.y+u.y*L});}if(tool==='circle'){const p=screen(a);ctx.beginPath();ctx.arc(p.x,p.y,C.distance(a,cursor)*scale,0,Math.PI*2);ctx.stroke();}else if(tool==='rectangle'){line(a,{x:cursor.x,y:a.y});line({x:cursor.x,y:a.y},cursor);line(cursor,{x:a.x,y:cursor.y});line({x:a.x,y:cursor.y},a);}else line(a,cursor);}
+        ctx.restore();
+    }
+    $('numeric-length').addEventListener('input',()=>render());
+    $('numeric-length').addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Enter'){e.preventDefault();e.stopPropagation();commitNumeric();}else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();$('numeric-length').value='';points=[];tapeEdge=null;cancelGesture();setTool('select');canvas.focus();}else if((e.ctrlKey||e.metaKey)&&['z','y'].includes(e.key.toLowerCase())){e.preventDefault();e.stopPropagation();$('numeric-length').value='';$(e.key.toLowerCase()==='y'||e.shiftKey?'redo':'undo').click();canvas.focus();}});
+    $('tape-mode').onchange=()=>{points=[];tapeEdge=null;tapeMeasurement=null;$('numeric-length').value='';render();};
+    $('guide-visible').onchange=()=>{if(!guideWritable())return;snapshot();doc.workspace=doc.workspace||{};doc.workspace.guidesVisible=$('guide-visible').checked;render();};
+    $('guide-clear').onclick=()=>{if(!guideWritable()||!guides().length)return;snapshot();doc.workspace.guides=[];render();};
+    $('tape-calibration').onclick=()=>{document.querySelector('.mode-switch [data-workspace="markup"]').click();const panel=$('markup-workbench');if(panel){const details=[...panel.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes('단위'));if(details){details.open=true;details.scrollIntoView({block:'center'});}}status('이 설정은 표시의 면적·길이 환산 기준입니다. 원본 CAD 크기는 바뀌지 않습니다.');};
     function point(p, shift = false) {
         if (!doc || busy || gesture) return;
+        if(tool==='tape'){tapePoint(p);return;}
         if (tool === "select") {
             const hit=hitEntity(p);
             if(!shift)selected.clear();
@@ -550,7 +616,7 @@
             status("선택 도구로 객체를 먼저 선택하세요.");
             return;
         }
-        points.push(p);
+        points.push(p);hoverPoint=p;
         const needed = {
             line: 2,
             rectangle: 2,
@@ -623,6 +689,7 @@
         if(e.button===1||e.button===2){e.preventDefault();canvas.style.cursor='grabbing';pan={pointerId:e.pointerId,x:e.clientX,y:e.clientY,ox:origin.x,oy:origin.y};canvas.setPointerCapture(e.pointerId);return;}
         if(e.button!==0||!doc||busy||$('text-dialog').open)return;
         const p=world(e);
+        if(!points.length){const edge=nearestTapeEdge(p);referenceAngle=edge?Math.atan2(edge.q.y-edge.p.y,edge.q.x-edge.p.x)*180/Math.PI:null;}
         if(tool==='select'){
             const grip=!e.shiftKey&&gripAt(p),hit=grip?.entity||hitEntity(p);
             if(!grip){if(e.shiftKey){if(hit){selected.has(hit.id)?selected.delete(hit.id):selected.add(hit.id);}render();return;}
@@ -637,9 +704,9 @@
     };
     canvas.onpointermove=e=>{
         if(pan&&pan.pointerId===e.pointerId){origin={x:pan.ox+e.clientX-pan.x,y:pan.oy+e.clientY-pan.y};render();return;}
-        const excluded=new Set(gesture?.originals?.map(e=>e.id)||[]),p=snap(world(e),excluded);hoverPoint=p;
+        rawHover=world(e);const excluded=new Set(gesture?.originals?.map(e=>e.id)||[]),p=snap({...rawHover},excluded);hoverPoint=p;
         $('x').value=displayLength(p.x);$('y').value=displayLength(p.y);
-        if(!gesture||gesture.pointerId!==e.pointerId){if(['measure','dimension'].includes(tool))render();canvas.style.cursor=tool==='select'?(gripAt(world(e))?'nwse-resize':'default'):'crosshair';return;}
+        if(!gesture||gesture.pointerId!==e.pointerId){if(['measure','dimension','tape','line','polyline','rectangle','circle'].includes(tool))render();canvas.style.cursor=tool==='select'?(gripAt(world(e))?'nwse-resize':'default'):'crosshair';return;}
         if((!canManage&&!gesture.originals?.every(e=>e.transient))||busy){cancelGesture();return;}
         if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)<4&&!gesture.moved)return;
         gesture.moved=true;gesture.end=p;canvas.style.cursor=gesture.kind==='move'?'move':gesture.kind==='resize'?'nwse-resize':'crosshair';
@@ -665,7 +732,7 @@
     };
     canvas.onpointercancel=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
     canvas.onlostpointercapture=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
-    canvas.onpointerleave=()=>{if(!gesture){snapMark=null;hoverPoint=null;render();}};
+    canvas.onpointerleave=()=>{if(!gesture){snapMark=null;if(!numericAnchor())hoverPoint=null;render();}};
     canvas.ondblclick=e=>{if(tool!=='select'||busy||gesture)return;const hit=hitEntity(world(e));if(hit&&['TEXT','MTEXT'].includes(hit.type))openTextEditor(hit);};
     canvas.oncontextmenu = (e) => e.preventDefault();
     canvas.addEventListener(
@@ -785,7 +852,7 @@
         if(j.reference){await window.CADReference.load(j.reference);parsed.reference=C.clone(j.reference);}
         if(activeIO?.token!==token)return;
         if(aiSession)stopAISharing(true,'도면을 다시 열어 공유를 중지했습니다.');
-        doc = parsed;aiVersion++;aiHashCache=null;
+        doc = parsed;aiVersion++;aiHashCache=null;edgeCache=null;tapeMeasurement=null;tapeEdge=null;axisLock=null;inference=null;
         doc.markups = C.clone(j.markups || []);
         doc.workspace = C.clone(j.workspace || {});
         cadBaseline = C.exportDXF(parsed);
@@ -1072,9 +1139,17 @@
     ["grid", "spacing", "ortho", "snap"].forEach(
         (id) => ($(id).onchange = render),
     );
+    document.addEventListener('keyup',e=>{if(e.key==='Shift'){shiftLock=null;if(rawHover){hoverPoint=snap({...rawHover});if(gesture?.kind==='draw')gesture.end=hoverPoint;render();}}});
     document.addEventListener("keydown", (e) => {
         if($('text-dialog').open){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s')e.preventDefault();if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();commitText();}return;}
 
+        if(e.isComposing||document.querySelector('dialog[open]'))return;
+        const editing=['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName);
+        if(!editing&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+            if(e.key.toLowerCase()==='t'&&!points.length&&!gesture){e.preventDefault();document.querySelector('.mode-switch [data-workspace="cad"]').click();setTool('tape');return;}
+            if(['line','polyline','tape'].includes(tool)&&['ArrowRight','ArrowLeft','ArrowUp','ArrowDown','Shift'].includes(e.key)){e.preventDefault();if(e.key==='ArrowRight')axisLock=0;else if(['ArrowLeft','ArrowUp'].includes(e.key))axisLock=90;else if(e.key==='ArrowDown'){axisLock=null;shiftLock=null;}else if(numericAnchor()&&hoverPoint)shiftLock=inference?.angle??Math.atan2(hoverPoint.y-numericAnchor().y,hoverPoint.x-numericAnchor().x)*180/Math.PI;if(rawHover){hoverPoint=snap({...rawHover});if(gesture?.kind==='draw')gesture.end=hoverPoint;render();}status(axisLock===0?'X 방향 잠금 · 빨강':axisLock===90?'Y 방향 잠금 · 초록':'방향 잠금 갱신');return;}
+            if(['line','polyline','rectangle','circle','tape'].includes(tool)&&numericAnchor()&&e.key.length===1&&/^[0-9.d]$/i.test(e.key)){e.preventDefault();$('numeric-length').value=e.key;$('numeric-length').focus();render();return;}
+        }
         if(e.key==='Escape'&&gesture){e.preventDefault();cancelGesture();setTool('select');return;}
         if(gesture)return;
         if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) && !((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s")) return;

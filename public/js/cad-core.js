@@ -1206,7 +1206,41 @@
         }
     }
 
+    function parseLengthInput(text, settings = {}) {
+        const value=String(text).trim().toLowerCase();
+        const number=token=>{const m=token.trim().match(/^(?:(\d+)\s+)?(\d+)\/(\d+)$|^(\d+(?:\.\d*)?|\.\d+)$/);if(!m)throw Error('길이는 숫자·소수 또는 분수로 입력하세요.');const n=m[4]!==undefined?Number(m[4]):Number(m[1]||0)+Number(m[2])/Number(m[3]);if(!Number.isFinite(n)||n<0)throw Error('길이는 0 이상이어야 합니다.');return n;};
+        let physical=null,n;
+        const feet=value.match(/^(.+?)\s*(?:'|ft)\s*(?:(.+?)\s*(?:"|in))?$/);
+        if(feet){n=number(feet[1])*304.8;if(feet[2])n+=number(feet[2])*25.4;physical=n;}
+        else {const m=value.match(/^(.*?)\s*(mm|cm|m|in|ft|"|')$/);if(m)physical=number(m[1])*lengthUnits[m[2]==='"'?'in':m[2]==="'"?'ft':m[2]];else n=number(value);}
+        const basis=settings.mmPerUnit;
+        if(physical!==null){if(!Number.isFinite(basis)||basis<=0)throw Error('mm·inch 등을 입력하려면 원본 도면의 기준 단위를 먼저 지정하세요.');n=physical/basis;}
+        else if(settings.unit&&settings.unit!=='drawing'){if(!Number.isFinite(basis)||basis<=0)throw Error('원본 도면의 기준 단위를 먼저 지정하세요.');n=n*lengthUnits[settings.unit==='ft-in'?'ft':settings.unit]/basis;}
+        if(!Number.isFinite(n)||n<=0||n>1e9)throw Error('길이는 0보다 크고 10억 도면 단위 이하여야 합니다.');return n;
+    }
+    function pointAtLength(a,cursor,length){const dx=cursor.x-a.x,dy=cursor.y-a.y,d=Math.hypot(dx,dy);if(!Number.isFinite(d)||d<1e-12)throw Error('마우스로 길이 방향을 먼저 지정하세요.');const p={x:a.x+dx/d*length,y:a.y+dy/d*length};if(!Number.isFinite(length)||length<=0||Math.abs(p.x)>1e9||Math.abs(p.y)>1e9)throw Error('좌표·길이 범위를 확인하세요.');return p;}
+    function numericDrawing(tool,a,cursor,text,settings={}){
+        if(tool==='rectangle'){const parts=String(text).split(',');if(parts.length!==2||parts.every(part=>!part.trim()))throw Error('사각형은 폭,높이를 입력하세요. 예: 1200mm,800mm');const w=parts[0].trim()?parseLengthInput(parts[0],settings):Math.abs(cursor.x-a.x),h=parts[1].trim()?parseLengthInput(parts[1],settings):Math.abs(cursor.y-a.y),q={x:a.x+(cursor.x<a.x?-w:w),y:a.y+(cursor.y<a.y?-h:h)};if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0||Math.abs(q.x)>1e9||Math.abs(q.y)>1e9)throw Error('폭·높이·좌표 범위를 확인하세요.');return {p:a,q};}
+        const polar=String(text).split('<');if(polar.length>2)throw Error('각도는 길이<80 형식으로 입력하세요.');if(polar.length===2){const angle=Number(polar[1].replace(/°|deg/gi,'').trim());if(!Number.isFinite(angle)||!polar[1].trim())throw Error('각도를 확인하세요.');cursor={x:a.x+Math.cos(angle*Math.PI/180),y:a.y+Math.sin(angle*Math.PI/180)};text=polar[0];}
+        const diameter=tool==='circle'&&/^d\s*/i.test(text),length=parseLengthInput(diameter?String(text).replace(/^d\s*/i,''):text,settings);
+        return {p:a,q:pointAtLength(a,cursor,length/(diameter?2:1)),length:length/(diameter?2:1)};
+    }
+    function inferDirection(a,p,options={}) {
+        const dx=p.x-a.x,dy=p.y-a.y,length=Math.hypot(dx,dy);if(!length)return {point:{...p},angle:0,kind:null};
+        const angle=Math.atan2(dy,dx)*180/Math.PI,wrap=x=>((x+180)%360+360)%360-180;
+        let target=options.lock,kind=target===undefined||target===null?null:'locked';
+        if(kind===null&&options.enabled!==false){const candidates=[{angle:Math.round(angle/180)*180,kind:'x'},{angle:90+Math.round((angle-90)/180)*180,kind:'y'}];if(options.reference!==undefined&&options.reference!==null){candidates.push({angle:options.reference+Math.round((angle-options.reference)/180)*180,kind:'parallel'},{angle:options.reference+90+Math.round((angle-options.reference-90)/180)*180,kind:'perpendicular'});}if(options.step>0)candidates.push({angle:Math.round(angle/options.step)*options.step,kind:'angle'});const hit=candidates.find(c=>Math.abs(wrap(angle-c.angle))<=(options.thresholdDeg??3));if(hit){target=hit.angle;kind=hit.kind;}}
+        if(!kind)return {point:{...p},angle,kind:null};const r=target*Math.PI/180,t=dx*Math.cos(r)+dy*Math.sin(r);return {point:{x:a.x+Math.cos(r)*t,y:a.y+Math.sin(r)*t},angle:target,kind};
+    }
+    function guideSnap(p,guides,tolerance,edges=[]){
+        let result=null,best=tolerance,priority=-1;const lines=guides.filter(g=>g.type==='line'),offer=(q,kind)=>{const d=distance(p,q),rank=kind==='guide-projection'?0:1;if(d<tolerance&&(rank>priority||rank===priority&&d<best)){priority=rank;best=d;result={...q,kind};}};
+        for(const guide of guides){if(guide.type==='point')offer(guide.p,'guide-point');else{const u=guide.direction,t=(p.x-guide.p.x)*u.x+(p.y-guide.p.y)*u.y;offer({x:guide.p.x+u.x*t,y:guide.p.y+u.y*t},'guide-projection');}}
+        const intersect=(a,u,b,v,segment=false)=>{const den=u.x*v.y-u.y*v.x;if(Math.abs(den)<1e-12)return;const dx=b.x-a.x,dy=b.y-a.y,t=(dx*v.y-dy*v.x)/den,k=(dx*u.y-dy*u.x)/den;if(segment&&(k<0||k>1))return;offer({x:a.x+u.x*t,y:a.y+u.y*t},'guide-intersection');};
+        for(let i=0;i<lines.length;i++){for(let j=i+1;j<lines.length;j++)intersect(lines[i].p,lines[i].direction,lines[j].p,lines[j].direction);for(const edge of edges.slice(0,64))intersect(lines[i].p,lines[i].direction,edge.p,{x:edge.q.x-edge.p.x,y:edge.q.y-edge.p.y},true);}
+        return result;
+    }
     g.CADCore = {
+        parseLengthInput, pointAtLength, numericDrawing, guideSnap, inferDirection,
         canvasColor,
         renderEntities,
         quantities, aiGeometry, aiContext, applyAIActions, utf8Size,

@@ -64,7 +64,8 @@ const point = (actual, x, y) => { near(actual.x, x); near(actual.y, y); };
 
         const originalRaw=entities().map(e=>e.raw);
         await expect(page.locator('#source-unit-control')).toBeHidden();
-        await expect(page.locator('#tool-buttons svg')).toHaveCount(15);
+        await expect(page.locator('#tool-buttons svg')).toHaveCount(16);
+        await expect(page.locator('[data-tool="tape"] svg')).toHaveCount(1);
         for(const name of ['line','polyline','dimension','measure','rotate','delete']){
             await expect(page.locator('[data-tool="'+name+'"]')).toHaveAttribute('aria-label',/.+/);
         }

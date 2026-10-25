@@ -15,7 +15,18 @@ class CadWorkspaceValidator
             throw ValidationException::withMessages(['workspace' => '작업 설정의 최대 크기는 100KB입니다.']);
         }
         $rules = [
-            'workspace' => 'present|array:measurement,layers,views,underlay',
+            'workspace' => 'present|array:measurement,layers,views,underlay,guides,guidesVisible',
+            'workspace.guidesVisible' => 'sometimes|boolean',
+            'workspace.guides' => 'sometimes|array|max:256',
+            'workspace.guides.*' => 'required|array:id,type,p,direction',
+            'workspace.guides.*.id' => ['required', 'string', 'max:80', 'distinct:strict', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'workspace.guides.*.type' => ['required', Rule::in(['line', 'point'])],
+            'workspace.guides.*.p' => 'required|array:x,y',
+            'workspace.guides.*.p.x' => 'required|numeric|between:-1000000000,1000000000',
+            'workspace.guides.*.p.y' => 'required|numeric|between:-1000000000,1000000000',
+            'workspace.guides.*.direction' => 'sometimes|array:x,y',
+            'workspace.guides.*.direction.x' => 'required_with:workspace.guides.*.direction|numeric|between:-1,1',
+            'workspace.guides.*.direction.y' => 'required_with:workspace.guides.*.direction|numeric|between:-1,1',
             'workspace.measurement' => 'sometimes|nullable|array:metersPerUnit,unit,source,points,distance',
             'workspace.measurement.metersPerUnit' => 'required_with:workspace.measurement|numeric|gt:0|max:1000000',
             'workspace.measurement.unit' => ['required_with:workspace.measurement', Rule::in(['mm', 'cm', 'm', 'in', 'ft'])],
@@ -47,12 +58,32 @@ class CadWorkspaceValidator
             'workspace.underlay.grayscale' => 'required_with:workspace.underlay|boolean',
         ];
         $result = Validator::make(['workspace' => $workspace], $rules)->validate()['workspace'];
-        foreach (['layers', 'views'] as $key) {
+        foreach (['layers', 'views', 'guides'] as $key) {
             if (isset($result[$key]) && ! array_is_list($result[$key])) {
-                throw ValidationException::withMessages(['workspace' => '레이어와 보기는 목록이어야 합니다.']);
+                throw ValidationException::withMessages(['workspace' => '레이어, 보기, 보조선·기준점은 목록이어야 합니다.']);
             }
         }
         $measurement = $result['measurement'] ?? null;
+        // Guides belong to the revision workspace, never to exported CAD entities or takeoff quantities.
+        foreach ($result['guides'] ?? [] as $index => $guide) {
+            $result['guides'][$index]['p'] = array_map('floatval', $guide['p']);
+            if ($guide['type'] === 'point') {
+                if (array_key_exists('direction', $guide)) {
+                    throw ValidationException::withMessages(["workspace.guides.$index.direction" => '기준점에는 방향을 지정할 수 없습니다.']);
+                }
+
+                continue;
+            }
+            $direction = $guide['direction'] ?? [];
+            $length = hypot((float) ($direction['x'] ?? 0), (float) ($direction['y'] ?? 0));
+            if (! is_finite($length) || abs($length - 1) > 1e-7) {
+                throw ValidationException::withMessages(["workspace.guides.$index.direction" => '보조선 방향은 길이가 1인 벡터여야 합니다.']);
+            }
+            $result['guides'][$index]['direction'] = ['x' => (float) $direction['x'] / $length, 'y' => (float) $direction['y'] / $length];
+        }
+        if (array_key_exists('guidesVisible', $result)) {
+            $result['guidesVisible'] = (bool) $result['guidesVisible'];
+        }
         foreach ($result['layers'] ?? [] as $index => $layer) {
             $result['layers'][$index]['visible'] = (bool) $layer['visible'];
             $result['layers'][$index]['locked'] = (bool) $layer['locked'];
