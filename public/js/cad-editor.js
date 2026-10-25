@@ -251,6 +251,13 @@
         redo = [];
         mark();
     }
+    function selectionFor(operation){
+        const all=[...doc.entities,...measurements].filter(e=>selected.has(e.id));
+        if(!all.length)throw Error('객체를 선택하세요.');
+        const blocked=all.filter(e=>!e.transient&&(!canManage||!editable(e)||!C.allows(e,operation)||e.hidden||e.paper||doc.layers[e.layer]?.visible===false));
+        if(blocked.length)throw Error('선택한 '+all.length+'개 중 '+blocked.length+'개는 이 작업을 지원하지 않거나 잠겨 있습니다. 아무 객체도 변경하지 않았습니다. 지원 객체만 다시 선택하세요.');
+        return all;
+    }
     function editable(e) {
         if(e?.transient)return true;
         return e.editable && !doc.layers[e.layer]?.locked;
@@ -297,24 +304,22 @@
         const es=doc?doc.entities.filter(e=>selected.has(e.id)):[],first=es[0];
         const key=JSON.stringify([canManage,busy,...es.map(e=>[e.id,e.color,e.aci,e.lineWeight,e.lineType,e.text,e.height,e.angle,doc.layers[e.layer]?.locked,doc.layers[e.layer]?.color,doc.layers[e.layer]?.lineWeight])]);
         if(key===inspectorKey)return;inspectorKey=key;styleEdits.clear();textEdits.clear();
-        $('selection-properties').textContent=first?(es.length===1?(first.type==='ERP_DIMENSION'?'거리 치수':first.type)+' · '+(editable(first)?'드래그 이동 / 손잡이 크기조절':'읽기 전용 또는 레이어 잠금'):es.length+'개 선택 · 첫 객체의 속성 표시'):'객체를 선택하면 속성이 표시됩니다. 새 객체 기본값은 왼쪽에서 설정하세요.';
+        $('selection-properties').textContent=first?(es.length===1?(first.type==='ERP_DIMENSION'?'거리 치수':first.type)+' · '+(editable(first)?(first.editReason||'2D 편집 가능')+' · 지원: '+(first.operations||['move','copy','rotate','scale','resize','style']).map(op=>({move:'이동',copy:'복사',rotate:'회전',scale:'배율',mirror:'대칭',resize:'손잡이',style:'속성',text:'문자',delete:'삭제',layer:'레이어'}[op]||op)).join(' / '):'읽기 전용 또는 레이어 잠금'):es.length+'개 선택 · 첫 객체의 속성 표시'):'객체를 선택하면 속성이 표시됩니다. 새 객체 기본값은 왼쪽에서 설정하세요.';
         if(first){$('entity-color').value=entityColor(first);$('entity-width').value=first.lineWeight>=0?first.lineWeight/100:(first.lineWeight??-1);$('entity-linetype').value=first.lineType||'BYLAYER';}
         const text=es.find(e=>e.type==='TEXT'||e.type==='MTEXT');
-        $('edit-text-dialog').disabled=!text||busy;
+        $('edit-text-dialog').disabled=!text||busy||es.length!==1;
         if(text){$('text').value=text.text;$('height').value=displayLength(text.height);$('text-color').value=entityColor(text);}
-        $('text-properties').disabled=!text||!canManage||busy||!es.some(e=>['TEXT','MTEXT'].includes(e.type)&&editable(e));
-        const shapeEnabled=canManage&&!busy&&es.some(e=>!['TEXT','MTEXT'].includes(e.type)&&editable(e));
+        $('text-properties').disabled=!text||!canManage||busy||!es.every(e=>['TEXT','MTEXT'].includes(e.type)&&editable(e)&&C.allows(e,'text'));
+        const shapeEnabled=canManage&&!busy&&es.length>0&&es.every(e=>!['TEXT','MTEXT'].includes(e.type)&&editable(e)&&C.allows(e,'style'));
         $('apply-style').disabled=!shapeEnabled;
         for(const id of ['entity-color','entity-width','entity-linetype'])$(id).disabled=!shapeEnabled;
     }
     function hitEntity(p){
         for(const e of [...entities(),...measurements].slice().reverse()){
             if(e.type==='ERP_DIMENSION'){for(const part of C.dimensionParts(e)){if(part.type==='LINE'&&C.segmentDistance(p,part.p,part.q)<=10/scale)return e;if(part.type==='TEXT'&&C.geometry(part).some(q=>C.distance(p,q)<=10/scale))return e;}continue;}
-            if(['TEXT','MTEXT'].includes(e.type)){
-                const box=C.textBox(e),dx=p.x-e.p.x,dy=p.y-e.p.y,x=dx*box.u.x+dy*box.u.y,y=dx*box.v.x+dy*box.v.y;
-                if(x>=-5/scale&&x<=box.width+5/scale&&y>=(e.type==='MTEXT'?-box.height:-e.height*.2)-5/scale&&y<=(e.type==='MTEXT'?0:e.height)+5/scale)return e;
-            }
+            if(['TEXT','MTEXT'].includes(e.type)){const box=C.textBox(e).points;if(window.CADMarkup.inside(p,box)||box.some((q,i)=>C.segmentDistance(p,q,box[(i+1)%box.length])<=5/scale))return e;continue;}
             if(C.contains(e,p))return e;
+            if(e.type==='INSERT'){const paths=e.renderParts?.map(C.geometry)||e.preview||[];if(paths.some(path=>path.some((q,i)=>i>0&&C.segmentDistance(p,path[i-1],q)<=10/scale)))return e;continue;}
             const ps=C.geometry(e);if(ps.length===1&&C.distance(p,ps[0])<=10/scale)return e;
             for(let i=1;i<ps.length;i++)if(C.segmentDistance(p,ps[i-1],ps[i])<=10/scale)return e;
         }return null;
@@ -483,6 +488,7 @@
             .querySelectorAll("[data-tool]")
             .forEach((b) => {b.classList.toggle("active", b.dataset.tool === t);b.setAttribute("aria-pressed",String(b.dataset.tool===t));});
         if (t === "delete") {
+            try{selectionFor('delete');}catch(error){status(error.message);tool='select';render();return;}
             measurements=measurements.filter(e=>!selected.has(e.id));
             if (!canManage){selected.clear();tool='select';render();return;}
             const ids = doc.entities
@@ -636,6 +642,7 @@
         const angle=Number($('angle').value),factor=Number($('factor').value);
         if((tool==='rotate'&&!Number.isFinite(angle))||(tool==='scale'&&(!Number.isFinite(factor)||factor<=0))){points=[];status('각도·배율 값을 확인하세요.');render();return;}
         if(['line','rectangle'].includes(tool)&&(C.distance(a,b)<1e-10||(tool==='rectangle'&&(Math.abs(a.x-b.x)<1e-10||Math.abs(a.y-b.y)<1e-10)))){points=[];status('길이·폭·높이는 0보다 커야 합니다.');render();return;}
+        if(['move','copy','rotate','scale','mirror'].includes(tool)){try{selectionFor(tool);}catch(error){points=[];status(error.message);render();return;}}
         snapshot();
         if (tool === "line") add("LINE", { p: a, q: b });
         if (tool === "rectangle")
@@ -695,7 +702,8 @@
             if(!grip){if(e.shiftKey){if(hit){selected.has(hit.id)?selected.delete(hit.id):selected.add(hit.id);}render();return;}
                 if(!hit||!selected.has(hit.id))selected.clear();if(hit)selected.add(hit.id);}
             render();if(!hit||(!canManage&&!hit.transient)||!editable(hit))return;
-            gesture={kind:grip?'resize':'move',key:grip?.key,entity:hit,start:p,end:p,pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false,originals:grip?[C.clone(hit)]:[...doc.entities,...measurements].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient)).map(C.clone),preview:new Map()};
+            try{selectionFor(grip?'resize':'move');}catch(error){status(error.message);return;}
+            gesture={kind:grip?'resize':'move',key:grip?.key,entity:hit,start:p,end:p,pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false,originals:grip?[hit]:[...doc.entities,...measurements].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient)),preview:new Map()};
         }else if(['line','rectangle','text'].includes(tool)&&!points.length){
             if(!canManage||doc.layers[$('layer').value]?.locked){status('읽기 전용 또는 작업 레이어 잠금입니다.');return;}
             gesture={kind:'draw',tool,start:snap(p),end:snap(p),pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false};
@@ -733,7 +741,7 @@
     canvas.onpointercancel=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
     canvas.onlostpointercapture=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
     canvas.onpointerleave=()=>{if(!gesture){snapMark=null;if(!numericAnchor())hoverPoint=null;render();}};
-    canvas.ondblclick=e=>{if(tool!=='select'||busy||gesture)return;const hit=hitEntity(world(e));if(hit&&['TEXT','MTEXT'].includes(hit.type))openTextEditor(hit);};
+    canvas.ondblclick=e=>{if(tool!=='select'||busy||gesture)return;const hit=hitEntity(world(e));if(hit&&['TEXT','MTEXT'].includes(hit.type)){selected=new Set([hit.id]);openTextEditor(hit);}};
     canvas.oncontextmenu = (e) => e.preventDefault();
     canvas.addEventListener(
         "wheel",
@@ -1100,6 +1108,7 @@
     };
     $("apply-text").onclick = () => {
         if (!canManage || !doc || busy || gesture) return;
+        let selectedText;try{selectedText=selectionFor('text');if(selectedText.some(e=>!['TEXT','MTEXT'].includes(e.type)))throw Error('문자만 선택하세요. 다른 객체는 변경하지 않았습니다.');}catch(error){status(error.message);return;}
         const es = doc.entities.filter(
                 (e) =>
                     selected.has(e.id) &&
@@ -1184,10 +1193,10 @@
                   .filter((e) => e && editable(e))
             : [];
     }
-    function operation(fn) {
+    function operation(fn,kind='style') {
         if (!doc || !canManage || busy || gesture) return;
         try {
-            const es = chosen();
+            const es = selectionFor(kind);
             if (!es.length) throw Error("편집 가능한 객체를 선택하세요.");
             const result = fn(es);
             snapshot();
@@ -1203,7 +1212,7 @@
                 C.offset(e, lengthValue('offset-distance')),
             );
             return () => doc.entities.push(...added);
-        });
+        },'copy');
     for (const kind of ["trim", "extend"])
         $(kind).onclick = () =>
             operation((es) => {
@@ -1220,7 +1229,7 @@
                         doc.entities.findIndex((e) => e.id === es[0].id)
                     ] = n;
                 };
-            });
+            },'resize');
     $("array").onclick = () =>
         operation((es) => {
             const added = C.array(
@@ -1231,7 +1240,7 @@
                 lengthValue('array-y'),
             );
             return () => doc.entities.push(...added);
-        });
+        },'copy');
     $("assign-layer").onclick = () =>
         operation(
             (es) => () =>
@@ -1239,10 +1248,12 @@
                     e.layer = $("layer").value;
                     e.dirty = true;
                 }),
+            'layer',
         );
     $("apply-style").onclick = () =>
         operation((selectedEntities) => {
-            const es=selectedEntities.filter(e=>!['TEXT','MTEXT'].includes(e.type));
+            if(selectedEntities.some(e=>['TEXT','MTEXT'].includes(e.type)))throw Error('선·도형 속성은 문자와 혼합 적용할 수 없습니다. 문자를 제외하고 다시 선택하세요.');
+            const es=selectedEntities;
             if(!es.length)throw Error('선 또는 도형을 선택하세요.');
             if(!styleEdits.size)throw Error("선·도형의 색 또는 굵기를 먼저 변경하세요.");
             const w = Number($("entity-width").value);
