@@ -304,3 +304,7 @@ body[data-workspace=markup] .cad-only,body[data-workspace=cad] .markup-only {dis
 
 #source-unit-control[hidden] {display:none;}
 @media(max-width:720px){#tool-buttons button{font-size:10px;padding-inline:1px;}#tool-buttons button>span:last-child{word-break:keep-all;}}
+
+#tape-panel{border-top:1px solid #38506a;margin:12px 0;padding-top:10px;}#numeric-length{width:100%;box-sizing:border-box;}#tape-readout{display:block;float:none;color:#fde68a;white-space:normal;font-size:12px;min-height:1.5em;}#guide-list{display:grid;gap:4px;max-height:150px;overflow:auto;}#guide-list button{font-size:11px;white-space:normal;word-break:break-word;}#tape-panel input[type=checkbox]{width:auto;}
+
+#measurement-hud{position:absolute;right:12px;bottom:72px;z-index:3;width:min(310px,calc(100% - 24px));box-sizing:border-box;border:1px solid #5d7998;border-radius:8px;background:#142033ed;padding:8px 10px;box-shadow:0 4px 18px #0005;}#measurement-hud label{display:block;font-size:11px;margin:4px 0 0;color:#c4d4e8;}#measurement-hud #numeric-length{display:block;margin-top:4px;min-width:0;padding:7px;font-size:14px;}@media(max-width:720px){#measurement-hud{bottom:82px;right:7px;width:calc(100% - 14px);padding:6px;}#measurement-hud #tape-readout{font-size:10px;}#measurement-hud #numeric-length{font-size:12px;padding:6px;}}
