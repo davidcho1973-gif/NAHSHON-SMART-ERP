@@ -19,9 +19,9 @@ class CadMarkupValidator
         }
         $validated = Validator::make(['markups' => $markups], [
             'markups' => 'present|array|max:1000',
-            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail',
+            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail,dash,fillColor,fillOpacity',
             'markups.*.id' => ['required', 'string', 'max:80', 'distinct:strict', 'regex:/^[a-zA-Z0-9_-]+$/'],
-            'markups.*.kind' => ['required', Rule::in(['area', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail'])],
+            'markups.*.kind' => ['required', Rule::in(['area', 'ellipse', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail'])],
             'markups.*.points' => 'required|array|min:1|max:2048',
             'markups.*.points.*' => 'required|array:x,y',
             'markups.*.points.*.x' => 'required|numeric|between:-1000000000,1000000000',
@@ -31,6 +31,9 @@ class CadMarkupValidator
             'markups.*.width' => 'required|numeric|between:1,40',
             'markups.*.size' => 'required|numeric|gt:0|max:1000000000',
             'markups.*.pattern' => ['required', Rule::in(['solid', 'diagonal', 'cross'])],
+            'markups.*.dash' => ['sometimes', Rule::in(['solid', 'dash', 'dot', 'dashdot'])],
+            'markups.*.fillColor' => ['sometimes', 'string', 'regex:/^(none|#[0-9a-fA-F]{6})$/'],
+            'markups.*.fillOpacity' => 'sometimes|numeric|between:0.05,1',
             'markups.*.text' => 'present|nullable|string|max:500',
             'markups.*.locked' => 'required|boolean',
             'markups.*.holes' => 'sometimes|array|max:64',
@@ -81,6 +84,25 @@ class CadMarkupValidator
                 $point = ['x' => (float) $point['x'], 'y' => (float) $point['y']];
             }
             unset($point);
+            if ($item['kind'] === 'ellipse') {
+                if ($n !== 4 || ! $this->simpleRing($item['points'])) {
+                    $fail();
+                }
+                [$p, $q, $r, $s] = $item['points'];
+                $ux = $q['x'] - $p['x'];
+                $uy = $q['y'] - $p['y'];
+                $vx = $s['x'] - $p['x'];
+                $vy = $s['y'] - $p['y'];
+                if (abs($ux * $vy - $uy * $vx) < 4e-12 || hypot(($r['x'] - $q['x']) - $vx, ($r['y'] - $q['y']) - $vy) >= max(1, hypot($ux, $uy), hypot($vx, $vy)) * 1e-7) {
+                    $fail();
+                }
+            }
+            if ((isset($item['fillColor']) || isset($item['fillOpacity'])) && ! in_array($item['kind'], ['area', 'ellipse'], true)) {
+                $fail();
+            }
+            if (isset($item['fillOpacity'])) {
+                $item['fillOpacity'] = (float) $item['fillOpacity'];
+            }
             if (in_array($item['kind'], ['area', 'cloud'], true) && ! $this->simpleRing($item['points'])) {
                 $fail();
             }

@@ -66,6 +66,25 @@
         return true;
     }
     const rect = (a, b) => [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }];
+    // An ellipse stores an affine frame, never hundreds of editable polygon vertices.
+    function ellipseFrame(points) {
+        const [a, b, c, d] = points;
+        if (!d) return null;
+        const u = { x: (b.x - a.x) / 2, y: (b.y - a.y) / 2 },
+            v = { x: (d.x - a.x) / 2, y: (d.y - a.y) / 2 };
+        return { center: { x: a.x + u.x + v.x, y: a.y + u.y + v.y }, u, v,
+            determinant: u.x * v.y - u.y * v.x,
+            residual: Math.hypot((c.x - b.x) - (d.x - a.x), (c.y - b.y) - (d.y - a.y)) };
+    }
+    function ellipsePoints(item, count = 128) {
+        const f = ellipseFrame(item.points);
+        if (!f) return [];
+        return Array.from({ length: count }, (_, i) => {
+            const t = i * 2 * Math.PI / count;
+            return { x: f.center.x + f.u.x * Math.cos(t) + f.v.x * Math.sin(t),
+                y: f.center.y + f.u.y * Math.cos(t) + f.v.y * Math.sin(t) };
+        });
+    }
     function cloud(points, size) {
         const lengths = points.map((p, i) =>
             distance(p, points[(i + 1) % points.length]),
@@ -193,11 +212,15 @@
     }
     function bounds(item) {
         let ps = item.points;
+        if (item.kind === "ellipse") {
+            const f = ellipseFrame(ps), rx = Math.hypot(f.u.x, f.v.x), ry = Math.hypot(f.u.y, f.v.y);
+            ps = [{ x: f.center.x - rx, y: f.center.y - ry }, { x: f.center.x + rx, y: f.center.y + ry }];
+        }
         if (item.kind === "cloud")
             ps = cloud(ps, item.size).flatMap((p) => [p.a, p.b, p.c]);
         if (["callout", "text"].includes(item.kind))
             ps = [...ps, ...labelCorners(item)];
-        if (["area", "cloud", "route"].includes(item.kind) && item.label) {
+        if (["area", "ellipse", "cloud", "route"].includes(item.kind) && item.label) {
             const p = item.points[0];
             ps = [
                 ...ps,
@@ -217,6 +240,16 @@
         };
     }
     function hit(item, p, tolerance) {
+        if (item.kind === "ellipse") {
+            const f = ellipseFrame(item.points);
+            if (!f || !f.determinant) return false;
+            const dx = p.x - f.center.x, dy = p.y - f.center.y,
+                x = (dx * f.v.y - dy * f.v.x) / f.determinant,
+                y = (f.u.x * dy - f.u.y * dx) / f.determinant;
+            if (x * x + y * y <= 1 + 1e-12) return true;
+            const outline = ellipsePoints(item);
+            return outline.some((a, i) => segmentDistance(p, a, outline[(i + 1) % outline.length]) <= tolerance);
+        }
         if(item.kind === 'detail') return inside(p,item.points);
         if (item.kind === "pin")
             return distance(p, item.points[0]) <= item.size + tolerance;
@@ -270,17 +303,28 @@
         ctx.save();
         const color = !options.paper && options.color ? options.color(item.color) : item.color;
         ctx.strokeStyle = item.kind === 'highlight' ? item.color : color;
-        ctx.fillStyle = ['area', 'pin', 'highlight'].includes(item.kind) ? item.color : color;
+        ctx.fillStyle = ['area', 'ellipse', 'pin', 'highlight'].includes(item.kind) ? (item.fillColor && item.fillColor !== 'none' ? item.fillColor : item.color) : color;
         const lineScale = options.lineScale || 1;
         ctx.lineWidth = item.width * lineScale;
         ctx.lineJoin = ctx.lineCap = "round";
-        ctx.setLineDash([]);
+        const dash = { solid: [], dash: [8, 5], dot: [1, 4], dashdot: [8, 4, 1, 4] }[item.dash || 'solid'];
+        ctx.setLineDash(dash.map(n => n * Math.max(1, item.width / 2) * lineScale));
         ctx.globalAlpha = item.opacity;
         ctx.beginPath();
         ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
         if (item.kind === 'detail') {
             root.CADReview?.drawDetail(ctx,item,screen,scale,options);
-        } else if (item.kind === "area") {
+        } else if (["area", "ellipse"].includes(item.kind)) {
+            const outline = () => {
+            ctx.beginPath();
+            if (item.kind === 'ellipse') {
+                const f = ellipseFrame(ps);
+                if (!f || Math.abs(f.determinant) < 1e-15) return;
+                ctx.save();
+                ctx.transform(f.u.x, f.u.y, f.v.x, f.v.y, f.center.x, f.center.y);
+                ctx.arc(0, 0, 1, 0, Math.PI * 2);
+                ctx.restore();
+            } else ps.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
             ctx.closePath();
             for (const ring of item.holes || []) {
                 ring.map(screen).forEach((p, i) =>
@@ -288,11 +332,15 @@
                 );
                 ctx.closePath();
             }
-            ctx.fill("evenodd");
-            if (item.pattern !== "solid") {
+            };
+            outline();
+            ctx.globalAlpha = item.fillOpacity ?? item.opacity;
+            if (item.fillColor !== 'none') ctx.fill("evenodd");
+            if (item.pattern !== "solid" && item.fillColor !== 'none') {
                 ctx.save();
                 ctx.clip("evenodd");
-                ctx.globalAlpha = Math.min(1, item.opacity + 0.35);
+                ctx.globalAlpha = Math.min(1, (item.fillOpacity ?? item.opacity) + 0.35);
+                ctx.setLineDash([]);
                 const b = bounds(item),
                     a = screen({ x: b.minX, y: b.maxY }),
                     z = screen({ x: b.maxX, y: b.minY });
@@ -318,17 +366,7 @@
                 ctx.restore();
             }
             ctx.globalAlpha = Math.min(1, item.opacity + 0.5);
-            ctx.beginPath();
-            ps.forEach((p, i) =>
-                i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
-            );
-            ctx.closePath();
-            for (const ring of item.holes || []) {
-                ring.map(screen).forEach((p, i) =>
-                    i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
-                );
-                ctx.closePath();
-            }
+            outline();
             ctx.stroke();
         } else if (item.kind === "cloud") {
             ctx.beginPath();
@@ -431,7 +469,7 @@
                 if (item.arrows === "both") arrow(ps[1], ps[0]);
             }
         }
-        if (["cloud", "area", "route"].includes(item.kind) && item.label) {
+        if (["cloud", "area", "ellipse", "route"].includes(item.kind) && item.label) {
             const p = ps[0];
             ctx.globalAlpha = 1;
             ctx.font = `600 ${Math.max(1, size)}px sans-serif`;
@@ -439,6 +477,7 @@
             ctx.strokeStyle = options.paper || options.background === 'white' ? "#fff" : "#152338";
             ctx.fillStyle = color;
             ctx.lineWidth = 3;
+            ctx.setLineDash([]);
             ctx.strokeText(item.label, p.x, p.y - size * 0.4);
             ctx.fillText(item.label, p.x, p.y - size * 0.4);
         }
@@ -451,6 +490,8 @@
         signedArea,
         validPolygon,
         rect,
+        ellipseFrame,
+        ellipsePoints,
         cloud,
         lines,
         labelBox,

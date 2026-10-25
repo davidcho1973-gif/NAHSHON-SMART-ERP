@@ -8,6 +8,15 @@
         boundary: "닫힌 경계 색칠",
         area: "자유 영역",
         box: "사각 영역",
+        circle: "원",
+        ellipse: "타원",
+        triangle: "삼각형",
+        diamond: "마름모",
+        polygon: "다각형",
+        star: "별표",
+        line: "직선",
+        arrow: "화살표",
+        doublearrow: "양방향 화살표",
         cloud: "변경 구름",
         callout: "연결 메모",
         pen: "자유 펜",
@@ -27,6 +36,15 @@
             "연결된 원본 직선 경계 안쪽 클릭 · 실제 틈이나 곡선·이미지는 자유 영역 사용",
         area: "경계를 차례로 클릭 · 첫 점 클릭 또는 Enter로 완성 · Esc 취소",
         box: "대각선으로 드래그하여 영역 지정",
+        circle: "대각선 드래그 · 원 크기 지정 · 네 모서리로 크기 조절",
+        ellipse: "대각선 드래그 · 가로·세로 크기 지정",
+        triangle: "대각선 드래그 · 삼각형의 범위 지정",
+        diamond: "대각선 드래그 · 마름모의 범위 지정",
+        polygon: "대각선 드래그 · 꼭짓점 수는 속성의 선·채우기에서 지정",
+        star: "대각선 드래그 · 주의할 위치를 별표로 강조",
+        line: "시작점에서 끝점까지 드래그 · Shift로 45° 각도 맞춤",
+        arrow: "시작점에서 지시할 위치까지 드래그 · Shift로 45° 각도 맞춤",
+        doublearrow: "두 지점을 연결하도록 드래그 · Shift로 45° 각도 맞춤",
         cloud: "변경된 부분을 감싸도록 드래그",
         callout: "지시할 위치에서 메모를 놓을 위치까지 드래그",
         pen: "마우스를 누른 채 그리기 · Esc 취소",
@@ -46,6 +64,15 @@
         boundary: ['teal', '<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/><path d="M12 7c-1.5 2-4 4-4 6a4 4 0 008 0c0-2-2.5-4-4-6z" fill="currentColor" fill-opacity=".35"/><path d="M10 14c0 1 1 2 2 2"/>'],
         area: ['teal', '<path d="M4 16L7 5l10 2 4 10-10 4z" fill="currentColor" fill-opacity=".2"/><circle cx="7" cy="5" r="1.4" fill="currentColor"/><circle cx="21" cy="17" r="1.4" fill="currentColor"/>'],
         box: ['teal', '<rect x="4" y="5" width="16" height="14" rx="1.5" fill="currentColor" fill-opacity=".2"/><path d="M4 9V5h4m8 14h4v-4" stroke-width="2.5"/>'],
+        circle: ['teal', '<circle cx="12" cy="12" r="8" fill="currentColor" fill-opacity=".2"/>'],
+        ellipse: ['teal', '<ellipse cx="12" cy="12" rx="9" ry="6" fill="currentColor" fill-opacity=".2"/>'],
+        triangle: ['teal', '<path d="M12 3L22 21H2z" fill="currentColor" fill-opacity=".2"/>'],
+        diamond: ['teal', '<path d="M12 2L22 12 12 22 2 12z" fill="currentColor" fill-opacity=".2"/>'],
+        polygon: ['teal', '<path d="M7 3h10l5 9-5 9H7l-5-9z" fill="currentColor" fill-opacity=".2"/>'],
+        star: ['amber', '<path d="M12 2l3 7 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1z" fill="currentColor" fill-opacity=".2"/>'],
+        line: ['blue', '<path d="M3 20L21 4"/><circle cx="3" cy="20" r="1.5"/><circle cx="21" cy="4" r="1.5"/>'],
+        arrow: ['blue', '<path d="M3 20L21 4m-9 0h9v9"/>'],
+        doublearrow: ['blue', '<path d="M3 20L21 4m-9 0h9v9M3 11v9h9"/>'],
         cloud: ['coral', '<path d="M6 6c0-3 5-3 6-1 3-3 7-1 6 2 4 0 5 5 2 6 2 4-2 7-5 5-2 3-6 3-7 0-4 1-7-3-4-6-3-2-2-6 2-6z"/>'],
         callout: ['violet', '<path d="M9 4h12v10H11l-3 3V5z" fill="currentColor" fill-opacity=".16"/><path d="M5 20l6-6M2 18l3 2 1-4M12 8h6m-6 3h4"/>'],
         pen: ['amber', '<path d="M14 5l5 5M4 20l2-7L16 3l5 5-10 10z"/><path d="M4 20l7-2M3 22h12"/>'],
@@ -226,11 +253,12 @@
                     "callout",
                     "text",
                     "route",
+                    "line", "arrow", "doublearrow",
                     "pin",
                 ].includes(next)
             )
                 $("markup-opacity").value = "100";
-            else if (["boundary", "box", "area", "highlight"].includes(next))
+            else if (["boundary", "box", "area", "highlight", "circle", "ellipse", "triangle", "diamond", "polygon", "star"].includes(next))
                 $("markup-opacity").value = "35";
             api.render();
             canvas.focus();
@@ -256,6 +284,21 @@
             ".mode-switch [data-workspace]",
         ))
             button.onclick = () => setMode(button.dataset.workspace);
+        const toolGroups = [
+            ['선택 · 수정', ['select', 'lasso', 'eraser']],
+            ['영역 · 도형', ['boundary', 'area', 'box', 'circle', 'ellipse', 'triangle', 'diamond', 'polygon', 'star']],
+            ['선 · 화살표', ['line', 'arrow', 'doublearrow', 'route', 'pen', 'highlight']],
+            ['문자 · 변경 표시', ['text', 'callout', 'pin', 'cloud', 'freecloud', 'calibrate']],
+        ];
+        const toolHosts = new Map();
+        for (const [title, keys] of toolGroups) {
+            const group = document.createElement('div'), heading = document.createElement('h3');
+            group.className = 'markup-tool-group';
+            heading.textContent = title;
+            group.append(heading);
+            $('markup-tools').append(group);
+            keys.forEach(key => toolHosts.set(key, group));
+        }
         for (const [key, name] of Object.entries(names)) {
             if(key==="region")continue;
             const button = document.createElement("button");
@@ -273,7 +316,7 @@
             label.textContent = name;
             button.append(icon, label);
             button.onclick = () => setTool(key);
-            $("markup-tools").append(button);
+            toolHosts.get(key).append(button);
         }
         function editText(item, fresh = false) {
             if (!permitted() || isLocked(item)) return;
@@ -343,6 +386,7 @@
                 return;
             const raw = api.world(event),
                 p = [
+                    'circle', 'ellipse', 'triangle', 'diamond', 'polygon', 'star', 'line', 'arrow', 'doublearrow',
                     "area",
                     "box",
                     "cloud",
@@ -617,6 +661,8 @@
                         g.kind === "region"
                             ? raw
                             : api.snap(raw);
+                    if (event.shiftKey && ['line', 'arrow', 'doublearrow'].includes(g.tool))
+                        g.end = G.snapAngle(g.start, g.end, 45);
                     if (
                         (["pen", "highlight", "eraser"].includes(g.tool) ||
                             g.tool === "lasso") &&
@@ -634,6 +680,7 @@
                                   end.y - g.start.y,
                               )
                             : (() => {
+                                  if (item.kind === 'ellipse') return G.resizeEllipse(item, g.grip, end);
                                   const result = clone(item),
                                       handle = handles(result)[g.grip];
                                   if (handle) {
@@ -654,17 +701,20 @@
             if (!g || g.kind !== "draw" || g.tool === "eraser") return null;
             const kind = {
                 box: "area",
+                circle: "ellipse", ellipse: "ellipse", triangle: "area", diamond: "area", polygon: "area", star: "area",
+                line: "route", arrow: "route", doublearrow: "route",
                 cloud: "cloud",
                 callout: "callout",
                 pen: "pen",
                 highlight: "highlight",
             }[g.tool];
-            const ps = ["box", "cloud"].includes(g.tool)
-                ? M.rect(g.start, g.end)
+            const ps = ["box", "cloud", "circle", "ellipse", "triangle", "diamond", "polygon", "star"].includes(g.tool)
+                ? G.shape(g.tool, g.start, g.end, workbench?.polygonSides() || 6)
                 : ["pen", "highlight"].includes(g.tool)
                   ? g.path
                   : [g.start, g.end];
             const item = create(kind, ps);
+            if (['line', 'arrow', 'doublearrow'].includes(g.tool)) item.arrows = { line: 'none', arrow: 'end', doublearrow: 'both' }[g.tool];
             if (kind === "callout") item.text = "메모 입력";
             return item;
         }
@@ -735,7 +785,7 @@
                 }
                 const item = preview(g);
                 if (
-                    ["area", "cloud"].includes(item.kind) &&
+                    ["area", "ellipse", "cloud"].includes(item.kind) &&
                     (!M.validPolygon(item.points) ||
                         M.distance(g.start, { x: g.end.x, y: g.start.y }) *
                             api.scale() <
@@ -754,7 +804,7 @@
                     g.preview.some(
                         (item) =>
                             !item.points.every(finite) ||
-                            (["area", "cloud"].includes(item.kind) &&
+                            (["area", "ellipse", "cloud"].includes(item.kind) &&
                                 !(G
                                     ? G.valid(item)
                                     : M.validPolygon(item.points))),
@@ -1099,6 +1149,7 @@
                     (item.locked ? "🔒 " : "") +
                     {
                         area: "영역",
+                        ellipse: "원 / 타원",
                         cloud: "변경 구름",
                         pen: "자유 펜",
                         highlight: "형광펜",
