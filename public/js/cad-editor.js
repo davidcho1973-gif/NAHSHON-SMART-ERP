@@ -290,7 +290,10 @@
             if(guides().length&&doc?.workspace?.guidesVisible!==false){const q=C.guideSnap(p,guides(),12/scale,sourceEdges(p));if(q&&(!snapMark||q.kind!=='guide-projection'||C.distance(p,q)<C.distance(p,snapMark)))snapMark={...q};}
             // Tape used to snap only to discrete vertices; an edge hit must retain its
             // own projected point so hover, the first click and the guide agree.
-            tapeHover=tool==='tape'?nearestTapeEdge(raw):null;
+            const reference=tool==='tape'&&points.length&&tapeMode()==='parallel'?tapeEdge:null;
+            // Once anchored, do not magnetize a small gap back onto its own baseline.
+            if(reference&&snapMark&&Math.abs(C.parallelGuide(reference,reference.p,snapMark).offset)<1e-8)snapMark=null;
+            tapeHover=tool==='tape'?nearestTapeEdge(raw,reference):null;
             if(tapeHover&&(!snapMark||!points.length&&['auto','parallel'].includes($('tape-mode').value))){
                 const q=snapMark&&C.segmentDistance(snapMark,tapeHover.p,tapeHover.q)<1e-8?snapMark:tapeHover.point;
                 snapMark={x:q.x,y:q.y,kind:'edge-projection'};
@@ -577,7 +580,7 @@
         if((x1-x0+1)*(y1-y0+1)>4096){for(let i=0;i<edges.length;i++)ids.add(i);}else for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)for(const id of grid.get(x+','+y)||[])ids.add(id);
         return [...ids].map(id=>edges[id]).filter(e=>e.minX<=point.x+tolerance&&e.maxX>=point.x-tolerance&&e.minY<=point.y+tolerance&&e.maxY>=point.y-tolerance).map(e=>({...e,distance:C.segmentDistance(point,e.p,e.q)})).filter(e=>e.distance<tolerance).sort((a,b)=>a.distance-b.distance).slice(0,64);
     }
-    function nearestTapeEdge(p){if(!doc)return null;let edge=null,best=12/scale;for(const candidate of sourceEdges(p)){const point=C.segmentPoint(p,candidate.p,candidate.q),d=C.distance(p,point);if(d<best&&C.distance(candidate.p,candidate.q)>1e-10){edge={...candidate,point};best=d;}}return edge;}
+    function nearestTapeEdge(p,reference=null){if(!doc)return null;let edge=null,best=12/scale;for(const candidate of sourceEdges(p)){if(reference&&[candidate.p,candidate.q].every(q=>Math.abs(C.parallelGuide(reference,reference.p,q).offset)<1e-8))continue;const point=C.segmentPoint(p,candidate.p,candidate.q),d=C.distance(p,point);if(d<best&&C.distance(candidate.p,candidate.q)>1e-10){edge={...candidate,point};best=d;}}return edge;}
     function tapeMode(){const mode=$('tape-mode').value;return mode==='auto'?(tapeEdge?'parallel':'distance'):mode;}
     function cancelTapeReference(){if(tool!=='tape')return;points=[];tapeEdge=null;tapeHover=null;tapeMeasurement=null;snapMark=null;inference=null;axisLock=null;shiftLock=null;$('numeric-length').value='';}
     function guides(){return doc?.workspace?.guides||[];}
