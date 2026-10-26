@@ -1496,6 +1496,7 @@
         }
     });
     markup=window.createCADMarkupTools({canvas,document:()=>doc,canManage:()=>canAnnotate,busy:()=>busy||!!gesture,
+        version:()=>aiVersion,sourceEdges,numericSettings,
         scale:()=>scale,world,screen,snap,render,snapshot,status,clearSnap:()=>{snapMark=null;},
         record:()=>record, request:api, entities:()=>entities(),
         view:()=>({center:{x:(canvas.clientWidth/2-origin.x)/scale,y:(origin.y-canvas.clientHeight/2)/scale},scale}),

@@ -4,6 +4,19 @@
         G = window.CADMarkupGeometry,
         $ = (id) => document.getElementById(id);
     const names = {
+        arc2: "두 끝점 호",
+        arc3: "세 점 호",
+        arc: "중심 기준 호",
+        pie: "부채꼴",
+        curve: "곡선 화살표",
+        cubic: "자유 곡선",
+        rotbox: "회전 사각형",
+        rounded: "둥근 사각형",
+        capsule: "캡슐형",
+        split: "영역 나누기",
+        hole: "내부 비우기",
+        trim: "직선 자르기",
+        extend: "직선 연장",
         select: "선택 / 이동",
         boundary: "닫힌 경계 색칠",
         area: "자유 영역",
@@ -31,6 +44,19 @@
         region: "출력 범위 지정",
     };
     const hints = {
+        arc2: "시작점 → 끝점 → 휘어질 위치 · 마지막 단계에서 돌출 높이 입력",
+        arc3: "시작점 → 지나갈 점 → 끝점",
+        arc: "중심 → 시작점 → 끝 방향 · 마지막 단계에서 회전각 입력",
+        pie: "중심 → 시작점 → 끝 방향 · 시계 방향은 속성에서 변경",
+        curve: "시작점 → 끝점 → 곡률 조절점 · 손잡이로 다시 수정",
+        cubic: "시작점 → 첫 손잡이 → 두 번째 손잡이 → 끝점",
+        rotbox: "첫 모서리 → 첫 변의 끝 → 폭",
+        rounded: "대각선 드래그 또는 두 모서리 클릭 · 반지름은 속성에서 지정",
+        capsule: "대각선 드래그 또는 두 모서리 클릭",
+        split: "영역 하나 선택 → 나눌 선의 두 점 지정 · 구멍과 서식 유지",
+        hole: "영역 하나 선택 → 내부 경계 클릭 → Enter",
+        trim: "직선 표시 선택 → 지울 부분 클릭 · 교차하는 직선·영역 경계 기준",
+        extend: "직선 표시 선택 → 늘릴 끝 쪽 클릭 · 처음 만나는 직선·영역 경계까지",
         select: "클릭하여 선택 · Shift로 추가 · 드래그 이동 · 꼭짓점으로 모양 수정",
         boundary:
             "연결된 원본 직선 경계 안쪽 클릭 · 실제 틈이나 곡선·이미지는 자유 영역 사용",
@@ -60,30 +86,136 @@
     };
     // Static SVG artwork keeps the toolbar legible without platform icon fonts.
     const toolArtwork = {
-        select: ['blue', '<path d="M5 3l14 10-7 1-3 7z" fill="currentColor" stroke-width="1.3"/>'],
-        boundary: ['teal', '<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/><path d="M12 7c-1.5 2-4 4-4 6a4 4 0 008 0c0-2-2.5-4-4-6z" fill="currentColor" fill-opacity=".35"/><path d="M10 14c0 1 1 2 2 2"/>'],
-        area: ['teal', '<path d="M4 16L7 5l10 2 4 10-10 4z" fill="currentColor" fill-opacity=".2"/><circle cx="7" cy="5" r="1.4" fill="currentColor"/><circle cx="21" cy="17" r="1.4" fill="currentColor"/>'],
-        box: ['teal', '<rect x="4" y="5" width="16" height="14" rx="1.5" fill="currentColor" fill-opacity=".2"/><path d="M4 9V5h4m8 14h4v-4" stroke-width="2.5"/>'],
-        circle: ['teal', '<circle cx="12" cy="12" r="8" fill="currentColor" fill-opacity=".2"/>'],
-        ellipse: ['teal', '<ellipse cx="12" cy="12" rx="9" ry="6" fill="currentColor" fill-opacity=".2"/>'],
-        triangle: ['teal', '<path d="M12 3L22 21H2z" fill="currentColor" fill-opacity=".2"/>'],
-        diamond: ['teal', '<path d="M12 2L22 12 12 22 2 12z" fill="currentColor" fill-opacity=".2"/>'],
-        polygon: ['teal', '<path d="M7 3h10l5 9-5 9H7l-5-9z" fill="currentColor" fill-opacity=".2"/>'],
-        star: ['amber', '<path d="M12 2l3 7 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1z" fill="currentColor" fill-opacity=".2"/>'],
-        line: ['blue', '<path d="M3 20L21 4"/><circle cx="3" cy="20" r="1.5"/><circle cx="21" cy="4" r="1.5"/>'],
-        arrow: ['blue', '<path d="M3 20L21 4m-9 0h9v9"/>'],
-        doublearrow: ['blue', '<path d="M3 20L21 4m-9 0h9v9M3 11v9h9"/>'],
-        cloud: ['coral', '<path d="M6 6c0-3 5-3 6-1 3-3 7-1 6 2 4 0 5 5 2 6 2 4-2 7-5 5-2 3-6 3-7 0-4 1-7-3-4-6-3-2-2-6 2-6z"/>'],
-        callout: ['violet', '<path d="M9 4h12v10H11l-3 3V5z" fill="currentColor" fill-opacity=".16"/><path d="M5 20l6-6M2 18l3 2 1-4M12 8h6m-6 3h4"/>'],
-        pen: ['amber', '<path d="M14 5l5 5M4 20l2-7L16 3l5 5-10 10z"/><path d="M4 20l7-2M3 22h12"/>'],
-        highlight: ['amber', '<path d="M9 13l7-10 6 5-9 9z" fill="currentColor" fill-opacity=".24"/><path d="M9 13l4 4-3 3-5-2zM3 22h15" stroke-width="2.4"/>'],
-        pin: ['coral', '<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1114 0z" fill="currentColor" fill-opacity=".18"/><path d="M11 7h2v7m-3 0h5"/>'],
-        freecloud: ['coral', '<path d="M4 15c-3-3 0-7 3-6-1-5 5-7 7-3 4-2 8 2 5 5 4 2 2 7-2 6-1 4-7 4-8 0-3 3-6 1-5-2z"/><path d="M7 11l5-3 4 5-5 3z" stroke-dasharray="2 2" stroke-width="1.2"/>'],
-        text: ['violet', '<rect x="3" y="4" width="18" height="16" rx="2" stroke-dasharray="3 2"/><path d="M8 8h8m-4 0v9m-2 0h4" stroke-width="2.2"/>'],
-        route: ['teal', '<path d="M4 18h7V6h9" stroke-width="5" opacity=".24"/><path d="M4 18h7V6h9"/><circle cx="4" cy="18" r="2" fill="currentColor"/><path d="M17 3l3 3-3 3"/>'],
-        eraser: ['rose', '<path d="M4 14l9-10a2 2 0 013 0l5 5-10 11H8z" fill="currentColor" fill-opacity=".18"/><path d="M8 10l8 7M11 20h10"/>'],
-        lasso: ['blue', '<path d="M19 11c0 4-4 6-9 6s-8-3-8-6 4-7 9-7 8 3 8 7z" stroke-dasharray="3 2"/><path d="M9 17c-2 5 4 6 6 2 1-2-2-4-4-2"/>'],
-        calibrate: ['blue', '<path d="M3 17L17 3l5 5L8 22z" fill="currentColor" fill-opacity=".16"/><path d="M7 13l3 3m1-7l3 3m1-7l3 3"/><circle cx="3" cy="17" r="1.5" fill="currentColor"/><circle cx="17" cy="3" r="1.5" fill="currentColor"/>'],
+        arc2: [
+            "blue",
+            '<path d="M3 19Q12 0 21 19"/><circle cx="3" cy="19" r="2"/><circle cx="21" cy="19" r="2"/>',
+        ],
+        arc3: [
+            "blue",
+            '<path d="M3 19Q12 0 21 19"/><circle cx="12" cy="9.5" r="2"/>',
+        ],
+        arc: [
+            "blue",
+            '<path d="M4 20V4a16 16 0 0116 16z" stroke-dasharray="3 2"/><path d="M4 4a16 16 0 0116 16"/>',
+        ],
+        pie: [
+            "teal",
+            '<path d="M4 20V4a16 16 0 0116 16z" fill="currentColor" fill-opacity=".25"/>',
+        ],
+        curve: ["blue", '<path d="M3 20Q3 3 21 4m-5-3 5 3-4 5"/>'],
+        cubic: [
+            "blue",
+            '<path d="M3 20C4-8 20 32 21 4"/><path d="M3 20L4 3m17 1-1 17" stroke-dasharray="2 2"/>',
+        ],
+        rotbox: [
+            "teal",
+            '<path d="M3 10L17 3l5 11-14 7z" fill="currentColor" fill-opacity=".2"/>',
+        ],
+        rounded: ["teal", '<rect x="3" y="5" width="18" height="14" rx="4"/>'],
+        capsule: ["teal", '<rect x="2" y="7" width="20" height="10" rx="5"/>'],
+        split: [
+            "rose",
+            '<rect x="3" y="3" width="18" height="18"/><path d="M1 16L23 8" stroke-width="3"/>',
+        ],
+        hole: [
+            "rose",
+            '<path d="M3 3h18v18H3zM8 8v8h8V8z" fill="currentColor" fill-opacity=".2" fill-rule="evenodd"/>',
+        ],
+        trim: [
+            "rose",
+            '<path d="M3 5h18M3 19h18M12 2v20"/><path d="m9 9 6 6m0-6-6 6" stroke-width="3"/>',
+        ],
+        extend: ["blue", '<path d="M3 4h18M12 22V4m-4 5 4-5 4 5"/>'],
+        select: [
+            "blue",
+            '<path d="M5 3l14 10-7 1-3 7z" fill="currentColor" stroke-width="1.3"/>',
+        ],
+        boundary: [
+            "teal",
+            '<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/><path d="M12 7c-1.5 2-4 4-4 6a4 4 0 008 0c0-2-2.5-4-4-6z" fill="currentColor" fill-opacity=".35"/><path d="M10 14c0 1 1 2 2 2"/>',
+        ],
+        area: [
+            "teal",
+            '<path d="M4 16L7 5l10 2 4 10-10 4z" fill="currentColor" fill-opacity=".2"/><circle cx="7" cy="5" r="1.4" fill="currentColor"/><circle cx="21" cy="17" r="1.4" fill="currentColor"/>',
+        ],
+        box: [
+            "teal",
+            '<rect x="4" y="5" width="16" height="14" rx="1.5" fill="currentColor" fill-opacity=".2"/><path d="M4 9V5h4m8 14h4v-4" stroke-width="2.5"/>',
+        ],
+        circle: [
+            "teal",
+            '<circle cx="12" cy="12" r="8" fill="currentColor" fill-opacity=".2"/>',
+        ],
+        ellipse: [
+            "teal",
+            '<ellipse cx="12" cy="12" rx="9" ry="6" fill="currentColor" fill-opacity=".2"/>',
+        ],
+        triangle: [
+            "teal",
+            '<path d="M12 3L22 21H2z" fill="currentColor" fill-opacity=".2"/>',
+        ],
+        diamond: [
+            "teal",
+            '<path d="M12 2L22 12 12 22 2 12z" fill="currentColor" fill-opacity=".2"/>',
+        ],
+        polygon: [
+            "teal",
+            '<path d="M7 3h10l5 9-5 9H7l-5-9z" fill="currentColor" fill-opacity=".2"/>',
+        ],
+        star: [
+            "amber",
+            '<path d="M12 2l3 7 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1z" fill="currentColor" fill-opacity=".2"/>',
+        ],
+        line: [
+            "blue",
+            '<path d="M3 20L21 4"/><circle cx="3" cy="20" r="1.5"/><circle cx="21" cy="4" r="1.5"/>',
+        ],
+        arrow: ["blue", '<path d="M3 20L21 4m-9 0h9v9"/>'],
+        doublearrow: ["blue", '<path d="M3 20L21 4m-9 0h9v9M3 11v9h9"/>'],
+        cloud: [
+            "coral",
+            '<path d="M6 6c0-3 5-3 6-1 3-3 7-1 6 2 4 0 5 5 2 6 2 4-2 7-5 5-2 3-6 3-7 0-4 1-7-3-4-6-3-2-2-6 2-6z"/>',
+        ],
+        callout: [
+            "violet",
+            '<path d="M9 4h12v10H11l-3 3V5z" fill="currentColor" fill-opacity=".16"/><path d="M5 20l6-6M2 18l3 2 1-4M12 8h6m-6 3h4"/>',
+        ],
+        pen: [
+            "amber",
+            '<path d="M14 5l5 5M4 20l2-7L16 3l5 5-10 10z"/><path d="M4 20l7-2M3 22h12"/>',
+        ],
+        highlight: [
+            "amber",
+            '<path d="M9 13l7-10 6 5-9 9z" fill="currentColor" fill-opacity=".24"/><path d="M9 13l4 4-3 3-5-2zM3 22h15" stroke-width="2.4"/>',
+        ],
+        pin: [
+            "coral",
+            '<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1114 0z" fill="currentColor" fill-opacity=".18"/><path d="M11 7h2v7m-3 0h5"/>',
+        ],
+        freecloud: [
+            "coral",
+            '<path d="M4 15c-3-3 0-7 3-6-1-5 5-7 7-3 4-2 8 2 5 5 4 2 2 7-2 6-1 4-7 4-8 0-3 3-6 1-5-2z"/><path d="M7 11l5-3 4 5-5 3z" stroke-dasharray="2 2" stroke-width="1.2"/>',
+        ],
+        text: [
+            "violet",
+            '<rect x="3" y="4" width="18" height="16" rx="2" stroke-dasharray="3 2"/><path d="M8 8h8m-4 0v9m-2 0h4" stroke-width="2.2"/>',
+        ],
+        route: [
+            "teal",
+            '<path d="M4 18h7V6h9" stroke-width="5" opacity=".24"/><path d="M4 18h7V6h9"/><circle cx="4" cy="18" r="2" fill="currentColor"/><path d="M17 3l3 3-3 3"/>',
+        ],
+        eraser: [
+            "rose",
+            '<path d="M4 14l9-10a2 2 0 013 0l5 5-10 11H8z" fill="currentColor" fill-opacity=".18"/><path d="M8 10l8 7M11 20h10"/>',
+        ],
+        lasso: [
+            "blue",
+            '<path d="M19 11c0 4-4 6-9 6s-8-3-8-6 4-7 9-7 8 3 8 7z" stroke-dasharray="3 2"/><path d="M9 17c-2 5 4 6 6 2 1-2-2-4-4-2"/>',
+        ],
+        calibrate: [
+            "blue",
+            '<path d="M3 17L17 3l5 5L8 22z" fill="currentColor" fill-opacity=".16"/><path d="M7 13l3 3m1-7l3 3m1-7l3 3"/><circle cx="3" cy="17" r="1.5" fill="currentColor"/><circle cx="17" cy="3" r="1.5" fill="currentColor"/>',
+        ],
     };
     window.createCADMarkupTools = function (api) {
         let mode = "markup",
@@ -93,11 +225,17 @@
             polygon = [],
             hover = null,
             draft = null,
-            workbench = null, regionReceiver = null;
+            workbench = null,
+            regionReceiver = null;
         let panelKey = "",
             presets = [],
             visible = true,
             space = false;
+        let snapCache = null,
+            preciseMark = null,
+            directionLock = null,
+            referenceAngle = null,
+            lastRaw = null;
         const canvas = api.canvas,
             clone = (value) => structuredClone(value);
         const items = () => api.document()?.markups || [];
@@ -111,7 +249,10 @@
         const shown = () => items().filter((item) => !workbench?.hidden(item));
         const writable = () => chosen().filter((item) => !isLocked(item));
         const handles = (item) =>
-            (item.kind === 'detail' ? [] : [item.points, ...(item.holes || [])]).flatMap((ring, r) =>
+            (item.kind === "detail"
+                ? []
+                : [item.points, ...(item.holes || [])]
+            ).flatMap((ring, r) =>
                 ring.map((point, index) => ({ point, ring: r, index })),
             );
         const stop = (event) => {
@@ -124,6 +265,468 @@
             Math.abs(p.x) <= 1e9 &&
             Math.abs(p.y) <= 1e9;
         const uid = () => crypto.randomUUID();
+        const hud = document.createElement("div");
+        hud.id = "markup-drawing-hud";
+        hud.className = "markup-only";
+        hud.innerHTML =
+            '<output id="markup-drawing-readout" aria-live="off"></output><label><span id="markup-numeric-label">다음 점 길이</span><input id="markup-numeric" type="text" autocomplete="off" placeholder="예: 1200mm&lt;45" aria-label="표시 그리기 치수"></label><button id="markup-numeric-apply" type="button">확정</button>';
+        canvas.parentElement.append(hud);
+        const multiTools = new Set([
+            "arc2",
+            "arc3",
+            "arc",
+            "pie",
+            "curve",
+            "cubic",
+            "rotbox",
+            "split",
+        ]);
+        const clickShapes = new Set([
+            "line",
+            "arrow",
+            "doublearrow",
+            "box",
+            "circle",
+            "ellipse",
+            "triangle",
+            "diamond",
+            "polygon",
+            "star",
+            "rounded",
+            "capsule",
+        ]);
+        function precision(raw, anchor = polygon.at(-1), event = {}) {
+            lastRaw = raw;
+            preciseMark = null;
+            if (!G || !api.document()) return raw;
+            let p = { ...raw };
+            const tolerance = 10 / api.scale(),
+                C = window.CADCore;
+            if ($("mw-snap")?.checked) {
+                const key = [
+                    api.version?.(),
+                    items().length,
+                    api.document(),
+                    JSON.stringify(api.document().layers || {}),
+                    JSON.stringify(api.document().workspace?.layers || []),
+                    gesture?.original,
+                ];
+                if (!snapCache || key.some((v, i) => snapCache.key[i] !== v)) {
+                    const candidates = [],
+                        edges = [];
+                    let count = 0;
+                    const edge = (a, b) => {
+                        edges.push([a, b]);
+                        candidates.push(
+                            { ...a, kind: "끝점" },
+                            { ...b, kind: "끝점" },
+                            {
+                                x: (a.x + b.x) / 2,
+                                y: (a.y + b.y) / 2,
+                                kind: "중점",
+                            },
+                        );
+                    };
+                    try {
+                        const collect = (e) => {
+                            if (
+                                e.hidden ||
+                                e.paper ||
+                                api.document().layers?.[e.layer]?.visible ===
+                                    false
+                            )
+                                return;
+                            if (++count > 200000)
+                                throw Error(
+                                    "맞춤점 검색 한도를 넘었습니다. 불필요한 레이어를 숨기세요.",
+                                );
+                            if (e.type === "INSERT" && e.renderParts) {
+                                e.renderParts.forEach(collect);
+                                return;
+                            }
+                            for (const [i, p] of C.snapPoints(e).entries()) {
+                                if (candidates.length >= 200000)
+                                    throw Error(
+                                        "맞춤점 한도를 넘었습니다. 불필요한 레이어를 숨기세요.",
+                                    );
+                                candidates.push({
+                                    ...p,
+                                    kind:
+                                        ["CIRCLE", "ARC", "ELLIPSE"].includes(
+                                            e.type,
+                                        ) && p === e.p
+                                            ? "중심"
+                                            : e.type === "LINE" && i === 2
+                                              ? "중점"
+                                              : e.type === "POINT"
+                                                ? "점"
+                                                : "끝점",
+                                });
+                            }
+                        };
+                        api.entities().forEach(collect);
+                        for (const item of shown()) {
+                            if (
+                                gesture?.original?.some((m) => m.id === item.id)
+                            )
+                                continue;
+                            if (M.curved(item)) {
+                                for (const t of [0, 0.5, 1])
+                                    candidates.push({
+                                        ...M.curvePoint(item, t),
+                                        kind:
+                                            t === 0.5 ? "호·곡선 중점" : "끝점",
+                                    });
+                                if (item.kind === "arc")
+                                    candidates.push({
+                                        ...M.ellipseFrame(item.points).center,
+                                        kind: "중심",
+                                    });
+                            } else if (item.kind === "ellipse") {
+                                const f = M.ellipseFrame(item.points);
+                                candidates.push({ ...f.center, kind: "중심" });
+                                for (const t of [
+                                    0,
+                                    Math.PI / 2,
+                                    Math.PI,
+                                    Math.PI * 1.5,
+                                ])
+                                    candidates.push({
+                                        x:
+                                            f.center.x +
+                                            f.u.x * Math.cos(t) +
+                                            f.v.x * Math.sin(t),
+                                        y:
+                                            f.center.y +
+                                            f.u.y * Math.cos(t) +
+                                            f.v.y * Math.sin(t),
+                                        kind: "사분점",
+                                    });
+                            } else
+                                for (const ring of G.rings(item)) {
+                                    for (let i = 1; i < ring.length; i++)
+                                        edge(ring[i - 1], ring[i]);
+                                    if (["area", "cloud"].includes(item.kind))
+                                        edge(ring.at(-1), ring[0]);
+                                    if (ring.length === 1)
+                                        candidates.push({
+                                            ...ring[0],
+                                            kind: "기준점",
+                                        });
+                                }
+                        }
+                        snapCache = {
+                            key,
+                            index: G.snapIndex(candidates),
+                            edges,
+                        };
+                    } catch (error) {
+                        snapCache = { key, index: G.snapIndex([]), edges: [] };
+                        api.status(error.message);
+                    }
+                }
+                const edges = [
+                    ...(api.sourceEdges?.(raw) || []).map((e) => [e.p, e.q]),
+                    ...snapCache.edges.filter(
+                        ([a, b]) => M.segmentDistance(raw, a, b) < tolerance,
+                    ),
+                ].slice(0, 64);
+                let point = snapCache.index.query(raw, tolerance);
+                for (const [a, b] of edges) {
+                    const mid = {
+                        x: (a.x + b.x) / 2,
+                        y: (a.y + b.y) / 2,
+                        kind: "중점",
+                    };
+                    if (
+                        M.distance(mid, raw) < tolerance &&
+                        (!point ||
+                            M.distance(mid, raw) < M.distance(point, raw))
+                    )
+                        point = mid;
+                }
+                for (let i = 0; i < edges.length; i++)
+                    for (let j = i + 1; j < edges.length; j++) {
+                        const h = G.lineIntersection(...edges[i], ...edges[j]);
+                        if (
+                            h &&
+                            h.t >= 0 &&
+                            h.t <= 1 &&
+                            h.s >= 0 &&
+                            h.s <= 1 &&
+                            M.distance(h.point, raw) < tolerance &&
+                            (!point ||
+                                M.distance(h.point, raw) <=
+                                    M.distance(point, raw) + 1e-10)
+                        )
+                            point = { ...h.point, kind: "교차점" };
+                    }
+                const guide = C.guideSnap(
+                    raw,
+                    api.document().workspace?.guidesVisible === false
+                        ? []
+                        : api.document().workspace?.guides || [],
+                    tolerance,
+                    edges.map(([p, q]) => ({ p, q })),
+                );
+                if (
+                    guide &&
+                    (!point || M.distance(guide, raw) < M.distance(point, raw))
+                )
+                    point = { ...guide, kind: "안내선" };
+                if (!point)
+                    for (const [a, b] of edges) {
+                        const q = C.segmentPoint(raw, a, b);
+                        if (
+                            M.distance(q, raw) < tolerance &&
+                            (!point ||
+                                M.distance(q, raw) < M.distance(point, raw))
+                        )
+                            point = { ...q, kind: "선 위" };
+                    }
+                if (point) {
+                    p = { x: point.x, y: point.y };
+                    preciseMark = point;
+                }
+                if (edges.length) {
+                    const [a, b] = edges[0];
+                    if (M.segmentDistance(raw, a, b) < tolerance / 2)
+                        referenceAngle =
+                            (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+                }
+            }
+            if (anchor) {
+                const lock =
+                    directionLock ??
+                    (event.shiftKey
+                        ? Math.round(
+                              (Math.atan2(p.y - anchor.y, p.x - anchor.x) * 4) /
+                                  Math.PI,
+                          ) * 45
+                        : null);
+                if (!preciseMark || lock !== null) {
+                    const found = C.inferDirection(anchor, p, {
+                        enabled: !!$("mw-infer")?.checked,
+                        lock,
+                        reference: referenceAngle,
+                        step: Number($("mw-step")?.value) || 0,
+                    });
+                    if (found.kind) {
+                        p = found.point;
+                        preciseMark = {
+                            ...p,
+                            kind: {
+                                x: "수평",
+                                y: "수직",
+                                parallel: "평행",
+                                perpendicular: "수직 맞춤",
+                                locked: "방향 고정",
+                                angle: "각도 맞춤",
+                            }[found.kind],
+                        };
+                    }
+                }
+            }
+            return p;
+        }
+        function makeGeometry(shape) {
+            let item = { ...create(shape.kind, shape.points), ...shape };
+            item = workbench?.decorate(item) || item;
+            if (M.curved(item)) item.arrows = shape.arrows || "none";
+            return item;
+        }
+        function construction(ps) {
+            if (ps.length < 3) return null;
+            if (tool === "arc2") return G.arcThrough(ps[0], ps[2], ps[1]);
+            if (tool === "arc3") return G.arcThrough(...ps);
+            if (tool === "arc" || tool === "pie")
+                return G.arcFromCenter(
+                    ...ps,
+                    $("mw-clockwise").checked,
+                    tool === "pie",
+                );
+            if (tool === "curve")
+                return {
+                    ...G.bezierThrough(ps[0], ps[2], ps[1]),
+                    arrows: "end",
+                };
+            if (tool === "cubic")
+                return ps.length < 4
+                    ? null
+                    : { kind: "curve", points: ps, arrows: "none" };
+            if (tool === "rotbox")
+                return { kind: "area", points: G.rotatedBox(...ps) };
+            return null;
+        }
+        function acceptPoint(p) {
+            if (!permitted()) return;
+            if (tool === "split") {
+                polygon.push(p);
+                if (polygon.length === 2) {
+                    try {
+                        const target = chosen()[0];
+                        if (!target || isLocked(target))
+                            throw Error("나눌 영역을 선택하세요.");
+                        const next = G.splitArea(target, ...polygon);
+                        polygon = [];
+                        apply(
+                            [
+                                ...items().filter((m) => m.id !== target.id),
+                                ...next,
+                            ],
+                            next.map((m) => m.id),
+                        );
+                        tool = "select";
+                        api.status(
+                            `${next.length}개 영역으로 나눴습니다. 각 영역의 색을 바꿀 수 있습니다.`,
+                        );
+                    } catch (error) {
+                        polygon.pop();
+                        api.status(error.message);
+                    }
+                }
+                api.render();
+                return;
+            }
+            if (multiTools.has(tool)) {
+                const required = tool === "cubic" ? 4 : 3;
+                if (polygon.length + 1 === required) {
+                    try {
+                        const item = makeGeometry(
+                            construction([...polygon, p]),
+                        );
+                        if (tool === "curve") item.arrows = "end";
+                        commit(item);
+                    } catch (error) {
+                        api.status(error.message);
+                    }
+                } else polygon.push(p);
+                api.render();
+                return;
+            }
+            if (clickShapes.has(tool) && polygon.length) {
+                const item = preview({
+                    kind: "draw",
+                    tool,
+                    start: polygon[0],
+                    end: p,
+                });
+                if (item && G.valid(item)) commit(item);
+                else api.status("크기 또는 좌표를 확인하세요.");
+                return;
+            }
+            if (["area", "freecloud", "route", "hole"].includes(tool)) {
+                if (polygon.length >= 512) {
+                    api.status("512개 꼭짓점까지 지정할 수 있습니다.");
+                    return;
+                }
+                if (
+                    polygon.length >= 3 &&
+                    M.distance(polygon[0], p) * api.scale() < 10 &&
+                    tool !== "route"
+                ) {
+                    finishArea();
+                    return;
+                }
+                if (
+                    !polygon.length ||
+                    M.distance(p, polygon.at(-1)) * api.scale() > 1
+                )
+                    polygon.push(p);
+                api.render();
+            }
+        }
+        function numericPoint() {
+            if (!permitted() || gesture || !polygon.length) return;
+            const C = window.CADCore,
+                text = $("markup-numeric").value.trim(),
+                a = polygon.at(-1),
+                cursor = hover || { x: a.x + 1, y: a.y },
+                settings = api.numericSettings?.() || {};
+            try {
+                if (!text) throw Error("치수를 입력하세요.");
+                let p;
+                if (["arc", "pie"].includes(tool) && polygon.length === 2) {
+                    const angle = Number(text.replace(/°|deg/gi, ""));
+                    if (!Number.isFinite(angle) || angle <= 0 || angle >= 360)
+                        throw Error(
+                            "회전각은 0보다 크고 360보다 작아야 합니다.",
+                        );
+                    p = G.rotatePoint(
+                        polygon[1],
+                        polygon[0],
+                        ((angle * Math.PI) / 180) *
+                            ($("mw-clockwise").checked ? -1 : 1),
+                    );
+                } else if (tool === "arc2" && polygon.length === 2) {
+                    const [a, b] = polygon,
+                        d = C.parseLengthInput(text, settings),
+                        len = M.distance(a, b),
+                        mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+                        n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len },
+                        sign =
+                            (cursor.x - mid.x) * n.x +
+                                (cursor.y - mid.y) * n.y <
+                            0
+                                ? -1
+                                : 1;
+                    p = {
+                        x: mid.x + n.x * d * sign,
+                        y: mid.y + n.y * d * sign,
+                    };
+                } else if (tool === "rotbox" && polygon.length === 2) {
+                    const [a, b] = polygon,
+                        d = C.parseLengthInput(text, settings),
+                        len = M.distance(a, b),
+                        n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len },
+                        sign =
+                            (cursor.x - a.x) * n.x + (cursor.y - a.y) * n.y < 0
+                                ? -1
+                                : 1;
+                    p = { x: b.x + n.x * d * sign, y: b.y + n.y * d * sign };
+                } else if (
+                    [
+                        "box",
+                        "ellipse",
+                        "triangle",
+                        "diamond",
+                        "polygon",
+                        "star",
+                        "rounded",
+                        "capsule",
+                    ].includes(tool)
+                )
+                    p = C.numericDrawing(
+                        "rectangle",
+                        polygon[0],
+                        cursor,
+                        text,
+                        settings,
+                    ).q;
+                else if (tool === "circle") {
+                    const d = C.parseLengthInput(text, settings);
+                    p = { x: a.x + d, y: a.y + d };
+                } else
+                    p = C.numericDrawing("line", a, cursor, text, settings).q;
+                if (!finite(p)) throw Error("도면 좌표 범위를 확인하세요.");
+                acceptPoint(p);
+                $("markup-numeric").value = "";
+                canvas.focus();
+            } catch (error) {
+                api.status(error.message);
+            }
+        }
+        $("markup-numeric-apply").onclick = numericPoint;
+        $("markup-numeric").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                stop(event);
+                numericPoint();
+            } else if (event.key === "Escape") {
+                stop(event);
+                $("markup-numeric").value = "";
+                canvas.focus();
+            }
+        });
         function settings() {
             const width = Number($("markup-width").value);
             return {
@@ -204,7 +807,7 @@
                 !item.points.every(finite) ||
                 !Number.isFinite(item.size) ||
                 item.size > 1e9 ||
-                (G && !G.valid(item)) ||
+                (G && !G.validSet([...items(), item])) ||
                 isLocked(item)
             ) {
                 api.status(
@@ -223,7 +826,11 @@
             return true;
         }
         function cancel() {
-            const receiver=regionReceiver;regionReceiver=null;
+            preciseMark = null;
+            directionLock = null;
+            snapCache = null;
+            const receiver = regionReceiver;
+            regionReceiver = null;
             const pointer = gesture?.pointer;
             gesture = null;
             polygon = [];
@@ -237,13 +844,19 @@
             receiver?.(null);
         }
         function pending() {
-            return !!gesture || !!regionReceiver || polygon.length > 0 || $("markup-dialog").open;
+            return (
+                !!gesture ||
+                !!regionReceiver ||
+                polygon.length > 0 ||
+                $("markup-dialog").open
+            );
         }
         function setTool(next) {
             if (api.busy()) return;
             cancel();
             tool = next;
-            selection.clear();
+            if (!["split", "hole", "trim", "extend"].includes(next))
+                selection.clear();
             panelKey = "";
             if (
                 [
@@ -253,12 +866,32 @@
                     "callout",
                     "text",
                     "route",
-                    "line", "arrow", "doublearrow",
+                    "line",
+                    "arrow",
+                    "doublearrow",
+                    "arc2",
+                    "arc3",
+                    "arc",
+                    "curve",
+                    "cubic",
                     "pin",
                 ].includes(next)
             )
                 $("markup-opacity").value = "100";
-            else if (["boundary", "box", "area", "highlight", "circle", "ellipse", "triangle", "diamond", "polygon", "star"].includes(next))
+            else if (
+                [
+                    "boundary",
+                    "box",
+                    "area",
+                    "highlight",
+                    "circle",
+                    "ellipse",
+                    "triangle",
+                    "diamond",
+                    "polygon",
+                    "star",
+                ].includes(next)
+            )
                 $("markup-opacity").value = "35";
             api.render();
             canvas.focus();
@@ -285,34 +918,74 @@
         ))
             button.onclick = () => setMode(button.dataset.workspace);
         const toolGroups = [
-            ['선택 · 수정', ['select', 'lasso', 'eraser']],
-            ['영역 · 도형', ['boundary', 'area', 'box', 'circle', 'ellipse', 'triangle', 'diamond', 'polygon', 'star']],
-            ['선 · 화살표', ['line', 'arrow', 'doublearrow', 'route', 'pen', 'highlight']],
-            ['문자 · 변경 표시', ['text', 'callout', 'pin', 'cloud', 'freecloud', 'calibrate']],
+            [
+                "선택 · 수정",
+                [
+                    "select",
+                    "lasso",
+                    "eraser",
+                    "split",
+                    "hole",
+                    "trim",
+                    "extend",
+                ],
+            ],
+            [
+                "영역 · 도형",
+                [
+                    "boundary",
+                    "area",
+                    "box",
+                    "circle",
+                    "ellipse",
+                    "triangle",
+                    "diamond",
+                    "polygon",
+                    "star",
+                    "rotbox",
+                    "rounded",
+                    "capsule",
+                    "pie",
+                ],
+            ],
+            [
+                "선 · 화살표",
+                ["line", "arrow", "doublearrow", "route", "pen", "highlight"],
+            ],
+            ["호 · 곡선", ["arc2", "arc3", "arc", "curve", "cubic"]],
+            [
+                "문자 · 변경 표시",
+                ["text", "callout", "pin", "cloud", "freecloud", "calibrate"],
+            ],
         ];
         const toolHosts = new Map();
         for (const [title, keys] of toolGroups) {
-            const group = document.createElement('div'), heading = document.createElement('h3');
-            group.className = 'markup-tool-group';
+            const group = document.createElement("div"),
+                heading = document.createElement("h3");
+            group.className = "markup-tool-group";
             heading.textContent = title;
             group.append(heading);
-            $('markup-tools').append(group);
-            keys.forEach(key => toolHosts.set(key, group));
+            $("markup-tools").append(group);
+            keys.forEach((key) => toolHosts.set(key, group));
         }
-        for (const [key, name] of Object.entries(names)) {
-            if(key==="region")continue;
+        for (const key of toolGroups.flatMap(([, keys]) => keys)) {
+            const name = names[key];
             const button = document.createElement("button");
             button.type = "button";
             button.dataset.markupTool = key;
             const [family, artwork] = toolArtwork[key];
             button.dataset.toolTone = family;
-            button.setAttribute('aria-label', key === 'select' ? '선택' : name);
-            button.title = name + ' · ' + hints[key];
-            const icon = document.createElement('span'), label = document.createElement('span');
-            icon.className = 'markup-tool-icon';
-            icon.setAttribute('aria-hidden', 'true');
-            icon.innerHTML = '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + artwork + '</svg>';
-            label.className = 'markup-tool-label';
+            button.setAttribute("aria-label", key === "select" ? "선택" : name);
+            button.title = name + " · " + hints[key];
+            const icon = document.createElement("span"),
+                label = document.createElement("span");
+            icon.className = "markup-tool-icon";
+            icon.setAttribute("aria-hidden", "true");
+            icon.innerHTML =
+                '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+                artwork +
+                "</svg>";
+            label.className = "markup-tool-label";
             label.textContent = name;
             button.append(icon, label);
             button.onclick = () => setTool(key);
@@ -359,6 +1032,26 @@
             draft = null;
         });
         function finishArea() {
+            if (tool === "hole") {
+                try {
+                    const one = chosen()[0];
+                    if (
+                        !permitted() ||
+                        polygon.length < 3 ||
+                        !one ||
+                        isLocked(one)
+                    )
+                        return;
+                    const item = G.hole(one, clone(polygon));
+                    polygon = [];
+                    apply(items().map((m) => (m.id === one.id ? item : m)));
+                    tool = "select";
+                    api.render();
+                } catch (error) {
+                    api.status(error.message);
+                }
+                return;
+            }
             if (!permitted() || polygon.length < (tool === "route" ? 2 : 3))
                 return;
             if (tool !== "route" && !M.validPolygon(polygon)) {
@@ -385,18 +1078,30 @@
             if (!api.document() || api.busy() || $("markup-dialog").open)
                 return;
             const raw = api.world(event),
-                p = [
-                    'circle', 'ellipse', 'triangle', 'diamond', 'polygon', 'star', 'line', 'arrow', 'doublearrow',
-                    "area",
-                    "box",
-                    "cloud",
-                    "freecloud",
-                    "route",
-                    "calibrate",
-                    "callout",
-                ].includes(tool)
-                    ? api.snap(raw)
-                    : raw;
+                p =
+                    multiTools.has(tool) ||
+                    clickShapes.has(tool) ||
+                    tool === "hole" ||
+                    [
+                        "circle",
+                        "ellipse",
+                        "triangle",
+                        "diamond",
+                        "polygon",
+                        "star",
+                        "line",
+                        "arrow",
+                        "doublearrow",
+                        "area",
+                        "box",
+                        "cloud",
+                        "freecloud",
+                        "route",
+                        "calibrate",
+                        "callout",
+                    ].includes(tool)
+                        ? precision(raw, polygon.at(-1), event)
+                        : raw;
             if (space) {
                 gesture = {
                     kind: "pan",
@@ -538,7 +1243,7 @@
                 api.render();
                 return;
             }
-            if (!permitted() && !["lasso","region"].includes(tool)) {
+            if (!permitted() && !["lasso", "region"].includes(tool)) {
                 api.status("읽기 전용 도면입니다.");
                 return;
             }
@@ -561,17 +1266,112 @@
                 visible = true;
                 $("markup-visible").checked = true;
             }
+            if (["split", "hole", "trim", "extend"].includes(tool)) {
+                const target = chosen()[0],
+                    needed = ["split", "hole"].includes(tool)
+                        ? "area"
+                        : "route";
+                if (chosen().length !== 1 || target.kind !== needed) {
+                    const hit = [...shown()]
+                        .reverse()
+                        .find(
+                            (m) =>
+                                m.kind === needed &&
+                                !isLocked(m) &&
+                                M.hit(m, raw, 8 / api.scale()),
+                        );
+                    if (hit) select([hit.id]);
+                    else
+                        api.status(
+                            needed === "area"
+                                ? "먼저 다각형 영역 하나를 선택하세요."
+                                : "먼저 직선 표시 하나를 선택하세요.",
+                        );
+                    return;
+                }
+                if (isLocked(target)) {
+                    api.status("잠긴 표시입니다.");
+                    return;
+                }
+                if (["trim", "extend"].includes(tool)) {
+                    if (
+                        target.points.length !== 2 ||
+                        M.segmentDistance(raw, ...target.points) >
+                            12 / api.scale()
+                    ) {
+                        api.status("편집할 직선의 해당 부분을 클릭하세요.");
+                        return;
+                    }
+                    try {
+                        const cutters = [
+                            ...(api.sourceEdges?.() || []).map((e) => [
+                                e.p,
+                                e.q,
+                            ]),
+                        ];
+                        for (const m of shown().filter(
+                            (m) =>
+                                m.id !== target.id &&
+                                ["area", "route"].includes(m.kind),
+                        ))
+                            for (const ring of G.rings(m)) {
+                                for (let i = 1; i < ring.length; i++)
+                                    cutters.push([ring[i - 1], ring[i]]);
+                                if (m.kind === "area")
+                                    cutters.push([ring.at(-1), ring[0]]);
+                            }
+                        const next = G.trimRoute(
+                            target,
+                            cutters,
+                            raw,
+                            tool === "extend",
+                        );
+                        apply(
+                            [
+                                ...items().filter((m) => m.id !== target.id),
+                                ...next,
+                            ],
+                            next.map((m) => m.id),
+                        );
+                        api.status(
+                            "편집 완료 · 실행 취소로 되돌릴 수 있습니다.",
+                        );
+                    } catch (error) {
+                        api.status(error.message);
+                    }
+                    return;
+                }
+            }
+            if (
+                multiTools.has(tool) ||
+                tool === "hole" ||
+                (clickShapes.has(tool) && polygon.length)
+            ) {
+                acceptPoint(p);
+                return;
+            }
             if (tool === "boundary") {
                 try {
                     const boundary = api.boundary(raw);
                     if (!boundary) {
-                        api.status('클릭한 곳을 둘러싼 닫힌 직선 경계를 찾지 못했습니다. 선의 틈·숨긴 레이어를 확인하세요. 곡선이나 이미지 영역은 자유 영역으로 지정하세요.');
+                        api.status(
+                            "클릭한 곳을 둘러싼 닫힌 직선 경계를 찾지 못했습니다. 선의 틈·숨긴 레이어를 확인하세요. 곡선이나 이미지 영역은 자유 영역으로 지정하세요.",
+                        );
                         return;
                     }
-                    const item = create('area', Array.isArray(boundary) ? boundary : boundary.points);
-                    if(boundary.holes?.length)item.holes=clone(boundary.holes);
-                    if(commit(item))api.status('영역을 색칠했습니다. 다른 닫힌 구역을 계속 클릭하거나 Esc로 마치세요.');
-                } catch(error) { api.status(error.message); }
+                    const item = create(
+                        "area",
+                        Array.isArray(boundary) ? boundary : boundary.points,
+                    );
+                    if (boundary.holes?.length)
+                        item.holes = clone(boundary.holes);
+                    if (commit(item))
+                        api.status(
+                            "영역을 색칠했습니다. 다른 닫힌 구역을 계속 클릭하거나 Esc로 마치세요.",
+                        );
+                } catch (error) {
+                    api.status(error.message);
+                }
                 return;
             }
             if (["area", "freecloud", "route"].includes(tool)) {
@@ -618,7 +1418,7 @@
                 return;
             }
             gesture = {
-                kind: ["lasso","region"].includes(tool) ? "region" : "draw",
+                kind: ["lasso", "region"].includes(tool) ? "region" : "draw",
                 tool,
                 pointer: event.pointerId,
                 start: p,
@@ -635,9 +1435,36 @@
             if (event.buttons === 2 || event.buttons === 4) return;
             stop(event);
             if (!api.document() || api.busy()) return;
-            if (!gesture && !polygon.length && tool !== 'eraser'){const raw=api.world(event);canvas.style.cursor=space?'grab':tool==='select'&&chosen().some(item=>!isLocked(item)&&handles(item).some(h=>M.distance(h.point||h,raw)*api.scale()<8))?'nwse-resize':tool==='select'?'default':'crosshair';return;}
+            if (
+                !gesture &&
+                !polygon.length &&
+                tool !== "eraser" &&
+                !multiTools.has(tool) &&
+                !clickShapes.has(tool) &&
+                !["area", "route", "hole"].includes(tool)
+            ) {
+                const raw = api.world(event);
+                canvas.style.cursor = space
+                    ? "grab"
+                    : tool === "select" &&
+                        chosen().some(
+                            (item) =>
+                                !isLocked(item) &&
+                                handles(item).some(
+                                    (h) =>
+                                        M.distance(h.point || h, raw) *
+                                            api.scale() <
+                                        8,
+                                ),
+                        )
+                      ? "nwse-resize"
+                      : tool === "select"
+                        ? "default"
+                        : "crosshair";
+                return;
+            }
             const raw = api.world(event);
-            hover = polygon.length ? api.snap(raw) : raw;
+            hover = precision(raw, polygon.at(-1) || gesture?.start, event);
             if (tool === "route" && polygon.length && G)
                 hover = G.snapAngle(
                     polygon.at(-1),
@@ -660,8 +1487,11 @@
                         ["pen", "highlight", "eraser"].includes(g.tool) ||
                         g.kind === "region"
                             ? raw
-                            : api.snap(raw);
-                    if (event.shiftKey && ['line', 'arrow', 'doublearrow'].includes(g.tool))
+                            : precision(raw, g.start, event);
+                    if (
+                        event.shiftKey &&
+                        ["line", "arrow", "doublearrow"].includes(g.tool)
+                    )
                         g.end = G.snapAngle(g.start, g.end, 45);
                     if (
                         (["pen", "highlight", "eraser"].includes(g.tool) ||
@@ -671,7 +1501,8 @@
                     )
                         g.path.push(raw);
                 } else {
-                    const end = g.kind === "vertex" ? api.snap(raw) : raw;
+                    const end =
+                        g.kind === "vertex" ? precision(raw, null, event) : raw;
                     g.preview = g.original.map((item) =>
                         g.kind === "move"
                             ? M.translate(
@@ -680,7 +1511,8 @@
                                   end.y - g.start.y,
                               )
                             : (() => {
-                                  if (item.kind === 'ellipse') return G.resizeEllipse(item, g.grip, end);
+                                  if (["ellipse", "arc"].includes(item.kind))
+                                      return G.resizeEllipse(item, g.grip, end);
                                   const result = clone(item),
                                       handle = handles(result)[g.grip];
                                   if (handle) {
@@ -701,20 +1533,56 @@
             if (!g || g.kind !== "draw" || g.tool === "eraser") return null;
             const kind = {
                 box: "area",
-                circle: "ellipse", ellipse: "ellipse", triangle: "area", diamond: "area", polygon: "area", star: "area",
-                line: "route", arrow: "route", doublearrow: "route",
+                rounded: "area",
+                capsule: "area",
+                circle: "ellipse",
+                ellipse: "ellipse",
+                triangle: "area",
+                diamond: "area",
+                polygon: "area",
+                star: "area",
+                line: "route",
+                arrow: "route",
+                doublearrow: "route",
                 cloud: "cloud",
                 callout: "callout",
                 pen: "pen",
                 highlight: "highlight",
             }[g.tool];
-            const ps = ["box", "cloud", "circle", "ellipse", "triangle", "diamond", "polygon", "star"].includes(g.tool)
-                ? G.shape(g.tool, g.start, g.end, workbench?.polygonSides() || 6)
-                : ["pen", "highlight"].includes(g.tool)
-                  ? g.path
-                  : [g.start, g.end];
+            const ps = ["rounded", "capsule"].includes(g.tool)
+                ? G.roundedBox(
+                      g.start,
+                      g.end,
+                      g.tool === "capsule"
+                          ? Infinity
+                          : Number($("mw-corner-radius").value) || 1,
+                  )
+                : [
+                        "box",
+                        "cloud",
+                        "circle",
+                        "ellipse",
+                        "triangle",
+                        "diamond",
+                        "polygon",
+                        "star",
+                    ].includes(g.tool)
+                  ? G.shape(
+                        g.tool,
+                        g.start,
+                        g.end,
+                        workbench?.polygonSides() || 6,
+                    )
+                  : ["pen", "highlight"].includes(g.tool)
+                    ? g.path
+                    : [g.start, g.end];
             const item = create(kind, ps);
-            if (['line', 'arrow', 'doublearrow'].includes(g.tool)) item.arrows = { line: 'none', arrow: 'end', doublearrow: 'both' }[g.tool];
+            if (["line", "arrow", "doublearrow"].includes(g.tool))
+                item.arrows = {
+                    line: "none",
+                    arrow: "end",
+                    doublearrow: "both",
+                }[g.tool];
             if (kind === "callout") item.text = "메모 입력";
             return item;
         }
@@ -732,7 +1600,23 @@
                 return;
             }
             if (g.kind === "region") {
-                if(regionReceiver){const receiver=regionReceiver;regionReceiver=null;tool="select";receiver(g.moved?{minX:Math.min(g.start.x,g.end.x),minY:Math.min(g.start.y,g.end.y),maxX:Math.max(g.start.x,g.end.x),maxY:Math.max(g.start.y,g.end.y)}:null);api.render();return;}
+                if (regionReceiver) {
+                    const receiver = regionReceiver;
+                    regionReceiver = null;
+                    tool = "select";
+                    receiver(
+                        g.moved
+                            ? {
+                                  minX: Math.min(g.start.x, g.end.x),
+                                  minY: Math.min(g.start.y, g.end.y),
+                                  maxX: Math.max(g.start.x, g.end.x),
+                                  maxY: Math.max(g.start.y, g.end.y),
+                              }
+                            : null,
+                    );
+                    api.render();
+                    return;
+                }
                 if (g.moved && G) {
                     const region =
                         g.tool === "lasso" ? g.path : M.rect(g.start, g.end);
@@ -752,6 +1636,15 @@
                 return;
             }
             if (!permitted() || !g.moved) {
+                if (
+                    permitted() &&
+                    !g.moved &&
+                    g.kind === "draw" &&
+                    clickShapes.has(g.tool)
+                ) {
+                    polygon = [g.start];
+                    hover = null;
+                }
                 api.render();
                 return;
             }
@@ -804,7 +1697,13 @@
                     g.preview.some(
                         (item) =>
                             !item.points.every(finite) ||
-                            (["area", "ellipse", "cloud"].includes(item.kind) &&
+                            ([
+                                "area",
+                                "ellipse",
+                                "arc",
+                                "curve",
+                                "cloud",
+                            ].includes(item.kind) &&
                                 !(G
                                     ? G.valid(item)
                                     : M.validPolygon(item.points))),
@@ -844,7 +1743,7 @@
             (event) => {
                 if (mode !== "markup") return;
                 stop(event);
-                if (["area", "freecloud", "route"].includes(tool)) {
+                if (["area", "freecloud", "route", "hole"].includes(tool)) {
                     finishArea();
                     return;
                 }
@@ -1176,8 +2075,20 @@
             }
         }
         function render(ctx, options = {}) {
-            if(mode==='markup'&&!options.paper)canvas.style.cursor=gesture?.kind==='pan'?'grabbing':space?'grab':gesture?.kind==='move'?'move':gesture?.kind==='vertex'?'nwse-resize':tool==='select'?'default':'crosshair';
-            options = {...options,doc:api.document()};
+            if (mode === "markup" && !options.paper)
+                canvas.style.cursor =
+                    gesture?.kind === "pan"
+                        ? "grabbing"
+                        : space
+                          ? "grab"
+                          : gesture?.kind === "move"
+                            ? "move"
+                            : gesture?.kind === "vertex"
+                              ? "nwse-resize"
+                              : tool === "select"
+                                ? "default"
+                                : "crosshair";
+            options = { ...options, doc: api.document() };
             if (visible || options.paper) {
                 const previewMap = new Map(
                     (gesture?.preview || []).map((m) => [m.id, m]),
@@ -1198,17 +2109,40 @@
             if (!options.paper && mode === "markup") {
                 if (polygon.length) {
                     const ps = [...polygon, ...(hover ? [hover] : [])];
-                    const item = create(
-                        tool === "route" || tool === "calibrate"
-                            ? "route"
-                            : tool === "freecloud"
-                              ? "cloud"
-                              : "area",
-                        ps,
-                    );
-                    M.draw(ctx, item, api.screen, api.scale(), options);
+                    let item;
+                    if (multiTools.has(tool) || clickShapes.has(tool)) {
+                        try {
+                            const shape = multiTools.has(tool)
+                                ? construction(ps)
+                                : null;
+                            item = shape
+                                ? makeGeometry(shape)
+                                : clickShapes.has(tool) && ps.length === 2
+                                  ? preview({
+                                        kind: "draw",
+                                        tool,
+                                        start: ps[0],
+                                        end: ps[1],
+                                    })
+                                  : create("route", ps);
+                            if (tool === "curve") item.arrows = "end";
+                        } catch {
+                            item = create("route", ps);
+                        }
+                    } else
+                        item = create(
+                            tool === "route" || tool === "calibrate"
+                                ? "route"
+                                : tool === "freecloud"
+                                  ? "cloud"
+                                  : "area",
+                            ps,
+                        );
+                    if (item.points.length > 1)
+                        M.draw(ctx, item, api.screen, api.scale(), options);
                     ctx.save();
-                    ctx.fillStyle = options.background === 'white' ? '#334155' : '#fff';
+                    ctx.fillStyle =
+                        options.background === "white" ? "#334155" : "#fff";
                     polygon.forEach((p) => {
                         const q = api.screen(p);
                         ctx.fillRect(q.x - 3, q.y - 3, 6, 6);
@@ -1226,7 +2160,8 @@
                             a = api.screen({ x: b.minX, y: b.maxY }),
                             z = api.screen({ x: b.maxX, y: b.minY });
                         ctx.save();
-                        ctx.strokeStyle = options.color?.('#7dd3fc') || '#7dd3fc';
+                        ctx.strokeStyle =
+                            options.color?.("#7dd3fc") || "#7dd3fc";
                         ctx.lineWidth = 1;
                         ctx.setLineDash([4, 4]);
                         ctx.strokeRect(
@@ -1236,6 +2171,17 @@
                             z.y - a.y + 8,
                         );
                         ctx.setLineDash([]);
+                        if (shown.kind === "curve") {
+                            ctx.setLineDash([3, 3]);
+                            ctx.beginPath();
+                            const ps = shown.points.map(api.screen);
+                            ctx.moveTo(ps[0].x, ps[0].y);
+                            ctx.lineTo(ps[1].x, ps[1].y);
+                            ctx.moveTo(ps[2].x, ps[2].y);
+                            ctx.lineTo(ps[3].x, ps[3].y);
+                            ctx.stroke();
+                            ctx.setLineDash([]);
+                        }
                         if (
                             chosen().length === 1 &&
                             !isLocked(item) &&
@@ -1264,13 +2210,63 @@
                     " · Space+드래그 화면 이동";
             }
             if (!options.paper) {
+                hud.hidden = mode !== "markup" || !polygon.length || !!gesture;
+                if (!hud.hidden) {
+                    const a = polygon.at(-1),
+                        p = hover || a;
+                    let label = [
+                        "box",
+                        "ellipse",
+                        "triangle",
+                        "diamond",
+                        "polygon",
+                        "star",
+                        "rounded",
+                        "capsule",
+                    ].includes(tool)
+                        ? "가로,세로"
+                        : tool === "circle"
+                          ? "지름"
+                          : tool === "arc2" && polygon.length === 2
+                            ? "돌출 높이"
+                            : tool === "rotbox" && polygon.length === 2
+                              ? "사각형 폭"
+                              : ["arc", "pie"].includes(tool) &&
+                                  polygon.length === 2
+                                ? "회전각(°)"
+                                : "다음 점 길이<각도";
+                    $("markup-numeric-label").textContent = label;
+                    $("markup-drawing-readout").textContent =
+                        `${names[tool]} · ${polygon.length}점 지정 · 거리 ${Number(M.distance(a, p).toPrecision(6))} · 각도 ${Number(((Math.atan2(p.y - a.y, p.x - a.x) * 180) / Math.PI).toFixed(1))}°`;
+                }
+                canvas.dataset.markupSnap = preciseMark?.kind || "";
+                if (preciseMark && mode === "markup") {
+                    const p = api.screen(preciseMark);
+                    canvas.dataset.markupSnapX = preciseMark.x;
+                    canvas.dataset.markupSnapY = preciseMark.y;
+                    ctx.save();
+                    ctx.strokeStyle =
+                        options.background === "white" ? "#b45309" : "#fbbf24";
+                    ctx.fillStyle =
+                        options.background === "white" ? "#ffffff" : "#0f172a";
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([]);
+                    ctx.strokeRect(p.x - 5, p.y - 5, 10, 10);
+                    ctx.font = "12px sans-serif";
+                    const w = ctx.measureText(preciseMark.kind).width;
+                    ctx.fillRect(p.x + 10, p.y - 24, w + 10, 21);
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.fillText(preciseMark.kind, p.x + 15, p.y - 9);
+                    ctx.restore();
+                }
                 if (gesture?.kind === "region") {
                     const ps =
                         gesture.tool === "lasso"
                             ? gesture.path
                             : M.rect(gesture.start, gesture.end);
                     ctx.save();
-                    const color = gesture.end.x < gesture.start.x ? '#34d399' : '#38bdf8';
+                    const color =
+                        gesture.end.x < gesture.start.x ? "#34d399" : "#38bdf8";
                     ctx.strokeStyle = options.color?.(color) || color;
                     ctx.fillStyle = "rgba(56,189,248,.1)";
                     ctx.lineWidth = 1;
@@ -1287,7 +2283,8 @@
                 if (tool === "eraser" && hover) {
                     const p = api.screen(hover);
                     ctx.save();
-                    ctx.strokeStyle = options.background === 'white' ? '#334155' : '#fff';
+                    ctx.strokeStyle =
+                        options.background === "white" ? "#334155" : "#fff";
                     ctx.lineWidth = 1;
                     ctx.beginPath();
                     ctx.arc(
@@ -1332,7 +2329,8 @@
                     return;
                 if (event.code === "Space") {
                     stop(event);
-                    space = true;canvas.style.cursor="grab";
+                    space = true;
+                    canvas.style.cursor = "grab";
                     return;
                 }
                 if (event.key === "Escape") {
@@ -1344,10 +2342,51 @@
                     api.render();
                     return;
                 }
+                if (
+                    (polygon.length || gesture?.kind === "draw") &&
+                    [
+                        "ArrowRight",
+                        "ArrowLeft",
+                        "ArrowUp",
+                        "ArrowDown",
+                    ].includes(event.key)
+                ) {
+                    stop(event);
+                    directionLock =
+                        event.key === "ArrowRight"
+                            ? 0
+                            : ["ArrowLeft", "ArrowUp"].includes(event.key)
+                              ? 90
+                              : null;
+                    if (lastRaw)
+                        hover = precision(
+                            lastRaw,
+                            polygon.at(-1) || gesture?.start,
+                        );
+                    api.render();
+                    return;
+                }
+                if (
+                    polygon.length &&
+                    /^[0-9.\-]$/.test(event.key) &&
+                    !event.ctrlKey &&
+                    !event.metaKey
+                ) {
+                    stop(event);
+                    $("markup-numeric").value = event.key;
+                    $("markup-numeric").focus();
+                    return;
+                }
                 if (pending()) {
+                    if (event.key === "Backspace" && polygon.length) {
+                        stop(event);
+                        polygon.pop();
+                        api.render();
+                        return;
+                    }
                     if (
                         event.key === "Enter" &&
-                        ["area", "freecloud", "route"].includes(tool)
+                        ["area", "freecloud", "route", "hole"].includes(tool)
                     ) {
                         stop(event);
                         finishArea();
@@ -1412,7 +2451,10 @@
             true,
         );
         document.addEventListener("keyup", (event) => {
-            if (event.code === "Space") {space = false;api.render();}
+            if (event.code === "Space") {
+                space = false;
+                api.render();
+            }
         });
         window.addEventListener("blur", () => {
             space = false;
@@ -1448,8 +2490,14 @@
             },
             items,
             selected: chosen,
-            apply,select,
-            pickRegion: receiver => {setMode("markup");setTool("region");regionReceiver=receiver;api.render();},
+            apply,
+            select,
+            pickRegion: (receiver) => {
+                setMode("markup");
+                setTool("region");
+                regionReceiver = receiver;
+                api.render();
+            },
         };
     };
 })();
