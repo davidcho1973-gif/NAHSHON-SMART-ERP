@@ -51,7 +51,7 @@ const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:a
         await expect(page.locator('#status')).toContainText(drawing.title);
         await page.locator('#snap').uncheck();
         await page.locator('[data-workspace="cad"]').click();
-        const box = await page.locator('#canvas').boundingBox(), scale = .85 * Math.min(box.width / 200, box.height / 120);
+        let box = await page.locator('#canvas').boundingBox();const scale = .85 * Math.min(box.width / 200, box.height / 120);
         const screen = (x, y) => ({x: box.x + box.width / 2 + (x - 100) * scale, y: box.y + box.height / 2 - (y - 60) * scale});
         const move = async (x, y) => {const p = screen(x, y); await page.mouse.move(p.x, p.y, {steps: 8});};
         const click = async (x, y) => {const p = screen(x, y); await page.mouse.click(p.x, p.y);};
@@ -101,6 +101,9 @@ const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:a
         await save(); assert.equal(nativeCount('LINE'), beforeCancel);
 
         await page.locator('[data-workspace="markup"]').click();
+        // The fixed numeric dock changes viewport height; the world center and
+        // scale stay fixed, so screen coordinates must use the current viewport.
+        box = await page.locator('#canvas').boundingBox();
         const activeMarkup = name => expect(page.locator(`[data-markup-tool="${name}"]`)).toHaveAttribute('aria-pressed', 'true');
         const dialog = async text => {await expect(page.locator('#markup-dialog')).toBeVisible(); await page.locator('#markup-dialog-text').fill(text); await page.locator('#markup-dialog-confirm').click();};
         const polygon = async x => {await click(x, 40); await click(x + 20, 40); await click(x + 10, 55); await page.keyboard.press('Enter');};
