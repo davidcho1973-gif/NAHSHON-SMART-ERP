@@ -19,7 +19,7 @@
         "POINT",
     ]);
     function readSketchMetadata(raw){
-        const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT');if(at<0)return null;
+        const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT');if(at<0||raw.filter(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT').length!==1)return null;
         let payload='';for(let i=at+1;i<raw.length&&raw[i][0]!==1001;i++){if(raw[i][0]!==1000)return null;payload+=raw[i][1];if(payload.length>1024)return null;}
         try{const m=JSON.parse(payload);if(m.v!==1||Object.keys(m).some(k=>!['v','group','locked'].includes(k))||m.group!==null&&m.group!==undefined&&(typeof m.group!=='string'||! /^[a-zA-Z0-9_-]{1,100}$/.test(m.group))||m.locked!==undefined&&typeof m.locked!=='boolean')return null;return m;}catch(_){return null;}
     }
@@ -1191,7 +1191,7 @@
     }
 
     function offset(e, d) {
-        if (!Number.isFinite(d)) throw Error("오프셋 거리가 잘못되었습니다.");
+        if (!Number.isFinite(d)||Math.abs(d)<1e-10) throw Error("0이 아닌 오프셋 거리를 입력하세요.");
         if(!allows(e,'copy'))throw Error('이 객체는 복사를 지원하지 않습니다.');
         const n = copyEditState(e, entityAssets);delete n.displayGeometry;
         if (e.type === "LINE") {
@@ -1253,6 +1253,13 @@
         n.dirty = true;
         return n;
     }
+    function copyEntities(es){
+        const groups=new Map();
+        return es.map(e=>{if(!allows(e,'copy'))throw Error('선택 객체 중 복사할 수 없는 객체가 있습니다.');const n=copyEditState(e,entityAssets);n.id=uid();n.dirty=true;n.sketchLocked=false;
+            if(n.raw)n.raw=n.raw.filter(p=>![5,330,360].includes(p[0]));
+            if(n.sketchGroup){if(!groups.has(n.sketchGroup))groups.set(n.sketchGroup,uid());n.sketchGroup=groups.get(n.sketchGroup);}
+            if(n.type==='ERP_DIMENSION'){n.groupId=uid();delete n.rawParts;}return n;});
+    }
     function array(es, rows, cols, dx, dy) {
         if (
             !Number.isInteger(rows) ||
@@ -1269,18 +1276,7 @@
         const out = [];
         for (let y = 0; y < rows; y++)
             for (let x = 0; x < cols; x++)
-                if (x || y)
-                    for (const e of es) {
-                        if(!allows(e,'copy'))throw Error('선택 객체 중 복사할 수 없는 객체가 있습니다.');
-                        const n = transform(e, { dx: x * dx, dy: y * dy });
-                        n.id = "array" + Math.random();
-            if(n.type==='ERP_DIMENSION'){n.groupId=uid();delete n.rawParts;}
-                        if (n.raw)
-                            n.raw = n.raw.filter(
-                                (p) => ![5, 330, 360].includes(p[0]),
-                            );
-                        out.push(n);
-                    }
+                if (x || y)for(const n of copyEntities(es.map(e=>transform(e,{dx:x*dx,dy:y*dy}))))out.push(n);
         return out;
     }
     function renameLayer(source, old, name) {
@@ -1608,7 +1604,7 @@
         canvasColor,
         renderEntities,
         quantities, aiGeometry, aiContext, applyAIActions, utf8Size,
-        uid, drawingUnit, lengthUnits, measurementSettings, lengthInputScale, formatLength, newDimension, dimensionLayout, dimensionParts, textLines, textBox, snapPoints,
+        uid, copyEntities, drawingUnit, lengthUnits, measurementSettings, lengthInputScale, formatLength, newDimension, dimensionLayout, dimensionParts, textLines, textBox, snapPoints,
         rectangleFrame, grips, resize, contains,
         renameLayer,
         offset,

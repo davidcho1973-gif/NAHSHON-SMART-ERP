@@ -694,18 +694,12 @@
                 if (!selected.has(e.id) || !editable(e)) return e;
                 const n = C.transform(e, o);
                 if (tool === "copy") {
-                    n.id = "copy" + Math.random();
-                    if(n.type==='ERP_DIMENSION'){n.groupId=C.uid();delete n.rawParts;}
-                    if (n.raw)
-                        n.raw = n.raw.filter(
-                            (p) => ![5, 330, 360].includes(p[0]),
-                        );
                     copies.push(n);
                     return e;
                 }
                 return n;
             });
-            doc.entities.push(...copies);
+            doc.entities.push(...C.copyEntities(copies));
         }
         points = [];
         if(['line','rectangle','circle','arc'].includes(tool)){selected.clear();hoverPoint=null;}

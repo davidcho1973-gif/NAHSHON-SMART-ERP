@@ -32,3 +32,9 @@ test('unknown edit metadata remains protected; valid group metadata permits inde
     assert.equal(d.entities[0].sketchGroup,undefined);assert.ok(!C.allows(d.entities[0],'copy'));d.entities[0]=C.transform(d.entities[0],{dx:1});assert.ok(C.exportDXF(d).includes('"v":2'));
     const plain=C.parse(source.replace('1001\nFOREIGN\n1000\nuntouched\n',''));Object.assign(plain.entities[0],{sketchGroup:'safe_group',sketchLocked:false,dirty:true});const e=C.parse(C.exportDXF(plain)).entities[0];assert.ok(C.allows(e,'copy'));
 });
+test('clipboard and array copies retain group membership without joining the original group',()=>{
+    const a=rect(),b=C.transform(a,{dx:50});b.id='second';a.sketchGroup=b.sketchGroup='original';
+    const copied=C.copyEntities([a,b]);assert.equal(copied[0].sketchGroup,copied[1].sketchGroup);assert.notEqual(copied[0].sketchGroup,'original');assert.notEqual(copied[0].id,copied[1].id);
+    const array=C.array([a,b],1,3,100,0);assert.equal(array[0].sketchGroup,array[1].sketchGroup);assert.equal(array[2].sketchGroup,array[3].sketchGroup);assert.notEqual(array[0].sketchGroup,array[2].sketchGroup);
+    assert.equal(a.sketchGroup,'original');assert.equal(a.points[0].x,0);
+});
