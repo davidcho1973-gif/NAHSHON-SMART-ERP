@@ -132,3 +132,13 @@ const boxFill=exploded.entities.find(e=>e.type==='HATCH'&&number(e,420)===0x20aa
 const handles=exploded.entities.filter(e=>!e.paper).map(e=>value(e,5));assert.equal(new Set(handles).size,handles.length,'Exploded/fill entities have unique native handles');
 assert.equal(readFileSync(at('source.dxf'),'utf8'),fixture.source,'Original source is immutable');
 console.log('PASS: nested transformed block explodes to independent line/text objects; sibling definition, elevation, inherited style, filled box and alpha survive DWG.');
+
+const grouped=C.copyDocument(exploded),groupedBox=grouped.entities.find(e=>e.type==='LWPOLYLINE');
+Object.assign(groupedBox,{sketchGroup:'native_roundtrip_group',sketchLocked:true,hidden:true,dirty:true});
+const groupedSaved=roundtrip('sketch-group-locked-hidden',grouped),savedBox=groupedSaved.entities.find(e=>e.sketchGroup==='native_roundtrip_group');
+assert.ok(savedBox,'Selection group XDATA survives actual DWG');assert.equal(savedBox.sketchLocked,true);assert.equal(savedBox.hidden,true);
+Object.assign(savedBox,{sketchLocked:false,hidden:false,dirty:true});assert.ok(C.allows(savedBox,'copy'),'Known group XDATA does not prevent copying after reopen');
+const offsetBox=C.offset(savedBox,2);groupedSaved.entities.push(offsetBox);
+const unlocked=roundtrip('sketch-offset-unlocked',groupedSaved),finalBox=unlocked.entities.find(e=>e.sketchGroup==='native_roundtrip_group');
+assert.equal(finalBox.sketchLocked,false);assert.equal(finalBox.hidden,false);assert.equal(unlocked.entities.filter(e=>e.type==='LWPOLYLINE').length,grouped.entities.filter(e=>e.type==='LWPOLYLINE').length+1);
+console.log('PASS: grouped, locked and hidden native shapes persist through DWG; unlock and rectangle offset remain editable.');

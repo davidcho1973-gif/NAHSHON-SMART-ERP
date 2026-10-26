@@ -18,6 +18,11 @@
         "MTEXT",
         "POINT",
     ]);
+    function readSketchMetadata(raw){
+        const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT');if(at<0)return null;
+        let payload='';for(let i=at+1;i<raw.length&&raw[i][0]!==1001;i++){if(raw[i][0]!==1000)return null;payload+=raw[i][1];if(payload.length>1024)return null;}
+        try{const m=JSON.parse(payload);if(m.v!==1||Object.keys(m).some(k=>!['v','group','locked'].includes(k))||m.group!==null&&m.group!==undefined&&(typeof m.group!=='string'||! /^[a-zA-Z0-9_-]{1,100}$/.test(m.group))||m.locked!==undefined&&typeof m.locked!=='boolean')return null;return m;}catch(_){return null;}
+    }
 
     // Raw DXF and tessellated block geometry are read-only assets, not edit state.
     // A JSON copy expands shared point paths into separate multi-megabyte copies.
@@ -112,7 +117,7 @@
             if(raw){const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_DIM');if(at>=0){let end=at+1;while(end<raw.length&&raw[end][0]!==1001)end++;raw.splice(at,end-at);}}
             if(!raw)raw=[[0,type],[100,'AcDbEntity'],[8,e.layer],[100,type==='LINE'?'AcDbLine':'AcDbText']];
             raw.push([1001,'ERP_CAD_DIM']);for(let i=0;i<payload.length;i+=200)raw.push([1000,payload.slice(i,i+200)]);
-            return newEntity(type,{...shape,id:e.id+'-'+index,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',raw,dirty:true},e.layer);
+            return newEntity(type,{...shape,id:e.id+'-'+index,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',raw,dirty:true,hidden:e.hidden,sketchGroup:e.sketchGroup,sketchLocked:e.sketchLocked},e.layer);
         });
     }
     function restoreDimensions(doc){
@@ -126,6 +131,8 @@
             const e=newDimension(m.a,m.b,m.placement,{id:'dim-'+group,groupId:group,measurement:m.measurement,mode:m.mode,axis:m.axis||undefined,textPosition:m.textPosition,height:m.height,color:m.color,lineWeight:m.lineWeight,lineType:m.lineType||'BYLAYER',layer:m.layer});
             const expected=dimensionParts(e),near=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=Math.max(1,Math.abs(a),Math.abs(b))*1e-8;
             if(entries.some(({e:actual},i)=>{const wanted=expected[i];return !actual.editable||actual.type!==wanted.type||actual.layer!==wanted.layer||actual.color!==wanted.color||actual.lineWeight!==wanted.lineWeight||canonicalLineType(actual.lineType)!==canonicalLineType(wanted.lineType)||!near(actual.p.x,wanted.p.x)||!near(actual.p.y,wanted.p.y)||(actual.type==='LINE'? !near(actual.q.x,wanted.q.x)||!near(actual.q.y,wanted.q.y):actual.text!==wanted.text||!near(actual.height,wanted.height)||Math.abs(((actual.angle-wanted.angle+180)%360+360)%360-180)>1e-8);}))continue;
+            if(entries.some(x=>x.e.sketchGroup!==entries[0].e.sketchGroup||x.e.sketchLocked!==entries[0].e.sketchLocked||x.e.hidden!==entries[0].e.hidden))continue;
+            Object.assign(e,{hidden:entries[0].e.hidden,sketchGroup:entries[0].e.sketchGroup,sketchLocked:entries[0].e.sketchLocked});
             e.dirty=false;e.rawParts=entries.map(x=>x.e.raw);replace.set(entries[0].e.id,e);entries.slice(1).forEach(x=>remove.add(x.e.id));
         }catch(_){}}
         doc.entities=doc.entities.filter(e=>!remove.has(e.id)).map(e=>replace.get(e.id)||e);return doc;
@@ -214,7 +221,7 @@
         e.text=decodeUnicode(val(raw,1,'<>'))||'<>';e.height=height>0?height:2.5;e.textPosition=has(11)&&has(21)?pt(raw,11):null;
         e.nativeDimension.operations=restricted?['style','text','resize','layer']:['move','copy','rotate','scale','resize','style','text','delete','layer'];
         const apps=raw.map((p,i)=>p[0]===1001?i:-1).filter(i=>i>=0);
-        if(apps.some(i=>raw[i][1]!=='ACAD'||raw[i+1]?.[0]!==1000||raw[i+1]?.[1]!=='DSTYLE'))e.nativeDimension.operations=e.nativeDimension.operations.filter(op=>op!=='copy');
+        if(apps.some(i=>!(raw[i][1]==='ERP_CAD_EDIT'&&readSketchMetadata(raw))&&(raw[i][1]!=='ACAD'||raw[i+1]?.[0]!==1000||raw[i+1]?.[1]!=='DSTYLE')))e.nativeDimension.operations=e.nativeDimension.operations.filter(op=>op!=='copy');
         return e;
     }
     function nativeDimensionLayout(e){
@@ -445,7 +452,7 @@
                 if(e.nativeDimension?.compatible)ops=[...e.nativeDimension.operations];
                 if(e.type==='HATCH'&&e.hatch){ops=['style','delete','layer'];try{const fields=hatchFields(e.raw);if(!num(e.raw,71)){ops.push('move','rotate','scale');if(!fields.hasSources)ops.push('copy');}}catch(_){}e.opacity=(num(e.raw,440)&0x2000000)?(num(e.raw,440)&255)/255:1;}
                 if(e.type==='INSERT'&&e.renderParts?.length&&!String(val(e.raw||[],2)).startsWith('*')&&safeBlock(val(e.raw||[],2))&&!num(e.raw||[],66)&&num(e.raw||[],70,1)<=1&&num(e.raw||[],71,1)<=1&&e.renderParts.every(part=>['LINE','CIRCLE','ARC','LWPOLYLINE','TEXT','MTEXT','POINT'].includes(part.type)&&planarXY(part)))ops=['move','copy','style','delete','layer'];
-                if((e.raw||[]).some(p=>[102,360,1001].includes(p[0]))&&e.type!=='ERP_DIMENSION'&&!e.nativeDimension?.compatible)ops=ops.filter(op=>op!=='copy');
+                if((e.raw||[]).some(p=>[102,360].includes(p[0])||p[0]===1001&&!(p[1]==='ERP_CAD_EDIT'&&readSketchMetadata(e.raw)))&&e.type!=='ERP_DIMENSION'&&!e.nativeDimension?.compatible)ops=ops.filter(op=>op!=='copy');
             }
             e.operations=ops;e.editable=ops.length>0;
             e.editReason=ops.length?(ops.includes('rotate')?'2D 편집 가능':ops.includes('move')?'이동·속성 편집 지원 · 형상 변경 제한':ops.includes('resize')?'속성·치수 위치 편집 지원 · 원본 측정점 보호':'속성 편집 지원 · 형상 변경 제한'):(e.nativeDimension?.reason||'3D·특수 객체 또는 지원하지 않는 형식 · 원본 보존');
@@ -507,6 +514,7 @@
             e.color = r.some((p) => p[0] === 420) ? num(r, 420) : null;
             e.aci = num(r, 62, 256);
             e.hidden = !!num(r, 60) || e.aci < 0;
+            const editMeta=readSketchMetadata(r);if(editMeta){if(editMeta.group)e.sketchGroup=editMeta.group;e.sketchLocked=!!editMeta.locked;}
             e.paper = !!num(r, 67) || (val(r, 410) && val(r, 410) !== "Model");
             e.lineType = val(r, 6, "BYLAYER");
             e.lineWeight = num(r, 370, -1);
@@ -1049,11 +1057,11 @@
                 at++;
             prefix = replaceRecords(prefix, at, 0, records);
         }
-        if(hasDimensions){
+        for(const appId of [...(hasDimensions?['ERP_CAD_DIM']:[]),...(d.entities.some(e=>e.sketchGroup||e.sketchLocked)?['ERP_CAD_EDIT']:[])]){
             let table=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='TABLE'&&prefix[i+1]?.[1]==='APPID'),end=table;
             if(table>=0){while(end<prefix.length&&!(prefix[end][0]===0&&prefix[end][1]==='ENDTAB'))end++;}
-            const exists=prefix.some((p,i)=>p[0]===0&&p[1]==='APPID'&&prefix.slice(i+1,i+9).some(p=>p[0]===2&&p[1]==='ERP_CAD_DIM'));
-            if(!exists){const record=[[0,'APPID'],[5,next()],[100,'AcDbSymbolTableRecord'],[100,'AcDbRegAppTableRecord'],[2,'ERP_CAD_DIM'],[70,'0']];if(table>=0){prefix=replaceRecords(prefix,end,0,record);const count=prefix.slice(table,end).find(p=>p[0]===70);if(count)count[1]=String(Number(count[1])+1);}else{let at=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='SECTION'&&prefix[i+1]?.[1]==='TABLES');while(at<prefix.length&&!(prefix[at][0]===0&&prefix[at][1]==='ENDSEC'))at++;prefix=replaceRecords(prefix,at,0,[[0,'TABLE'],[2,'APPID'],[70,'1']].concat(record,[[0,'ENDTAB']]));}}
+            const exists=prefix.some((p,i)=>p[0]===0&&p[1]==='APPID'&&prefix.slice(i+1,i+9).some(p=>p[0]===2&&p[1]===appId));
+            if(!exists){const record=[[0,'APPID'],[5,next()],[100,'AcDbSymbolTableRecord'],[100,'AcDbRegAppTableRecord'],[2,appId],[70,'0']];if(table>=0){prefix=replaceRecords(prefix,end,0,record);const count=prefix.slice(table,end).find(p=>p[0]===70);if(count)count[1]=String(Number(count[1])+1);}else{let at=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='SECTION'&&prefix[i+1]?.[1]==='TABLES');while(at<prefix.length&&!(prefix[at][0]===0&&prefix[at][1]==='ENDSEC'))at++;prefix=replaceRecords(prefix,at,0,[[0,'TABLE'],[2,'APPID'],[70,'1']].concat(record,[[0,'ENDTAB']]));}}
         }
         let out = [...prefix];
         for (const e of d.entities) {
@@ -1097,7 +1105,11 @@
             if (e.color !== undefined && e.color !== null) set(420, e.color);
             if (e.lineType) set(6, e.lineType);
             if (e.lineWeight !== undefined) set(370, e.lineWeight);
-            if(e.type==='HATCH'){appendRecords(out,r);continue;}
+            if(e.hidden!==undefined){set(60,e.hidden?1:0);if(!e.hidden&&num(r,62)<0)set(62,Math.abs(num(r,62)));}
+            // Keep persistent selection groups and locks on the DXF entities,
+            // not in a side table keyed by IDs that change when DXF is reopened.
+            const editRecords=()=>{if(e.sketchGroup===undefined&&e.sketchLocked===undefined)return;const at=r.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT');if(at>=0){if(!readSketchMetadata(r))throw Error('지원하지 않는 편집 메타데이터가 있습니다. 원본을 보존합니다.');let end=at+1;while(end<r.length&&r[end][0]!==1001)end++;r.splice(at,end-at);}if(e.sketchGroup||e.sketchLocked)r.push([1001,'ERP_CAD_EDIT'],[1000,JSON.stringify({v:1,group:e.sketchGroup||null,locked:!!e.sketchLocked})]);};
+            if(e.type==='HATCH'){editRecords();appendRecords(out,r);continue;}
             set(10, e.p.x);
             set(20, e.p.y);
             if (e.type === "LINE") {
@@ -1135,6 +1147,7 @@
                     0,
                     [100, "AcDbArc"],
                 );
+            editRecords();
             appendRecords(out, r);
         }
         appendRecords(out, suffix);
@@ -1188,11 +1201,26 @@
                 dy = ((e.q.x - e.p.x) * d) / len;
             n.p = { x: e.p.x + dx, y: e.p.y + dy };
             n.q = { x: e.q.x + dx, y: e.q.y + dy };
-        } else if (e.type === "CIRCLE") {
+        } else if (e.type === "CIRCLE" || e.type === 'ARC') {
             n.radius += d;
             if (n.radius <= 0) throw Error("원 반지름이 0 이하입니다.");
-        } else throw Error("오프셋은 선 또는 원만 지원합니다.");
+        } else if(e.type==='LWPOLYLINE'){
+            const ps=e.points,count=ps.length,closed=e.closed;
+            if(count<2||count>2000||ps.some(p=>p.bulge))throw Error('오프셋은 직선 폴리선(최대 2,000개 점)을 지원합니다. 곡선 구간은 원·원호 도구를 사용하세요.');
+            const cross=(a,b)=>a.x*b.y-a.y*b.x,sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y}),area=points=>points.reduce((sum,p,i)=>sum+cross(p,points[(i+1)%points.length]),0)/2;
+            const signedArea=area(ps),sign=closed?(signedArea>0?-1:1):1;
+            const edges=ps.slice(0,closed?count:count-1).map((p,i)=>{const q=ps[(i+1)%count],len=distance(p,q);if(len<1e-10)throw Error('길이 0인 구간은 오프셋할 수 없습니다.');const dx=-(q.y-p.y)*d*sign/len,dy=(q.x-p.x)*d*sign/len;return [{x:p.x+dx,y:p.y+dy},{x:q.x+dx,y:q.y+dy}];});
+            const intersect=(a,b,c,d,segment=false)=>{const u=sub(b,a),v=sub(d,c),den=cross(u,v);if(Math.abs(den)<1e-12)return null;const t=cross(sub(c,a),v)/den,s=cross(sub(c,a),u)/den;if(segment&&(t<0||t>1||s<0||s>1))return null;return {x:a.x+t*u.x,y:a.y+t*u.y};};
+            const out=ps.map((p,i)=>{if(!closed&&i===0)return {...p,...edges[0][0]};if(!closed&&i===count-1)return {...p,...edges.at(-1)[1]};const prev=edges[(i-1+edges.length)%edges.length],next=edges[i%edges.length],q=intersect(...prev,...next)||next[0];if(distance(q,p)>Math.max(1e-8,Math.abs(d)*30))throw Error('모서리가 너무 날카롭습니다. 오프셋 간격을 줄이세요.');return {...p,...q};});
+            const invalid=()=>{throw Error('오프셋 결과가 뒤집히거나 겹칩니다. 간격을 줄이세요.');};
+            if(closed&&(Math.abs(area(out))<1e-10||Math.sign(area(out))!==Math.sign(signedArea)))invalid();
+            const end=closed?count:count-1;
+            for(let i=0;i<end;i++){const a=out[i],b=out[(i+1)%count];if(cross(sub(b,a),sub(ps[(i+1)%count],ps[i]))>1e-6)invalid();if((b.x-a.x)*(ps[(i+1)%count].x-ps[i].x)+(b.y-a.y)*(ps[(i+1)%count].y-ps[i].y)<=0)invalid();for(let j=i+2;j<end;j++){if(closed&&i===0&&j===end-1)continue;if(intersect(a,b,out[j],out[(j+1)%count],true))invalid();}}
+            if(closed&&d<0&&out.some(p=>ps.some((a,i)=>segmentDistance(p,a,ps[(i+1)%count])<Math.abs(d)-Math.max(1e-8,Math.abs(d)*1e-7))))invalid();
+            n.points=out;n.p=out[0];
+        } else throw Error("오프셋은 선·원·원호·직선 폴리선을 지원합니다.");
         n.id = "offset" + Math.random();
+        delete n.sketchGroup;n.sketchLocked=false;
         n.dirty = true;
         if (n.raw) n.raw = n.raw.filter((p) => ![5, 330, 360].includes(p[0]));
         return n;
@@ -1359,6 +1387,8 @@
         n.p={...n.points[0]};n.dirty=true;return n;
     }
     function contains(e,p) {
+        if(e.type==='CIRCLE')return distance(e.p,p)<=e.radius;
+        if(e.type==='LWPOLYLINE'&&e.closed){const ring=geometry(e);let hit=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if(segmentDistance(p,a,b)<1e-9)return true;if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)hit=!hit;}return hit;}
         if(e.hatch){const inside=ring=>{let hit=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)hit=!hit;}return hit;};const count=e.hatch.rings.filter(inside).length;return e.hatch.style===2?count>0:e.hatch.style===1?count===1:count%2===1;}
         const f=rectangleFrame(e);if(!f)return false;
         const x=(p.x-f.a.x)*f.u.x+(p.y-f.a.y)*f.u.y,y=(p.x-f.a.x)*f.v.x+(p.y-f.a.y)*f.v.y;
@@ -1392,7 +1422,7 @@
         if(e.type==='ERP_DIMENSION')result={p:point(e.p),q:point(e.q),placement:point(e.placement),mode:e.mode,height:e.height,...(e.axis?{axis:point(e.axis)}:{}),textPosition:e.textPosition?point(e.textPosition):null};
         function finite(value){if(typeof value==='number'&&(!Number.isFinite(value)||Math.abs(value)>1e12))throw Error('AI 공유/편집 좌표와 수치는 유한한 ±1조 범위여야 합니다.');if(Array.isArray(value))value.forEach(finite);else if(value&&typeof value==='object')Object.values(value).forEach(finite);}finite(result);return result;
     }
-    function aiEditable(e){return !!e.editable&&aiGeometry(e)!==null&&['move','rotate','scale','style','delete',...(['TEXT','MTEXT'].includes(e.type)?['text']:[])].every(op=>allows(e,op));}
+    function aiEditable(e){return !!e.editable&&!e.sketchLocked&&aiGeometry(e)!==null&&['move','rotate','scale','style','delete',...(['TEXT','MTEXT'].includes(e.type)?['text']:[])].every(op=>allows(e,op));}
     function utf8Size(value){let bytes=0;for(const character of JSON.stringify(value)){const n=character.codePointAt(0);bytes+=n<=127?1:n<=2047?2:n<=65535?3:4;}return bytes;}
     function aiContext(doc,options){
         if(!['drawing','mm','cm','m','in','ft'].includes(options.unit)||!['selection','visible'].includes(options.scope)||!/^([a-f0-9]{64})$/.test(options.documentHash))throw Error('공유 범위·도면 단위·문서 해시를 확인하세요.');
