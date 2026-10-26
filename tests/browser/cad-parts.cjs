@@ -11,8 +11,9 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
         doc.entities.push(C.newEntity('POINT',{p:{x:0,y:0}}),C.newEntity('POINT',{p:{x:200,y:120}}));
         const original=C.exportDXF(doc);let drawing={id:9,title:'SYNTHETIC PARTS',revision:1,site_id:1,canManage:true,canExport:true,dxf:original,markups:[],workspace:{}};
         const catalog=new Map(),archived=new Set();
-        const scripts=['polygon-clipping','cad-core','cad-fidelity','cad-markup','cad-markup-geometry','cad-parts','cad-markup-workbench','cad-recovery','cad-print','cad-review','cad-review-workbench','cad-markup-tools','cad-editor'];
-        const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'')
+        const source=fs.readFileSync('resources/views/cad/index.blade.php','utf8');
+        const scripts=[...source.matchAll(/asset\('(js\/cad-[^']+\.js|vendor\/polygon-clipping\/polygon-clipping.js)'\)/g)].map(m=>m[1].split('/').at(-1).replace(/\.js$/,''));
+        const html=source.replace(/<script[^>]*>[\s\S]*?<\/script>/g,'')
             .replace(/<link[^>]*>/g,'').replace('</head>','<link rel="stylesheet" href="/cad-editor.css"><link rel="stylesheet" href="/cad-parts.css"></head>')
             .replace('{{ csrf_token() }}','synthetic').replaceAll('{{ auth()->id() }}','synthetic-user').replaceAll('{{ \\App\\Support\\Org::name() }}','SYNTHETIC ERP')
             .replace('</body>',scripts.map(n=>`<script src="/${n}.js"></script>`).join('')+'</body>');
