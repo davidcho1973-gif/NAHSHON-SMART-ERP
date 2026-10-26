@@ -214,6 +214,13 @@ const fs = require("node:fs"),
         };
 
         await page.locator("#mw-infer").uncheck();
+        await page.locator('.mode-switch [data-workspace="cad"]').click();
+        await page.locator('.mode-switch [data-workspace="markup"]').click();
+        assert.deepEqual(
+            await page.locator("#canvas").boundingBox(),
+            box,
+            "workspace switching restores the same drawing viewport",
+        );
         await expect(
             page.locator("[data-markup-tool]").first(),
         ).toHaveAttribute("data-markup-tool", "select");
@@ -557,6 +564,9 @@ const fs = require("node:fs"),
         await expect(page.locator("#status")).toContainText("잠긴");
         assert.equal(drawing.revision, lockedRevision);
         assert.deepEqual(drawing.markups[0], locked);
+        await page.locator("#markup-lock").click();
+        await save();
+        assert.equal(drawing.markups[0].locked, false);
         const rendering = await page.evaluate(() => {
             const M = window.CADMarkup,
                 G = window.CADMarkupGeometry,

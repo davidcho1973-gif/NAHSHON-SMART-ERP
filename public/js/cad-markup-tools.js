@@ -901,6 +901,7 @@
                 return;
             cancel();
             api.clearCAD();
+            const view = api.document() ? api.view?.() : null;
             mode = next;
             selection.clear();
             document.body.dataset.workspace = mode;
@@ -911,7 +912,8 @@
                     "aria-pressed",
                     String(button.dataset.workspace === mode),
                 );
-            api.render();
+            if (view) api.setView(view);
+            else api.render();
         }
         for (const button of document.querySelectorAll(
             ".mode-switch [data-workspace]",
