@@ -24,7 +24,7 @@
     // Share these assets across history entries; copy every mutable editing field.
     const immutableAssets = new WeakSet();
     const documentAssets = new Set(['prefix', 'suffix', 'lineTypes', 'presentation']);
-    const entityAssets = new Set(['raw', 'rawParts', 'displayGeometry', 'preview', 'renderParts', 'hatch', 'presentationWarnings']);
+    const entityAssets = new Set(['raw', 'rawParts', 'displayGeometry', 'preview', 'renderParts', 'hatch', 'presentationWarnings', 'explodeRaw']);
     function immutableAsset(value) {
         if (!value || typeof value !== 'object' || immutableAssets.has(value)) return value;
         immutableAssets.add(value);
@@ -149,28 +149,306 @@
         return e.type!=='MTEXT'||num(r,31)===0;
     }
     function allows(e,operation){return !!e&&(e.operations?e.operations.includes(operation):!!e.editable);}
+
+    // Native DIMENSIONs carry defining points and a separate anonymous graphics
+    // block. Changing only the defining points leaves stale graphics in DWG.
+    // Keep the native entity and style data; regenerate a private block on save.
+    function ndSet(raw, code, value) {
+        const end=raw.findIndex(p=>p[0]===1001),limit=end<0?raw.length:end;
+        const index=raw.findIndex((p,i)=>i<limit&&p[0]===code);
+        if(index>=0)raw[index]=[code,String(value)];
+        else raw.splice(limit,0,[code,String(value)]);
+    }
+    function ndPoint(raw,code,p,z){ndSet(raw,code,p.x);ndSet(raw,code+10,p.y);if(z!==undefined)ndSet(raw,code+20,z);}
+    const ndIndexes=new WeakMap();
+    function ndIndex(prefix){
+        let index=ndIndexes.get(prefix);if(index)return index;
+        index={styles:new Map(),fonts:new Map(),blockNames:new Map(),blocks:new Map()};let block=null;
+        for(let i=0;i<prefix.length;i++)if(prefix[i][0]===0){let end=i+1;while(end<prefix.length&&prefix[end][0]!==0)end++;const r=prefix.slice(i,end),type=r[0][1];
+            if(type==='DIMSTYLE')index.styles.set(String(val(r,2)).toUpperCase(),r);
+            if(type==='STYLE')index.fonts.set(String(val(r,5)).toUpperCase(),val(r,2,'Standard'));
+            if(type==='BLOCK_RECORD')index.blockNames.set(String(val(r,5)).toUpperCase(),val(r,2));
+            if(type==='BLOCK'){block={name:val(r,2),base:pt(r),raw:[],safe:(num(r,70)&~1)===0};index.blocks.set(block.name,block);}
+            else if(type==='ENDBLK')block=null;
+            else if(block){block.raw.push(r);if(!['LINE','CIRCLE','ARC','SOLID','TRACE','LWPOLYLINE'].includes(type)||r.some(p=>[102,360,1001].includes(p[0]))||num(r,210)!==0||num(r,220)!==0||num(r,230,1)!==1||num(r,39)!==0||block.raw.length>128)block.safe=false;}
+            i=end-1;
+        }
+        ndIndexes.set(prefix,index);return index;
+    }
+    function ndStyle(doc,raw) {
+        const index=ndIndex(doc.prefix),style=index.styles.get(String(val(raw,3,'Standard')).toUpperCase())||[];
+        const values={40:1,41:2.5,42:.625,44:1.25,140:2.5,142:0,144:1,147:.625,271:2,277:2,278:46,176:0,177:0,178:0};
+        for(const [code,value]of style)if(code!==100&&code!==1001)values[code]=value;
+        let at=raw.findIndex((p,i)=>p[0]===1000&&p[1]==='DSTYLE'&&raw.slice(0,i).some(p=>p[0]===1001&&p[1]==='ACAD'));
+        if(at>=0){at++;if(raw[at]?.[0]===1002&&raw[at][1]==='{')at++;for(;at+1<raw.length&&raw[at][0]!==1001;at++){if(raw[at][0]===1002&&raw[at][1]==='}')break;if(raw[at][0]===1070){values[Number(raw[at][1])]=raw[at+1][1];at++;}}}
+        const textStyle=index.fonts.get(String(values[340]||'').toUpperCase())||'Standard';
+        const arrow=code=>{const handle=String(values[code]||'0').toUpperCase();if(handle==='0')return null;const name=index.blockNames.get(handle);return index.blocks.get(name)||{safe:false};};
+        const arrows=Number(values[173])?[arrow(343)||arrow(342),arrow(344)||arrow(342)]:[arrow(342),arrow(342)];
+        return {values,textStyle,arrows};
+    }
+    function ndOverride(raw,updates){
+        let app=raw.findIndex(p=>p[0]===1001&&p[1]==='ACAD');
+        if(app<0){raw.push([1001,'ACAD']);app=raw.length-1;}
+        let end=app+1;while(end<raw.length&&raw[end][0]!==1001)end++;
+        let start=raw.findIndex((p,i)=>i>app&&i<end&&p[0]===1000&&p[1]==='DSTYLE');
+        if(start<0){raw.splice(end,0,[1000,'DSTYLE'],[1002,'{'],[1002,'}']);start=end;end+=3;}
+        let close=start+2;while(close<end&&!(raw[close][0]===1002&&raw[close][1]==='}'))close++;
+        if(close===end)throw Error('치수 스타일 재정의가 잘못되었습니다.');
+        for(const [code,value]of Object.entries(updates)){
+            let found=false;for(let i=start+2;i<close-1;i++)if(raw[i][0]===1070&&Number(raw[i][1])===Number(code)){raw[i+1]=[Number(code)>=170&&Number(code)<=289?1070:1040,String(value)];found=true;break;}
+            if(!found){raw.splice(close,0,[1070,String(code)],[Number(code)>=170&&Number(code)<=289?1070:1040,String(value)]);close+=2;}
+        }
+    }
+    function nativeDimensionPlainText(value){return !/[{}\\\r\n]/.test(decodeUnicode(value??'').replace(/\\[XP]/g,''));}
+    function nativeDimensionParse(e,doc){
+        if(e.type!=='DIMENSION'||e.nativeDimension)return e;
+        const raw=e.raw||[],kind=num(raw,70)&7,style=ndStyle(doc,raw),values=style.values;
+        const has=code=>raw.some(p=>p[0]===code),a=pt(raw,13),b=pt(raw,14),z=num(raw,30),restricted=raw.some(p=>[102,360].includes(p[0]));
+        const planar=num(raw,210)===0&&num(raw,220)===0&&num(raw,230,1)===1&&[31,33,34].every(c=>!has(c)||Math.abs(num(raw,c)-z)<1e-7);
+        const finiteStyle=[40,41,42,44,140,142,143,144,147,171,271,273,277].every(c=>values[c]===undefined||Number.isFinite(Number(values[c])));
+        const textSafe=[val(raw,1),values[3],values[4]].every(nativeDimensionPlainText);
+        const compatible=textSafe&&[0,1].includes(kind)&&planar&&finiteStyle&&!Number(values[71]||0)&&!Number(values[72]||0)&&num(raw,52)===0&&style.arrows.every(arrow=>!arrow||arrow.safe)&&[10,20,13,23,14,24].every(has)&&distance(a,b)>1e-10&&![...Object.values(a),...Object.values(b),...Object.values(pt(raw)),num(raw,50)].some(v=>!Number.isFinite(v));
+        if(!compatible){e.nativeDimension={compatible:false,reason:textSafe?'지원하는 2D 선형·정렬 치수만 편집할 수 있습니다.':'복잡한 문자 서식이 있는 치수는 원본 서식을 보존하여 읽기 전용으로 표시합니다.'};return e;}
+        const factor=Number(values[40])>0?Number(values[40]):1,height=Number(values[140])*factor;
+        e.nativeDimension={compatible:true,kind,a,b,z,zs:{31:num(raw,31,z),33:num(raw,33,z),34:num(raw,34,z)},angle:num(raw,50),values,textStyle:style.textStyle,arrows:style.arrows,scaleFactor:factor,associated:restricted,manualText:!!(num(raw,70)&128),originalHeight:height>0?height:2.5};
+        e.text=decodeUnicode(val(raw,1,'<>'))||'<>';e.height=height>0?height:2.5;e.textPosition=has(11)&&has(21)?pt(raw,11):null;
+        e.nativeDimension.operations=restricted?['style','text','resize','layer']:['move','copy','rotate','scale','resize','style','text','delete','layer'];
+        const apps=raw.map((p,i)=>p[0]===1001?i:-1).filter(i=>i>=0);
+        if(apps.some(i=>raw[i][1]!=='ACAD'||raw[i+1]?.[0]!==1000||raw[i+1]?.[1]!=='DSTYLE'))e.nativeDimension.operations=e.nativeDimension.operations.filter(op=>op!=='copy');
+        return e;
+    }
+    function nativeDimensionLayout(e){
+        const d=e.nativeDimension;if(!d?.compatible)throw Error('지원하지 않는 치수입니다.');
+        const delta={x:d.b.x-d.a.x,y:d.b.y-d.a.y},length=Math.hypot(delta.x,delta.y),angle=d.kind===0?d.angle*Math.PI/180:Math.atan2(delta.y,delta.x),u={x:Math.cos(angle),y:Math.sin(angle)},n={x:-Math.sin(angle),y:Math.cos(angle)};
+        const offset=(e.p.x-d.b.x)*n.x+(e.p.y-d.b.y)*n.y,firstOffset=(e.p.x-d.a.x)*n.x+(e.p.y-d.a.y)*n.y,a={x:d.a.x+n.x*firstOffset,y:d.a.y+n.y*firstOffset},b={x:d.b.x+n.x*offset,y:d.b.y+n.y*offset};
+        const value=d.kind===1?length:Math.abs(delta.x*u.x+delta.y*u.y),gap=Number(d.values[147]||0)*d.scaleFactor;
+        const text=e.textPosition||{x:(a.x+b.x)/2+n.x*(gap+e.height/2),y:(a.y+b.y)/2+n.y*(gap+e.height/2)};
+        return {a,b,u,n,value,offset,text,angle:angle*180/Math.PI,label:ndLabel(e,value)};
+    }
+    function ndFormat(value,unit,precision,zero=0,separator=46,round=0){
+        const decimals=Math.max(0,Math.min(8,precision)),actual=round>0?Math.round(value/round)*round:value;
+        let text;if(unit===1)text=actual.toExponential(decimals);else if(unit===3||unit===4){let inches=Math.abs(actual),feet=Math.floor(inches/12),remaining=inches-feet*12;if(unit===3){remaining=Number(remaining.toFixed(decimals));if(remaining>=12){feet++;remaining=0;}text=`${actual<0?'-':''}${feet}'-${remaining.toFixed(decimals)}\"`;}else{const denominator=2**decimals,total=Math.round(inches*denominator),whole=Math.floor(total/denominator);feet=Math.floor(whole/12);const inch=whole%12;let numerator=total%denominator,denom=denominator;while(numerator&&numerator%2===0){numerator/=2;denom/=2;}text=`${actual<0?'-':''}${feet}'-${inch}${numerator?' '+numerator+'/'+denom:''}\"`;}}
+        else if(unit===5){const denom=2**decimals,total=Math.round(Math.abs(actual)*denom),whole=Math.floor(total/denom);let numerator=total%denom,d=denom;while(numerator&&numerator%2===0){numerator/=2;d/=2;}text=(actual<0?'-':'')+whole+(numerator?' '+numerator+'/'+d:'');}
+        else{ text=actual.toFixed(decimals);if(zero&8)text=text.replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'');if(zero&4)text=text.replace(/^(-?)0\./,'$1.');if(separator!==46&&separator>0)text=text.replace('.',String.fromCharCode(separator));}
+        return text;
+    }
+    function ndLabel(e,measurement){
+        const v=e.nativeDimension.values,value=measurement*Number(v[144]??1),separator=Number(v[278]||46);
+        let text=ndFormat(value,Number(v[277]||2),Number(v[271]??2),Number(v[78]||0),separator,Number(v[45]||0));
+        const post=decodeUnicode(v[3]||'<>');text=post.includes('<>')?post.replace(/<>/g,text):post+text;
+        if(Number(v[170])){const alternate=ndFormat(value*Number(v[143]??25.4),Number(v[273]||2),Number(v[171]??3),Number(v[285]||0),separator,Number(v[148]||0)),post=decodeUnicode(v[4]||'[]');text+=post.includes('[]')?post.replace('[]','['+alternate+']'):post.includes('<>')?'['+post.replace(/<>/g,alternate)+']':'['+alternate+post+']';}
+        const override=String(e.text??'<>');return override===' '?'' : (override||'<>').replace(/<>/g,text).replace(/\\[XP]/g,'\n');
+    }
+    function ndArrowParts(definition,tip,angle,scale,properties){
+        const radians=angle*Math.PI/180,move=p=>({x:tip.x+(p.x-definition.base.x)*scale*Math.cos(radians)-(p.y-definition.base.y)*scale*Math.sin(radians),y:tip.y+(p.x-definition.base.x)*scale*Math.sin(radians)+(p.y-definition.base.y)*scale*Math.cos(radians)}),parts=[];
+        for(const raw of definition.raw){
+            const type=raw[0][1],layer=val(raw,8,'0'),index=num(raw,62,0),part={type,p:pt(raw),layer:layer==='0'?properties.layer:layer,color:raw.some(p=>p[0]===420)?num(raw,420):index===0?properties.color:null,aci:index===0?properties.aci:index,lineWeight:num(raw,370,-2)===-2?properties.lineWeight:num(raw,370,-1)};
+            if(type==='LINE')part.q=pt(raw,11);
+            if(type==='CIRCLE'||type==='ARC'){part.radius=num(raw,40);part.start=num(raw,50);part.end=num(raw,51);}
+            if(type==='LWPOLYLINE'){part.points=[];for(let i=0;i<raw.length;i++)if(raw[i][0]===10){let end=i+1;while(end<raw.length&&raw[end][0]!==10)end++;const record=raw.slice(i,end);part.points.push({...pt(record),bulge:num(record,42)});i=end-1;}part.closed=!!(num(raw,70)&1);}
+            let path;if(['SOLID','TRACE'].includes(type)){path=[pt(raw),pt(raw,11),pt(raw,13),pt(raw,12),pt(raw)];part.solid=true;}else if(type==='LWPOLYLINE'&&g.CADFidelity)path=g.CADFidelity.polyline(part.points,part.closed);else path=geometry(part);
+            part.displayGeometry=path.map(move);part.p=move(part.p);if(part.q)part.q=move(part.q);if(part.points)part.points=part.points.map(move);if(part.radius)part.radius*=scale;if(type==='ARC'){part.start+=angle;part.end+=angle;}
+            part.nativeArrowSkip=parts.length>0;if(!parts.length)part.nativeArrow={name:definition.name,p:tip,angle,scale};parts.push(part);
+        }
+        return parts;
+    }
+    function nativeDimensionParts(e){
+        if(!e.nativeDimension?.compatible)return e.renderParts||[];
+        const d=e.nativeDimension,l=nativeDimensionLayout(e),scale=d.scaleFactor,values=d.values,parts=[];
+        const color=code=>e.color??(Number(values[code])>0&&Number(values[code])<256?parseInt(aci(Number(values[code])).slice(1),16):null);
+        const line=(p,q,code=176)=>parts.push({type:'LINE',p:{...p},q:{...q},layer:e.layer,color:color(code),aci:e.aci??256,lineWeight:e.lineWeight,lineType:e.lineType||'BYLAYER'});
+        const offset=Number(values[42]||0)*scale,extension=Number(values[44]||0)*scale,sign=l.offset<0?-1:1;
+        if(!Number(values[75]||0))line({x:d.a.x+l.n.x*offset*sign,y:d.a.y+l.n.y*offset*sign},{x:l.a.x+l.n.x*extension*sign,y:l.a.y+l.n.y*extension*sign},177);
+        if(!Number(values[76]||0))line({x:d.b.x+l.n.x*offset*sign,y:d.b.y+l.n.y*offset*sign},{x:l.b.x+l.n.x*extension*sign,y:l.b.y+l.n.y*extension*sign},177);
+        if(!Number(values[281]||0)||!Number(values[282]||0))line(l.a,l.b);
+        const tick=Number(values[142]||0)*scale,arrow=Number(values[41]||2.5)*scale;
+        for(const [p,direction,suppress,arrowDefinition]of [[l.a,1,Number(values[281]||0),d.arrows?.[0]],[l.b,-1,Number(values[282]||0),d.arrows?.[1]]]){
+            if(suppress)continue;
+            if(tick>0)line({x:p.x-(l.u.x+l.n.x)*tick,y:p.y-(l.u.y+l.n.y)*tick},{x:p.x+(l.u.x+l.n.x)*tick,y:p.y+(l.u.y+l.n.y)*tick});
+            else if(arrowDefinition)parts.push(...ndArrowParts(arrowDefinition,p,l.angle+(direction===1?180:0),arrow,{layer:e.layer,color:color(176),aci:e.aci??256,lineWeight:e.lineWeight}));
+            else{const back={x:p.x+l.u.x*arrow*direction,y:p.y+l.u.y*arrow*direction},p1={x:back.x+l.n.x*arrow/6,y:back.y+l.n.y*arrow/6},p2={x:back.x-l.n.x*arrow/6,y:back.y-l.n.y*arrow/6};parts.push({type:'SOLID',p:{...p},points:[{...p},p1,p2],displayGeometry:[{...p},p1,p2,{...p}],solid:true,layer:e.layer,color:color(176),aci:e.aci??256,lineWeight:e.lineWeight});}
+        }
+        if(l.label)parts.push({type:'MTEXT',p:{...l.text},text:l.label,height:e.height,width:0,angle:l.angle,attachment:5,textAlign:'center',textBaseline:'middle',plainText:true,layer:e.layer,color:color(178),aci:e.aci??256,lineWeight:e.lineWeight,fontStyle:d.textStyle});
+        return parts;
+    }
+    function nativeDimensionGrips(e){
+        if(!e.nativeDimension?.compatible)return [];
+        const l=nativeDimensionLayout(e),out=[{key:'dimension-line',point:{x:l.a.x+(l.b.x-l.a.x)/3,y:l.a.y+(l.b.y-l.a.y)/3}},{key:'dimension-text',point:l.text}];
+        if(!e.nativeDimension.associated)out.push({key:'dimension-start',point:e.nativeDimension.a},{key:'dimension-end',point:e.nativeDimension.b});
+        return out;
+    }
+    function nativeDimensionRefresh(e){delete e.displayGeometry;delete e.preview;e.renderParts=nativeDimensionParts(e);e.dirty=true;return e;}
+    function nativeDimensionResize(e,key,p){
+        if(!e.nativeDimension?.compatible||![p.x,p.y].every(Number.isFinite))throw Error('유효한 치수 손잡이 위치가 필요합니다.');
+        const n=clone(e),before=nativeDimensionLayout(n);
+        if(key==='dimension-line'){
+            const amount=(p.x-before.b.x)*before.n.x+(p.y-before.b.y)*before.n.y;n.p={x:n.p.x+before.n.x*amount,y:n.p.y+before.n.y*amount};
+            if(n.textPosition&&!n.nativeDimension.manualText)n.textPosition={x:n.textPosition.x+before.n.x*amount,y:n.textPosition.y+before.n.y*amount};
+        }else if(key==='dimension-text'){n.textPosition={...p};n.nativeDimension.manualText=true;}
+        else if(['dimension-start','dimension-end'].includes(key)&&!n.nativeDimension.associated){n.nativeDimension[key==='dimension-start'?'a':'b']={...p};if(distance(n.nativeDimension.a,n.nativeDimension.b)<1e-10)throw Error('치수 측정점은 서로 달라야 합니다.');if(!n.nativeDimension.manualText)n.textPosition=null;}
+        else throw Error('연관 치수의 측정점은 원본 형상을 보존합니다. 치수선이나 문자 위치를 조절하세요.');
+        return nativeDimensionRefresh(n);
+    }
+    function nativeDimensionTransform(e,o){
+        if(!e.nativeDimension?.compatible||e.nativeDimension.associated||o.mirror)throw Error('이 치수는 치수선·문자 위치와 속성만 수정할 수 있습니다.');
+        const n=clone(e),angle=(o.angle||0)*Math.PI/180,s=o.scale??1,c=o.center||{x:0,y:0};
+        if(![angle,s,c.x,c.y,o.dx??0,o.dy??0].every(Number.isFinite)||s<=0)throw Error('치수 변환 수치를 확인하세요.');
+        const move=p=>({x:c.x+(p.x-c.x)*s*Math.cos(angle)-(p.y-c.y)*s*Math.sin(angle)+(o.dx||0),y:c.y+(p.x-c.x)*s*Math.sin(angle)+(p.y-c.y)*s*Math.cos(angle)+(o.dy||0)});
+        n.p=move(n.p);n.nativeDimension.a=move(n.nativeDimension.a);n.nativeDimension.b=move(n.nativeDimension.b);if(n.textPosition)n.textPosition=move(n.textPosition);n.nativeDimension.angle+=(o.angle||0);n.height*=s;n.nativeDimension.scaleFactor*=s;
+        return nativeDimensionRefresh(n);
+    }
+    function ndSectionEnd(prefix,name){const start=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='SECTION'&&prefix[i+1]?.[1]===name);if(start<0)return -1;let end=start+2;while(end<prefix.length&&!(prefix[end][0]===0&&prefix[end][1]==='ENDSEC'))end++;return end;}
+    function nativeDimensionDocument(source){
+        const dirty=source.entities.filter(e=>e.type==='DIMENSION'&&e.dirty&&e.nativeDimension?.compatible);if(!dirty.length)return source;
+        const doc={...source,prefix:clone(source.prefix),entities:[...source.entities]};let max=0;
+        for(const records of [doc.prefix,source.suffix,...source.entities.map(e=>e.raw||[])])for(const [code,value]of records)if(code===5||code===105){const handle=parseInt(value,16);if(Number.isFinite(handle))max=Math.max(max,handle);}
+        const next=()=>(++max).toString(16).toUpperCase();
+        if(ndSectionEnd(doc.prefix,'TABLES')<0)doc.prefix.splice(doc.prefix.length-2,0,[0,'SECTION'],[2,'TABLES'],[0,'ENDSEC']);
+        if(ndSectionEnd(doc.prefix,'BLOCKS')<0)doc.prefix.splice(doc.prefix.length-2,0,[0,'SECTION'],[2,'BLOCKS'],[0,'ENDSEC']);
+        let table=doc.prefix.findIndex((p,i)=>p[0]===0&&p[1]==='TABLE'&&doc.prefix[i+1]?.[1]==='BLOCK_RECORD');
+        if(table<0){const end=ndSectionEnd(doc.prefix,'TABLES');doc.prefix.splice(end,0,[0,'TABLE'],[2,'BLOCK_RECORD'],[5,next()],[100,'AcDbSymbolTable'],[70,'0'],[0,'ENDTAB']);table=end;}
+        const tableHead=doc.prefix.slice(table,table+6),tableHandle=val(tableHead,5),blockRecords=[],blocks=[];
+        for(const e of dirty){
+            if(!nativeDimensionPlainText(e.text))throw Error('치수 문자는 일반 문자와 <> 측정값 기호를 사용하세요. CAD 서식 코드·중괄호·줄바꿈은 지원하지 않습니다.');
+            const d=e.nativeDimension,l=nativeDimensionLayout(e),recordHandle=next(),name='*D_ERP_'+recordHandle;
+            blockRecords.push([0,'BLOCK_RECORD'],[5,recordHandle],[330,tableHandle],[100,'AcDbSymbolTableRecord'],[100,'AcDbBlockTableRecord'],[2,name],[70,'0'],[280,'1'],[281,'0']);
+            blocks.push([0,'BLOCK'],[5,next()],[330,recordHandle],[100,'AcDbEntity'],[8,e.layer],[100,'AcDbBlockBegin'],[2,name],[70,'1'],[10,'0'],[20,'0'],[30,'0'],[3,name],[1,'']);
+            for(const part of nativeDimensionParts(e)){
+                if(part.nativeArrowSkip)continue;
+                const raw=[[0,part.nativeArrow?'INSERT':part.type],[5,next()],[330,recordHandle],[100,'AcDbEntity'],[8,part.layer],[62,part.aci??256]];
+                if(part.color!==null&&part.color!==undefined)raw.push([420,part.color]);if(part.lineWeight!==undefined)raw.push([370,part.lineWeight]);
+                if(part.nativeArrow){const arrow=part.nativeArrow;raw.push([100,'AcDbBlockReference'],[2,arrow.name]);ndPoint(raw,10,arrow.p,d.z);raw.push([41,arrow.scale],[42,arrow.scale],[43,arrow.scale],[50,arrow.angle]);}
+                else if(part.type==='LINE'){raw.push([100,'AcDbLine']);ndPoint(raw,10,part.p,d.z);ndPoint(raw,11,part.q,d.z);}
+                else if(part.type==='SOLID'){raw.push([100,'AcDbTrace']);ndPoint(raw,10,part.points[0],d.z);ndPoint(raw,11,part.points[1],d.z);ndPoint(raw,12,part.points[2],d.z);ndPoint(raw,13,part.points[2],d.z);}
+                else if(part.type==='MTEXT'){raw.push([100,'AcDbMText']);ndPoint(raw,10,part.p,d.z);const text=encodeMText(part.text),encoded=doc.acadVersion<1021?text.replace(/[^\x00-\x7f]/g,c=>'\\U+'+c.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0')):text,chunks=encoded.match(/[\s\S]{1,200}/g)||[''];raw.push([40,part.height],[41,0],[71,5],[72,1]);for(const chunk of chunks.slice(0,-1))raw.push([3,chunk]);raw.push([1,chunks.at(-1)],[7,d.textStyle],[11,Math.cos(part.angle*Math.PI/180)],[21,Math.sin(part.angle*Math.PI/180)],[31,0]);}
+                for(const pair of raw)blocks.push([pair[0],String(pair[1])]);
+            }
+            blocks.push([0,'ENDBLK'],[5,next()],[330,recordHandle],[100,'AcDbEntity'],[8,e.layer],[100,'AcDbBlockEnd']);
+            // Code 50 is specific to rotated linear dimensions. ACadSharp (and
+            // native CAD readers) treats its presence as a linear subtype cue.
+            const raw=clone(e.raw||[]).filter(pair=>d.kind!==1||pair[0]!==50);ndSet(raw,2,name);ndPoint(raw,10,e.p,d.z);ndPoint(raw,11,l.text,d.zs?.[31]??d.z);ndPoint(raw,13,d.a,d.zs?.[33]??d.z);ndPoint(raw,14,d.b,d.zs?.[34]??d.z);
+            ndSet(raw,70,(num(raw,70)|32)|(d.manualText?128:0));if(d.kind===0)ndSet(raw,50,d.angle);ndSet(raw,42,l.value);ndSet(raw,1,e.text??'<>');ndSet(raw,8,e.layer);if(e.color!==undefined&&e.color!==null)ndSet(raw,420,e.color);if(e.lineWeight!==undefined)ndSet(raw,370,e.lineWeight);if(e.lineType)ndSet(raw,6,e.lineType);
+            if(!raw.some(p=>p[0]===5))raw.splice(1,0,[5,next()]);ndOverride(raw,{40:d.scaleFactor,140:e.height/d.scaleFactor});
+            const n={...e,raw,dirty:false};doc.entities[doc.entities.indexOf(e)]=n;
+        }
+        let tableEnd=table+2;while(tableEnd<doc.prefix.length&&!(doc.prefix[tableEnd][0]===0&&doc.prefix[tableEnd][1]==='ENDTAB'))tableEnd++;
+        doc.prefix=doc.prefix.slice(0,tableEnd).concat(blockRecords,doc.prefix.slice(tableEnd));
+        const count=doc.prefix.slice(table,table+8).find(p=>p[0]===70);if(count)count[1]=String(Number(count[1])+dirty.length);
+        const blocksEnd=ndSectionEnd(doc.prefix,'BLOCKS');doc.prefix=doc.prefix.slice(0,blocksEnd).concat(blocks,doc.prefix.slice(blocksEnd));
+        const seed=doc.prefix.findIndex(p=>p[0]===9&&p[1]==='$HANDSEED');if(seed>=0&&doc.prefix[seed+1]?.[0]===5)doc.prefix[seed+1][1]=next();
+        return doc;
+    }
+
+    // Native HATCH records remain authoritative; index coordinate fields instead of
+    // rebuilding boundaries from their tessellated presentation.
+    function hatchFields(raw) {
+        let cursor=raw.findIndex(p=>p[0]===91);if(cursor<0)throw Error('해치 경계 정보가 없습니다.');
+        const points=[],vectors=[],lengths=[],angles=[];let hasSources=false;
+        const take=(code,optional=false)=>{if(raw[cursor]?.[0]!==code){if(optional)return null;throw Error('지원하지 않는 해치 경계 구조입니다.');}return cursor++;};
+        const pair=(code,vector=false)=>{const x=take(code),y=take(code+10);(vector?vectors:points).push([x,y]);};
+        const count=Number(raw[cursor++][1]);if(count<1||count>256)throw Error('해치 경계가 너무 복잡합니다.');
+        for(let loop=0;loop<count;loop++){
+            const flags=Number(raw[take(92)][1]);
+            if(flags&2){const bulge=Number(raw[take(72)][1]);take(73);const n=Number(raw[take(93)][1]);if(n>2048)throw Error('해치 경계가 너무 복잡합니다.');for(let j=0;j<n;j++){pair(10);if(bulge)take(42,true);}}
+            else{const n=Number(raw[take(93)][1]);if(n>2048)throw Error('해치 경계가 너무 복잡합니다.');for(let j=0;j<n;j++){const type=Number(raw[take(72)][1]);if(type===1){pair(10);pair(11);}else if(type===2){pair(10);lengths.push(take(40));angles.push(take(50),take(51));take(73);}else if(type===3){pair(10);pair(11,true);take(40);take(50);take(51);take(73);}else throw Error('스플라인 해치의 형상 변경은 아직 지원하지 않습니다.');}}
+            const n=take(97,true);if(n!==null){const sources=Number(raw[n][1]);hasSources ||= sources>0;if(sources>4096)throw Error('해치 참조가 너무 많습니다.');for(let j=0;j<sources;j++)take(330);}
+        }
+        for(let i=cursor;i<raw.length&&raw[i][0]!==1001;i++){
+            if(raw[i][0]===53)angles.push(i);
+            if([41,49].includes(raw[i][0]))lengths.push(i);
+            if(raw[i][0]===52)angles.push(i);
+            if([43,45,10].includes(raw[i][0])&&raw[i+1]?.[0]===raw[i][0]+1){(raw[i][0]===45?vectors:points).push([i,i+1]);i++;}
+            else if(raw[i][0]===10&&raw[i+1]?.[0]===20){points.push([i,i+1]);i++;}
+        }
+        return {points,vectors,lengths,angles,hasSources};
+    }
+    function hatchRefresh(e){
+        const n={...e};n.hatch=g.CADFidelity.hatch(n.raw);n.displayGeometry=n.hatch.rings.flat();n.opacity=(num(n.raw,440,0)&0x2000000)?(num(n.raw,440)&255)/255:1;return n;
+    }
+    function editHatch(e,changes={}){
+        if(e.type!=='HATCH'||!allows(e,'style'))throw Error('편집 가능한 해치를 선택하세요.');
+        const n={...e,raw:clone(e.raw),dirty:true};
+        const set=(code,value)=>{let at=n.raw.findIndex(p=>p[0]===code);if(at<0){at=n.raw.findIndex(p=>p[0]===1001);n.raw.splice(at<0?n.raw.length:at,0,[code,String(value)]);}else n.raw[at][1]=String(value);};
+        if(changes.color!==undefined){if(!Number.isInteger(changes.color)||changes.color<0||changes.color>0xffffff)throw Error('해치 색상을 확인하세요.');n.color=changes.color;}
+        if(changes.opacity!==undefined){if(!Number.isFinite(changes.opacity)||changes.opacity<.1||changes.opacity>1)throw Error('CAD 해치 불투명도는 10~100%입니다. 숨기려면 객체를 삭제하거나 레이어를 끄세요.');set(440,0x2000000|Math.round(changes.opacity*255));}
+        if(changes.patternScale!==undefined||changes.patternAngle!==undefined){
+            if(n.hatch?.gradient)throw Error('그라데이션 해치는 색·불투명도만 수정할 수 있습니다.');
+            const oldScale=num(n.raw,41,1),scale=changes.patternScale??oldScale,oldAngle=num(n.raw,52),angle=changes.patternAngle??oldAngle;
+            if(!Number.isFinite(scale)||scale<=0||!Number.isFinite(angle))throw Error('패턴 배율은 양수, 각도는 유효한 숫자여야 합니다.');
+            const factor=scale/oldScale,rotation=(angle-oldAngle)*Math.PI/180,c=Math.cos(rotation),sin=Math.sin(rotation);
+            for(let i=0;i<n.raw.length;i++){const code=n.raw[i][0];if(code===53)n.raw[i][1]=String(Number(n.raw[i][1])+angle-oldAngle);if(code===49)n.raw[i][1]=String(Number(n.raw[i][1])*factor);if([43,45].includes(code)&&n.raw[i+1]?.[0]===code+1){const x=Number(n.raw[i][1])*factor,y=Number(n.raw[i+1][1])*factor;n.raw[i][1]=String(x*c-y*sin);n.raw[i+1][1]=String(x*sin+y*c);i++;}}
+            set(41,scale);set(52,angle);
+        }
+        return hatchRefresh(n);
+    }
+    function transformHatch(e,o){
+        const fields=hatchFields(e.raw),n={...e,raw:clone(e.raw),dirty:true},s=o.scale??1,a=(o.angle||0)*Math.PI/180,c=o.center||{x:0,y:0};
+        if(o.mirror)throw Error('해치는 대칭 변환을 지원하지 않습니다.');
+        if(![s,a,c.x,c.y,o.dx||0,o.dy||0].every(Number.isFinite)||s<=0)throw Error('해치 변환 값을 확인하세요.');
+        const transform=(indices,vector)=>{const x=(Number(e.raw[indices[0]][1])-(vector?0:c.x))*s,y=(Number(e.raw[indices[1]][1])-(vector?0:c.y))*s;n.raw[indices[0]][1]=String(x*Math.cos(a)-y*Math.sin(a)+(vector?0:c.x+(o.dx||0)));n.raw[indices[1]][1]=String(x*Math.sin(a)+y*Math.cos(a)+(vector?0:c.y+(o.dy||0)));};
+        fields.points.forEach(p=>transform(p,false));fields.vectors.forEach(p=>transform(p,true));for(const i of fields.lengths)n.raw[i][1]=String(Number(e.raw[i][1])*s);for(const i of fields.angles)n.raw[i][1]=String(Number(e.raw[i][1])+(o.angle||0));return hatchRefresh(n);
+    }
+    function hatchForPolyline(e,options={}){
+        if(e.type!=='LWPOLYLINE'||!e.closed||!allows(e,'style')||e.points.length<3||e.points.length>2048)throw Error('닫힌 2D 폴리선을 선택하세요.');
+        const bulged=e.points.some(p=>p.bulge),raw=[[0,'HATCH'],[100,'AcDbEntity'],[8,e.layer],[100,'AcDbHatch'],[10,0],[20,0],[30,num(e.raw||[],38)],[210,0],[220,0],[230,1],[2,'SOLID'],[70,1],[71,0],[91,1],[92,3],[72,bulged?1:0],[73,1],[93,e.points.length]];
+        for(const p of e.points){raw.push([10,p.x],[20,p.y]);if(bulged)raw.push([42,p.bulge||0]);}raw.push([97,0],[75,0],[76,1],[98,0]);
+        let n=newEntity('HATCH',{raw:raw.map(p=>[p[0],String(p[1])]),color:options.color??e.color,operations:['move','copy','rotate','scale','style','delete','layer']},e.layer);n=hatchRefresh(n);return editHatch(n,{opacity:options.opacity??.5,...options});
+    }
+
+
+
+    function findPolylineFill(doc,e){
+        if(e.type!=='LWPOLYLINE'||!e.closed)return null;
+        const path=g.CADFidelity.polyline(e.points,true).slice(0,-1),near=(a,b)=>distance(a,b)<=1e-7;
+        return doc.entities.find(h=>h.type==='HATCH'&&h.hatch?.solid&&h.hatch.rings.length===1&&(()=>{const ring=h.hatch.rings[0].slice(0,-1);if(path.length!==ring.length)return false;const starts=[];for(let i=0;i<ring.length&&starts.length<16;i++)if(near(path[0],ring[i]))starts.push(i);return starts.some(start=>[1,-1].some(direction=>path.every((p,i)=>near(p,ring[(start+direction*i+ring.length)%ring.length]))));})())||null;
+    }
+
+    function explodeBlock(e,doc){
+        if(e.type!=='INSERT'||!allows(e,'move')||!allows(e,'copy')||!e.renderParts?.length)throw Error('이 블록은 안전하게 풀 수 없습니다. 외부 참조·속성·3D·특수 객체를 확인하세요.');
+        if(e.renderParts.length>5000)throw Error('한 번에 5,000개 이하인 블록만 풀 수 있습니다.');
+        const allowed=['LINE','ARC','CIRCLE','LWPOLYLINE','TEXT','MTEXT','POINT'];
+        if(e.renderParts.some(p=>p.blockExplodable===false||!allowed.includes(p.type)||!planarXY(p)||p.presentationWarnings?.some(w=>!['font_substitution'].includes(w))||p.type==='MTEXT'&&!plainMText(p.text).safe))throw Error('비균일 배율·대칭·미지원 문자를 포함한 블록은 원본 보존을 위해 풀 수 없습니다.');
+        const children=e.renderParts.map(part=>{
+            const n={...part,id:uid(),dirty:true,raw:clone(part.explodeRaw||[]),layer:part.blockLayerInherited?e.layer:part.layer};
+            delete n.explodeRaw;delete n.renderParts;delete n.preview;delete n.blockExplodable;
+            n.raw=n.raw.filter(p=>![5,330,360].includes(p[0]));
+            if(part.blockColorInherited){n.color=e.color;n.aci=e.aci;}
+            if(part.lineWeight===-2)n.lineWeight=e.lineWeight;
+            if(canonicalLineType(part.lineType||'')==='BYBLOCK')n.lineType=e.lineType;
+            const set=(code,value)=>{const pair=n.raw.find(p=>p[0]===code);if(pair)pair[1]=String(value);else n.raw.push([code,String(value)]);};
+            set(62,n.aci??256);set(n.type==='LWPOLYLINE'?38:30,part.blockElevation||0);if(n.type==='LINE'||n.type==='TEXT'&&n.textAnchor)set(31,part.blockElevation||0);
+            if(n.type==='LWPOLYLINE')n.raw=n.raw.map(p=>[p[0],[40,41,43].includes(p[0])?String(Number(p[1])*(part.blockScale||1)):p[1]]);
+            if(n.type==='MTEXT'){const plain=plainMText(n.text);n.text=plain.text;n.plainText=true;n.attachment=num(n.raw,71,1);}
+            return n;
+        });
+        annotate2D({...doc,entities:children});if(children.some(p=>!p.editable))throw Error('블록 내부에 개별 편집을 지원하지 않는 객체가 있습니다. 아무 객체도 변경하지 않았습니다.');return children;
+    }
+
     function annotate2D(doc){
         const full=['move','copy','rotate','scale','mirror','resize','style','delete','layer'];
         const blocks=new Map();let block=null;
         for(let i=0;i<doc.prefix.length;i++){const pair=doc.prefix[i];if(pair[0]!==0)continue;let end=i+1;while(end<doc.prefix.length&&doc.prefix[end][0]!==0)end++;
             if(pair[1]==='BLOCK'){const raw=doc.prefix.slice(i,end);block={name:val(raw,2),safe:num(raw,70)===0&&!raw.some(p=>[102,360,1001].includes(p[0])),children:[]};blocks.set(block.name,block);}
             else if(pair[1]==='ENDBLK')block=null;
-            else if(block){if(['ATTDEF','ATTRIB'].includes(pair[1]))block.safe=false;if(pair[1]==='INSERT'){const raw=doc.prefix.slice(i,end);block.children.push(val(raw,2));if(num(raw,66)||raw.some(p=>[102,360,1001].includes(p[0])))block.safe=false;}}
+            else if(block){if(!['INSERT','LINE','POINT','CIRCLE','ARC','LWPOLYLINE','TEXT','MTEXT'].includes(pair[1]))block.safe=false;if(['ATTDEF','ATTRIB'].includes(pair[1]))block.safe=false;if(pair[1]==='INSERT'){const raw=doc.prefix.slice(i,end);block.children.push(val(raw,2));if(num(raw,66)||raw.some(p=>[102,360,1001].includes(p[0])))block.safe=false;}}
             i=end-1;
         }
         const safeBlock=(name,seen=new Set())=>{const b=blocks.get(name);if(!b||!b.safe||seen.has(name)||seen.size>=16)return false;const next=new Set(seen);next.add(name);return b.children.every(child=>safeBlock(child,next));};
         for(const e of doc.entities){
             let ops=[];
+            nativeDimensionParse(e,doc);
             if(doc.acadVersion>=1015&&!e.paper&&planarXY(e)){
                 if(['LINE','CIRCLE','ARC','POINT','ERP_DIMENSION'].includes(e.type))ops=[...full];
                 if(e.type==='LWPOLYLINE'&&!(num(e.raw||[],70)&~129)){ops=[...full];if(e.points.length>512||e.points.some(p=>p.bulge)||(e.raw||[]).some(p=>p[0]===91||[40,41].includes(p[0])&&Number(p[1])!==0)||num(e.raw||[],43)!==0)ops=ops.filter(op=>op!=='resize');}
                 if(e.type==='TEXT'){ops=[...full.filter(op=>op!=='mirror'),'text'];if([71,72,73].some(code=>num(e.raw||[],code)))ops=['move','copy','style','text','delete','layer'];}
                 if(e.type==='MTEXT'&&e.plainText){ops=[...full.filter(op=>op!=='mirror'),'text'];if((e.attachment||1)!==1)ops=['move','copy','style','text','delete','layer'];}
+                if(e.nativeDimension?.compatible)ops=[...e.nativeDimension.operations];
+                if(e.type==='HATCH'&&e.hatch){ops=['style','delete','layer'];try{const fields=hatchFields(e.raw);if(!num(e.raw,71)){ops.push('move','rotate','scale');if(!fields.hasSources)ops.push('copy');}}catch(_){}e.opacity=(num(e.raw,440)&0x2000000)?(num(e.raw,440)&255)/255:1;}
                 if(e.type==='INSERT'&&e.renderParts?.length&&!String(val(e.raw||[],2)).startsWith('*')&&safeBlock(val(e.raw||[],2))&&!num(e.raw||[],66)&&num(e.raw||[],70,1)<=1&&num(e.raw||[],71,1)<=1&&e.renderParts.every(part=>['LINE','CIRCLE','ARC','LWPOLYLINE','TEXT','MTEXT','POINT'].includes(part.type)&&planarXY(part)))ops=['move','copy','style','delete','layer'];
-                if((e.raw||[]).some(p=>[102,360,1001].includes(p[0]))&&e.type!=='ERP_DIMENSION')ops=ops.filter(op=>op!=='copy');
+                if((e.raw||[]).some(p=>[102,360,1001].includes(p[0]))&&e.type!=='ERP_DIMENSION'&&!e.nativeDimension?.compatible)ops=ops.filter(op=>op!=='copy');
             }
             e.operations=ops;e.editable=ops.length>0;
-            e.editReason=ops.length?(ops.includes('rotate')?'2D 편집 가능':'이동·속성 편집 지원 · 형상 변경 제한'):'3D·특수 객체 또는 지원하지 않는 형식 · 원본 보존';
+            e.editReason=ops.length?(ops.includes('rotate')?'2D 편집 가능':ops.includes('move')?'이동·속성 편집 지원 · 형상 변경 제한':ops.includes('resize')?'속성·치수 위치 편집 지원 · 원본 측정점 보호':'속성 편집 지원 · 형상 변경 제한'):(e.nativeDimension?.reason||'3D·특수 객체 또는 지원하지 않는 형식 · 원본 보존');
         }
         return doc;
     }
@@ -446,6 +724,7 @@
         return {width,height,u,v,points:[[x,top],[x+width,top],[x+width,bottom],[x,bottom]].map(([x,y])=>({x:anchor.x+(x*(e.type==='TEXT'?(e.widthFactor||1):1)+Math.tan(e.oblique||0)*y)*u.x+y*v.x,y:anchor.y+(x*(e.type==='TEXT'?(e.widthFactor||1):1)+Math.tan(e.oblique||0)*y)*u.y+y*v.y}))};
     }
     function geometry(e) {
+        if(e.nativeDimension?.compatible&&e.dirty)return nativeDimensionParts(e).flatMap(geometry);
         if(e.displayGeometry)return e.displayGeometry;
         if(e.renderParts)return e.renderParts.flatMap(geometry);
         if(['TEXT','MTEXT'].includes(e.type)){const box=textBox({...e,text:e.dirty?e.text:(e.displayText??e.text),p:e.textAnchor||e.p});return [...box.points,box.points[0]];}
@@ -520,6 +799,8 @@
             throw Error(
                 "지원하지 않는 객체는 원본 보존을 위해 편집할 수 없습니다.",
             );
+        if(e.nativeDimension?.compatible)return nativeDimensionTransform(e,o);
+        if(e.type==='HATCH')return transformHatch(e,o);
         const n = copyEditState(e, entityAssets),
             a = ((o.angle || 0) * Math.PI) / 180,
             s = o.scale ?? 1,
@@ -581,6 +862,7 @@
         return records.slice(0, at).concat(replacement, records.slice(at + count));
     }
     function exportDXF(d) {
+        d=nativeDimensionDocument(d);
         const hasDimensions=d.entities.some(e=>e.type==='ERP_DIMENSION');
         d={...d,entities:d.entities.flatMap(e=>e.type==='ERP_DIMENSION'?e.dirty?dimensionParts(e):e.rawParts.map((raw,i)=>({id:e.id+'-'+i,raw,dirty:false})):e)};
 
@@ -815,6 +1097,7 @@
             if (e.color !== undefined && e.color !== null) set(420, e.color);
             if (e.lineType) set(6, e.lineType);
             if (e.lineWeight !== undefined) set(370, e.lineWeight);
+            if(e.type==='HATCH'){appendRecords(out,r);continue;}
             set(10, e.p.x);
             set(20, e.p.y);
             if (e.type === "LINE") {
@@ -1046,6 +1329,7 @@
     }
     function grips(e) {
         if(!allows(e,'resize'))return [];
+        if(e.nativeDimension?.compatible)return nativeDimensionGrips(e);
         if(e.type==='ERP_DIMENSION'){const l=dimensionLayout(e);return [{key:'dimension-line',point:{x:l.a.x+(l.b.x-l.a.x)/3,y:l.a.y+(l.b.y-l.a.y)/3}},{key:'dimension-text',point:l.text}];}
         if(e.type==='MTEXT'&&e.editable){const b=textBox(e);return [{key:'text-width',point:{x:e.p.x+b.u.x*b.width,y:e.p.y+b.u.y*b.width}},{key:'text-size',point:{x:e.p.x-b.v.x*b.height,y:e.p.y-b.v.y*b.height}}];}
         if(e.type==='LINE')return [{key:'p',point:e.p},{key:'q',point:e.q}];
@@ -1055,6 +1339,7 @@
     function resize(e,key,p) {
         if(!allows(e,'resize'))throw Error('이 객체는 형상 손잡이 변경을 지원하지 않습니다. 이동 또는 속성 편집을 사용하세요.');
         if(!e.editable||![p.x,p.y].every(Number.isFinite))throw Error('크기를 조절할 수 없는 객체입니다.');
+        if(e.nativeDimension?.compatible)return nativeDimensionResize(e,key,p);
         const n=clone(e);delete n.displayGeometry;
         if(e.type==='ERP_DIMENSION'){if(key==='dimension-line')n.placement={...p};else if(key==='dimension-text')n.textPosition={...p};else throw Error('알 수 없는 치수 손잡이입니다.');n.dirty=true;return n;}
         if(e.type==='MTEXT'){const b=textBox(e),dx=p.x-e.p.x,dy=p.y-e.p.y;if(key==='text-width')n.width=Math.max(e.height,Math.abs(dx*b.u.x+dy*b.u.y));else if(key==='text-size')n.height=Math.max(.001,Math.abs(dx*b.v.x+dy*b.v.y)/(textLines(e).length*1.2));else throw Error('알 수 없는 문자 손잡이입니다.');n.dirty=true;return n;}
@@ -1074,6 +1359,7 @@
         n.p={...n.points[0]};n.dirty=true;return n;
     }
     function contains(e,p) {
+        if(e.hatch){const inside=ring=>{let hit=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)hit=!hit;}return hit;};const count=e.hatch.rings.filter(inside).length;return e.hatch.style===2?count>0:e.hatch.style===1?count===1:count%2===1;}
         const f=rectangleFrame(e);if(!f)return false;
         const x=(p.x-f.a.x)*f.u.x+(p.y-f.a.y)*f.u.y,y=(p.x-f.a.x)*f.v.x+(p.y-f.a.y)*f.v.y;
         return x>=0&&x<=f.w&&y>=0&&y<=f.h;
@@ -1185,7 +1471,7 @@
     function renderEntities(ctx, doc, shown, screen, scale, options = {}) {
         if(doc?.reference){g.CADReference?.draw(ctx,doc,screen);shown=shown.filter(e=>!doc.entities.some(original=>original.id===e.id));}
         const C = g.CADCore, printing = !!options.paper, selected = options.selected || new Set();
-        for (const e of shown.flatMap(e=>e.renderParts?.length?e.renderParts.filter(part=>!part.hidden&&doc.layers[part.layer]?.visible!==false).map(part=>({...part,id:e.id,...(part.blockColorInherited?{color:e.color,aci:e.aci}:{}),...(part.blockLayerInherited?{layer:e.layer}:{}),...(part.lineWeight===-2?{lineWeight:e.lineWeight}:{}),...(canonicalLineType(part.lineType||'')==='BYBLOCK'?{lineType:e.lineType}:{})})):e.type==='ERP_DIMENSION'?C.dimensionParts(e).map(part=>({...part,id:e.id})):e)) {
+        for (const e of shown.flatMap(e=>e.nativeDimension?.compatible&&e.dirty?nativeDimensionParts(e).map(part=>({...part,id:e.id})):e.renderParts?.length?e.renderParts.filter(part=>!part.hidden&&doc.layers[part.layer]?.visible!==false).map(part=>({...part,id:e.id,...(part.blockColorInherited?{color:e.color,aci:e.aci}:{}),...(part.blockLayerInherited?{layer:e.layer}:{}),...(part.lineWeight===-2?{lineWeight:e.lineWeight}:{}),...(canonicalLineType(part.lineType||'')==='BYBLOCK'?{lineType:e.lineType}:{})})):e.type==='ERP_DIMENSION'?C.dimensionParts(e).map(part=>({...part,id:e.id})):e)) {
             const ps = ['TEXT','MTEXT'].includes(e.type)?[]:C.geometry(e);
             if(['TEXT','MTEXT'].includes(e.type))ps.push(e.p);
             if (!ps.length) continue;
@@ -1285,6 +1571,8 @@
         return result;
     }
     g.CADCore = {
+        nativeDimensionPlainText, nativeDimensionLayout, nativeDimensionParts, nativeDimensionGrips,
+        editHatch, hatchForPolyline, findPolylineFill, explodeBlock,
         allows, planarXY,
         parseLengthInput, pointAtLength, numericDrawing, guideSnap, inferDirection,
         canvasColor,

@@ -76,7 +76,7 @@
         render();
     };
     const displayColor = color => C.canvasColor(color, canvasBackground);
-    const styleEdits=new Set(),textEdits=new Set();
+    const styleEdits=new Set(),textEdits=new Set(),nativeEdits=new Set();
     let unitSettings=null, inputScale=1;
     const lengthInputs=['x','y','spacing','offset-distance','array-x','array-y','default-text-height','height','text-dialog-height','text-dialog-width'];
     const lengthValue=id=>$(id).value.trim()===''?NaN:Number($(id).value)/inputScale;
@@ -302,21 +302,37 @@
         // Unit selections must wait for the same drawing/save transaction as geometry edits.
         for(const id of ['dimension-unit','source-unit'])$(id).disabled=!doc||busy||!!gesture;
         const es=doc?doc.entities.filter(e=>selected.has(e.id)):[],first=es[0];
-        const key=JSON.stringify([canManage,busy,...es.map(e=>[e.id,e.color,e.aci,e.lineWeight,e.lineType,e.text,e.height,e.angle,doc.layers[e.layer]?.locked,doc.layers[e.layer]?.color,doc.layers[e.layer]?.lineWeight])]);
-        if(key===inspectorKey)return;inspectorKey=key;styleEdits.clear();textEdits.clear();
+        const key=JSON.stringify([canManage,busy,...es.map(e=>[e.id,e.color,e.aci,e.lineWeight,e.lineType,e.text,e.height,e.angle,e.opacity,e.type==='HATCH'?e.raw?.find(p=>p[0]===41)?.[1]:null,e.type==='HATCH'?e.raw?.find(p=>p[0]===52)?.[1]:null,e.nativeDimension,doc.layers[e.layer]?.locked,doc.layers[e.layer]?.color,doc.layers[e.layer]?.lineWeight])]);
+        if(key===inspectorKey)return;inspectorKey=key;styleEdits.clear();textEdits.clear();nativeEdits.clear();
         $('selection-properties').textContent=first?(es.length===1?(first.type==='ERP_DIMENSION'?'거리 치수':first.type)+' · '+(editable(first)?(first.editReason||'2D 편집 가능')+' · 지원: '+(first.operations||['move','copy','rotate','scale','resize','style']).map(op=>({move:'이동',copy:'복사',rotate:'회전',scale:'배율',mirror:'대칭',resize:'손잡이',style:'속성',text:'문자',delete:'삭제',layer:'레이어'}[op]||op)).join(' / '):'읽기 전용 또는 레이어 잠금'):es.length+'개 선택 · 첫 객체의 속성 표시'):'객체를 선택하면 속성이 표시됩니다. 새 객체 기본값은 왼쪽에서 설정하세요.';
         if(first){$('entity-color').value=entityColor(first);$('entity-width').value=first.lineWeight>=0?first.lineWeight/100:(first.lineWeight??-1);$('entity-linetype').value=first.lineType||'BYLAYER';}
         const text=es.find(e=>e.type==='TEXT'||e.type==='MTEXT');
+        $('text-properties').hidden=!text;
+        $('edit-text-dialog').hidden=!text;
         $('edit-text-dialog').disabled=!text||busy||es.length!==1;
         if(text){$('text').value=text.text;$('height').value=displayLength(text.height);$('text-color').value=entityColor(text);}
         $('text-properties').disabled=!text||!canManage||busy||!es.every(e=>['TEXT','MTEXT'].includes(e.type)&&editable(e)&&C.allows(e,'text'));
         const shapeEnabled=canManage&&!busy&&es.length>0&&es.every(e=>!['TEXT','MTEXT'].includes(e.type)&&editable(e)&&C.allows(e,'style'));
+
+        $('native-properties').hidden=es.length!==1||!(first?.type==='HATCH'||first?.type==='INSERT'||first?.type==='LWPOLYLINE'&&first.closed||first?.nativeDimension?.compatible);
+        if(first)$('native-color').value=entityColor(first);
+        $('native-properties').disabled=!canManage||busy||es.length===0||es.some(e=>!editable(e));
+        $('fill-selected').hidden=first?.type!=='LWPOLYLINE';
+        $('explode-selected').hidden=first?.type!=='INSERT';
+        $('fill-selected').disabled=es.length!==1||first?.type!=='LWPOLYLINE'||!first.closed||!C.allows(first,'style');
+        $('explode-selected').disabled=es.length!==1||first?.type!=='INSERT'||!C.allows(first,'copy');
+        $('hatch-properties').hidden=es.length!==1||first?.type!=='HATCH';
+        $('native-dimension-properties').hidden=es.length!==1||!first?.nativeDimension?.compatible;
+        if(first?.type==='HATCH'){$('hatch-opacity').value=Math.round((first.opacity??1)*100);$('hatch-scale').value=Number(first.raw.find(p=>p[0]===41)?.[1]||1);$('hatch-angle').value=Number(first.raw.find(p=>p[0]===52)?.[1]||0);}
+        if(first?.nativeDimension?.compatible){$('native-dimension-text').value=first.text??'<>';$('native-dimension-height').value=displayLength(first.height);}
+
         $('apply-style').disabled=!shapeEnabled;
         for(const id of ['entity-color','entity-width','entity-linetype'])$(id).disabled=!shapeEnabled;
     }
     function hitEntity(p){
+        for(const e of entities().slice().reverse())if(e.type==='LWPOLYLINE'&&e.closed){const path=C.geometry(e);if(path.some((q,i)=>i>0&&C.segmentDistance(p,path[i-1],q)<=4/scale))return e;}
         for(const e of [...entities(),...measurements].slice().reverse()){
-            if(e.type==='ERP_DIMENSION'){for(const part of C.dimensionParts(e)){if(part.type==='LINE'&&C.segmentDistance(p,part.p,part.q)<=10/scale)return e;if(part.type==='TEXT'&&C.geometry(part).some(q=>C.distance(p,q)<=10/scale))return e;}continue;}
+            if(e.nativeDimension?.compatible||e.type==='ERP_DIMENSION'){for(const part of e.nativeDimension?.compatible?C.nativeDimensionParts(e):C.dimensionParts(e)){if(part.type==='LINE'&&C.segmentDistance(p,part.p,part.q)<=10/scale)return e;if(['TEXT','MTEXT'].includes(part.type)){const box=C.textBox(part).points;if(window.CADMarkup.inside(p,box)||box.some((q,i)=>C.segmentDistance(p,q,box[(i+1)%box.length])<=5/scale))return e;}}continue;}
             if(['TEXT','MTEXT'].includes(e.type)){const box=C.textBox(e).points;if(window.CADMarkup.inside(p,box)||box.some((q,i)=>C.segmentDistance(p,q,box[(i+1)%box.length])<=5/scale))return e;continue;}
             if(C.contains(e,p))return e;
             if(e.type==='INSERT'){const paths=e.renderParts?.map(C.geometry)||e.preview||[];if(paths.some(path=>path.some((q,i)=>i>0&&C.segmentDistance(p,path[i-1],q)<=10/scale)))return e;continue;}
@@ -1250,6 +1266,33 @@
                 }),
             'layer',
         );
+
+    for(const id of ['native-color','hatch-opacity','hatch-scale','hatch-angle'])for(const event of ['input','change'])$(id).addEventListener(event,()=>nativeEdits.add(id));
+    $('fill-selected').onclick=()=>{
+        if(!doc||!canManage||busy||gesture)return;
+        const es=doc.entities.filter(e=>selected.has(e.id));
+        if(es.length===1&&editable(es[0])){const existing=C.findPolylineFill(doc,es[0]);if(existing){selected=new Set([existing.id]);render();status('기존 채움을 선택했습니다. 색·불투명도를 조절하세요.');return;}}
+        operation(es=>{
+        if(es.length!==1)throw Error('박스 또는 닫힌 폴리선 한 개를 선택하세요.');
+        const fill=C.hatchForPolyline(es[0],{color:parseInt($('native-color').value.slice(1),16),opacity:.5});
+        return ()=>{doc.entities.push(fill);selected=new Set([fill.id]);status('채움을 만들었습니다. 테두리와 별도 해치 객체이며, 함께 옮기려면 둘 다 선택하세요.');};
+    });};
+    $('explode-selected').onclick=()=>operation(es=>{
+        if(es.length!==1)throw Error('풀 블록 한 개를 선택하세요.');const children=C.explodeBlock(es[0],doc),id=es[0].id;
+        return ()=>{doc.entities=doc.entities.flatMap(e=>e.id===id?children:e);selected=new Set(children.map(e=>e.id));status('블록을 풀었습니다. 내부 선·문자를 선택해 편집할 수 있습니다. 실행 취소로 복원할 수 있습니다.');};
+    },'copy');
+    $('apply-hatch').onclick=()=>operation(es=>{
+        if(es.length!==1)throw Error('해치 한 개를 선택하세요.');const changes={};if(nativeEdits.has('native-color'))changes.color=parseInt($('native-color').value.slice(1),16);if(nativeEdits.has('hatch-opacity'))changes.opacity=Number($('hatch-opacity').value)/100;if(nativeEdits.has('hatch-scale'))changes.patternScale=Number($('hatch-scale').value);if(nativeEdits.has('hatch-angle'))changes.patternAngle=Number($('hatch-angle').value);if(!Object.keys(changes).length)throw Error('색·불투명도·패턴 값을 먼저 변경하세요.');const next=C.editHatch(es[0],changes);
+        return ()=>{doc.entities=doc.entities.map(e=>e.id===next.id?next:e);};
+    });
+    $('apply-native-dimension').onclick=()=>operation(es=>{
+        if(es.length!==1||!es[0].nativeDimension)throw Error('편집 가능한 원본 치수 한 개를 선택하세요.');
+        const height=lengthValue('native-dimension-height'),text=$('native-dimension-text').value;
+        if(!C.nativeDimensionPlainText(text))throw Error('일반 문자·<> 실측값·\\P 또는 \\X 줄바꿈을 사용할 수 있습니다. 복잡 서식 코드·중괄호·직접 줄바꿈은 원본 CAD에서 편집하세요.');
+        if(!Number.isFinite(height)||height<=0||text.length>2000)throw Error('치수 문자와 크기를 확인하세요.');
+        return ()=>{es[0].text=text;es[0].height=height;if(nativeEdits.has('native-color'))es[0].color=parseInt($('native-color').value.slice(1),16);es[0].dirty=true;delete es[0].renderParts;delete es[0].displayGeometry;};
+    },'text');
+
     $("apply-style").onclick = () =>
         operation((selectedEntities) => {
             if(selectedEntities.some(e=>['TEXT','MTEXT'].includes(e.type)))throw Error('선·도형 속성은 문자와 혼합 적용할 수 없습니다. 문자를 제외하고 다시 선택하세요.');
