@@ -43,6 +43,18 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
         await expect(page.locator('#status')).toContainText('부품 1개 배치');
         await page.keyboard.press('Control+d');await page.locator('#save').click();await expect(page.locator('#dirty')).toHaveText('개정 2 저장됨');
         assert.equal(drawing.markups.length,2);assert.equal(drawing.markups[0].kind,'part');assert.equal(drawing.markups[0].part.id,drawing.markups[1].part.id);assert.notEqual(drawing.markups[0].id,drawing.markups[1].id);
+        const printed=await page.evaluate(data=>{
+            const doc=window.CADCore.parse(data.dxf);doc.markups=data.markups;doc.workspace=data.workspace;
+            const labels=[],original=CanvasRenderingContext2D.prototype.fillText;
+            CanvasRenderingContext2D.prototype.fillText=function(text,...args){labels.push(text);return original.call(this,text,...args);};
+            try{const out=window.CADPrint.render(doc,data,{minX:0,minY:0,maxX:200,maxY:120},{paper:'A4',landscape:true,dpi:150,fixed:false,legend:true,title:data.title});
+                const crop=out.plan.frame,pixels=out.canvas.getContext('2d').getImageData(crop.x,crop.y,crop.width,crop.height).data;
+                let blue=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]<100&&pixels[i+1]>130&&pixels[i+2]>180)blue++;
+                return {labels,blue,pdfBytes:out.blob().size};
+            }finally{CanvasRenderingContext2D.prototype.fillText=original;}
+        },drawing);
+        assert.ok(printed.labels.some(s=>s.includes('Gate valve')&&s.includes('DN50')&&s.includes('(2)')));
+        assert.ok(printed.blue>100);assert.ok(printed.pdfBytes>1000);
         await page.locator('#reload').click();await expect(page.locator('#dirty')).toHaveText('개정 2');await open();
         await expect(page.locator('#pl-counts')).toContainText('2개');await expect(page.locator('#pl-basis')).toContainText('저장 개정 2');
         const download=page.waitForEvent('download');await page.locator('#pl-csv').click();assert.match((await download).suggestedFilename(),/cad-9-r2-parts.csv/);

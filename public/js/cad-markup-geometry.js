@@ -359,7 +359,7 @@
                 close = (ps) => [...ps, ps[0]];
             let paths = [[...item.points]];
             if (item.kind === 'ellipse') paths = [close(M.ellipsePoints(item))];
-            if (["area", "detail"].includes(item.kind))
+            if (["area", "detail", "part"].includes(item.kind))
                 paths = G.rings(item).map(close);
             if (item.kind === "cloud")
                 paths = [

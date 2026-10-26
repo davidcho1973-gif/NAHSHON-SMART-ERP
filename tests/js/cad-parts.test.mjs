@@ -20,6 +20,7 @@ test('compound symbols count once; copies, transforms, reload, deletion and undo
     assert.deepEqual(reopened[0].part,part);
     assert.ok(M.hit(a,{x:10,y:20},0));
     assert.ok(!M.hit(a,{x:200,y:200},0));
+    assert.equal(G.selectRegion([a],M.rect({x:-20,y:0},{x:40,y:60}),true).length,1);
 });
 
 test('resizing keeps aspect ratio and does not mutate the catalog snapshot',()=>{
