@@ -14,7 +14,7 @@
             : {}),
     });
     G.area = (item) =>
-        Math.abs(root.CADMarkup.signedArea(item.points)) -
+        item.kind === 'ellipse' ? Math.PI * Math.abs(root.CADMarkup.ellipseFrame(item.points).determinant) : Math.abs(root.CADMarkup.signedArea(item.points)) -
         (item.holes || []).reduce(
             (sum, ring) => sum + Math.abs(root.CADMarkup.signedArea(ring)),
             0,
@@ -73,7 +73,7 @@
             items.length < 2 ||
             items.some((m) => m.kind !== "area" || m.locked)
         )
-            throw Error("잠금이 없는 영역을 두 개 이상 선택하세요.");
+            throw Error("자유·사각·다각형 영역을 두 개 이상 선택하세요. 원·타원 또는 잠긴 표시는 영역 연산에서 제외하세요.");
         if (
             !["union", "difference", "intersection"].includes(operation) ||
             !root.polygonClipping
@@ -95,6 +95,9 @@
     G.valid = (item) => {
         const M = root.CADMarkup;
         if (!Array.isArray(item.points) || !item.points.length) return false;
+        if (item.dash !== undefined && !['solid', 'dash', 'dot', 'dashdot'].includes(item.dash)) return false;
+        if (item.fillColor !== undefined && (!['area', 'ellipse'].includes(item.kind) || !/^(none|#[0-9a-f]{6})$/i.test(item.fillColor))) return false;
+        if (item.fillOpacity !== undefined && (!['area', 'ellipse'].includes(item.kind) || !Number.isFinite(item.fillOpacity) || item.fillOpacity < 0.05 || item.fillOpacity > 1)) return false;
         if (item.kind === "detail" && !root.CADReview?.detailValid(item))
             return false;
         if (["text", "pin"].includes(item.kind) && item.points.length !== 1)
@@ -126,6 +129,11 @@
             return false;
         if (!Number.isFinite(item.size) || item.size <= 0 || item.size > 1e9)
             return false;
+        if (item.kind === 'ellipse') {
+            const f = M.ellipseFrame(item.points);
+            return item.points.length === 4 && !item.holes && !!f && Math.abs(f.determinant) >= 1e-12 &&
+                f.residual < Math.max(1, Math.hypot(f.u.x, f.u.y) * 2, Math.hypot(f.v.x, f.v.y) * 2) * 1e-7;
+        }
         if (!["area", "cloud"].includes(item.kind)) return true;
         if (!G.rings(item).every(M.validPolygon)) return false;
         if (!item.holes?.length) return true;
@@ -189,6 +197,76 @@
             x: origin.x + Math.cos(angle) * length,
             y: origin.y + Math.sin(angle) * length,
         };
+    };
+    G.shape = (tool, a, b, sides = 6) => {
+        const M = root.CADMarkup;
+        if (tool === 'circle') {
+            const d = Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+            b = { x: a.x + (b.x < a.x ? -d : d), y: a.y + (b.y < a.y ? -d : d) };
+        }
+        if (['box', 'cloud', 'circle', 'ellipse'].includes(tool)) return M.rect(a, b);
+        const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2,
+            rx = Math.abs(b.x - a.x) / 2, ry = Math.abs(b.y - a.y) / 2;
+        if (tool === 'triangle') return [{ x, y: y + ry }, { x: x - rx, y: y - ry }, { x: x + rx, y: y - ry }];
+        const n = tool === 'star' ? 10 : tool === 'diamond' ? 4 : Math.max(3, Math.min(12, Math.round(sides) || 6));
+        return Array.from({ length: n }, (_, i) => {
+            const angle = Math.PI / 2 + i * Math.PI * 2 / n, r = tool === 'star' && i % 2 ? 0.45 : 1;
+            return { x: x + Math.cos(angle) * rx * r, y: y + Math.sin(angle) * ry * r };
+        });
+    };
+    G.resizeEllipse = (item, index, target) => {
+        const points = item.points, fixed = points[(index + 2) % 4],
+            u = { x: points[(index + 1) % 4].x - fixed.x, y: points[(index + 1) % 4].y - fixed.y },
+            v = { x: points[(index + 3) % 4].x - fixed.x, y: points[(index + 3) % 4].y - fixed.y },
+            det = u.x * v.y - u.y * v.x;
+        if (!det) return structuredClone(item);
+        const x = target.x - fixed.x, y = target.y - fixed.y,
+            s = (x * v.y - y * v.x) / det, t = (u.x * y - u.y * x) / det,
+            result = structuredClone(item);
+        result.points[index] = { ...target };
+        result.points[(index + 1) % 4] = { x: fixed.x + s * u.x, y: fixed.y + s * u.y };
+        result.points[(index + 3) % 4] = { x: fixed.x + t * v.x, y: fixed.y + t * v.y };
+        return result;
+    };
+    G.resize = (items, width, height, keepRatio = true) => {
+        const b = G.bounds(items), w = b.maxX - b.minX, h = b.maxY - b.minY;
+        if (![width, height].every(n => Number.isFinite(n) && n > 0 && n <= 1e9) || w <= 1e-12 || h <= 1e-12)
+            throw Error('너비와 높이가 있는 표시를 선택하고 양수를 입력하세요.');
+        const sx = width / w, sy = keepRatio ? sx : height / h;
+        if (Math.abs(sx - sy) > 1e-9 && items.some(m => !['area', 'ellipse', 'route', 'pen', 'highlight'].includes(m.kind) || m.label))
+            throw Error('문자·구름·번호·상세도가 포함되면 비율 유지를 켜세요.');
+        const center = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+        return items.map(item => {
+            const result = G.map(item, p => ({ x: center.x + (p.x - center.x) * sx, y: center.y + (p.y - center.y) * sy }));
+            if (Math.abs(sx - sy) <= 1e-9) {
+                result.size *= sx;
+                if (result.textStyle?.boxWidth) result.textStyle.boxWidth *= sx;
+            }
+            return result;
+        });
+    };
+    G.repeat = (items, columns, rows, dx, dy, existingCount = 0) => {
+        if (![columns, rows].every(n => Number.isInteger(n) && n >= 1 && n <= 20) || columns * rows < 2 ||
+            ![dx, dy].every(n => Number.isFinite(n) && Math.abs(n) <= 1e9) ||
+            (columns > 1 && dx === 0) || (rows > 1 && dy === 0))
+            throw Error('열·행은 1~20, 반복 방향의 간격은 0이 아닌 수로 입력하세요.');
+        if (existingCount + items.length * (columns * rows - 1) > 1000)
+            throw Error('반복 결과가 표시 1,000개 한도를 넘습니다.');
+        const result = [];
+        for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
+            if (!row && !column) continue;
+            const groups = new Map();
+            for (const item of items) {
+                const copy = root.CADMarkup.translate(structuredClone(item), dx * column, dy * row);
+                copy.id = crypto.randomUUID();
+                if (copy.group) {
+                    if (!groups.has(copy.group)) groups.set(copy.group, crypto.randomUUID());
+                    copy.group = groups.get(copy.group);
+                }
+                result.push(copy);
+            }
+        }
+        return result;
     };
     function units(items) {
         const groups = new Map();
@@ -278,6 +356,7 @@
             const M = root.CADMarkup,
                 close = (ps) => [...ps, ps[0]];
             let paths = [[...item.points]];
+            if (item.kind === 'ellipse') paths = [close(M.ellipsePoints(item))];
             if (["area", "detail"].includes(item.kind))
                 paths = G.rings(item).map(close);
             if (item.kind === "cloud")
@@ -315,7 +394,7 @@
                 ];
             if (["text", "callout"].includes(item.kind))
                 paths.push(close(M.labelCorners(item)));
-            if (item.label && ["cloud", "area", "route"].includes(item.kind)) {
+            if (item.label && ["cloud", "area", "ellipse", "route"].includes(item.kind)) {
                 const b = M.bounds(item);
                 paths.push(
                     close(

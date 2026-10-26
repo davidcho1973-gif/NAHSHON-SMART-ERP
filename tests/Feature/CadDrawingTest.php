@@ -251,6 +251,32 @@ file_put_contents($argv[5], str_repeat("x", 1025)); echo "{}";');
         $this->actingAs($viewer)->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$mark]])->assertForbidden();
     }
 
+    public function test_ellipse_and_independent_fill_styles_roundtrip_and_reject_invalid_frames_atomically(): void
+    {
+        $id = $this->upload()->json('id');
+        $url = '/admin-api/cad/'.$id;
+        $ellipse = array_replace($this->markup(), ['id' => 'oval', 'kind' => 'ellipse',
+            'points' => [['x' => 10, 'y' => 20], ['x' => 50, 'y' => 40], ['x' => 40, 'y' => 60], ['x' => 0, 'y' => 40]],
+            'fillColor' => '#ff6600', 'fillOpacity' => .25, 'dash' => 'dashdot']);
+        $arrow = array_replace($this->markup(), ['id' => 'arrow', 'kind' => 'route', 'points' => [['x' => 0, 'y' => 0], ['x' => 50, 'y' => 20]], 'arrows' => 'both', 'dash' => 'dot']);
+        $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$ellipse, $arrow]])->assertOk()
+            ->assertJsonPath('markups.0.kind', 'ellipse')->assertJsonPath('markups.0.fillOpacity', .25)->assertJsonPath('markups.1.arrows', 'both');
+        $this->getJson($url.'/history?revision=2')->assertOk()->assertJsonPath('markups.0.fillColor', '#ff6600')->assertJsonPath('markups.0.dash', 'dashdot');
+        $this->putJson($url, ['revision' => 2, 'dxf' => self::DXF])->assertOk()->assertJsonPath('markups.0.fillColor', '#ff6600');
+        foreach ([
+            ['points' => array_slice($ellipse['points'], 0, 3)],
+            ['points' => [['x' => 0, 'y' => 0], ['x' => 10, 'y' => 0], ['x' => 9, 'y' => 10], ['x' => 0, 'y' => 10]]],
+            ['points' => array_fill(0, 4, ['x' => 0, 'y' => 0])],
+            ['holes' => []], ['fillColor' => 'url(javascript:bad)'], ['fillOpacity' => 0], ['dash' => 'custom'],
+            ['kind' => 'route'],
+        ] as $change) {
+            $this->putJson($url, ['revision' => 3, 'dxf' => self::DXF, 'markups' => [array_replace($ellipse, $change)]])->assertUnprocessable();
+        }
+        $this->getJson($url)->assertOk()->assertJsonPath('revision', 3)->assertJsonPath('markups.0.points', $ellipse['points']);
+        $this->assertDatabaseCount('cad_drawing_revisions', 3);
+        $this->get($url.'/download?format=original')->assertStreamedContent(self::DXF);
+    }
+
     public function test_holes_text_groups_and_calibration_survive_immutable_revisions_and_old_clients(): void
     {
         $id = $this->upload()->json('id');

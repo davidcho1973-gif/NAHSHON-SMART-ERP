@@ -19,6 +19,70 @@ const area = (id, points) => ({
     locked: false,
 });
 
+test('ellipses retain exact affine bounds, area and picking through rotation and corner resizing', () => {
+    const ellipse = { ...area('oval', box(100, 200, 40, 20)), kind: 'ellipse' };
+    assert.equal(G.valid(ellipse), true);
+    assert.ok(Math.abs(G.area(ellipse) - 200 * Math.PI) < 1e-8);
+    assert.deepEqual(M.bounds(ellipse), { minX: 100, minY: 200, maxX: 140, maxY: 220 });
+    assert.ok(M.hit(ellipse, { x: 120, y: 210 }, 0));
+    assert.ok(!M.hit(ellipse, { x: 100, y: 200 }, 0));
+    const rotated = G.transform([ellipse], 45, 1)[0], radius = Math.sqrt(250), bounds = M.bounds(rotated);
+    assert.ok(Math.abs(bounds.maxX - (120 + radius)) < 1e-8);
+    assert.ok(Math.abs(bounds.maxY - (210 + radius)) < 1e-8);
+    assert.ok(Math.abs(G.area(rotated) - G.area(ellipse)) < 1e-8);
+    for (let i = 0; i < 4; i++) {
+        const old = structuredClone(rotated), corner = rotated.points[i], resized = G.resizeEllipse(rotated, i, { x: corner.x + 3, y: corner.y - 2 });
+        assert.ok(G.valid(resized));
+        assert.deepEqual(resized.points[(i + 2) % 4], rotated.points[(i + 2) % 4]);
+        assert.deepEqual(rotated, old);
+    }
+    assert.equal(G.valid({ ...ellipse, points: box(1, 1, 0, 10) }), false);
+    assert.equal(G.valid({ ...ellipse, points: [...ellipse.points.slice(0, 3), { x: 130, y: 210 }] }), false);
+    assert.equal(G.valid({ ...ellipse, holes: [] }), false);
+    assert.equal(G.selectRegion([ellipse], box(99, 199, 3, 3), true).length, 0, 'empty frame corner is not the ellipse');
+    assert.equal(G.selectRegion([ellipse], box(119, 209, 2, 2), true).length, 1);
+    assert.equal(G.selectRegion([ellipse], box(99, 199, 42, 22), false).length, 1);
+});
+
+test('shape creation and exact resizing preserve valid geometry and source data', () => {
+    for (const tool of ['triangle', 'diamond', 'polygon', 'star']) {
+        const points = G.shape(tool, { x: 20, y: 40 }, { x: -10, y: 0 }, 7);
+        assert.ok(M.validPolygon(points), tool);
+        assert.equal(points.length, { triangle: 3, diamond: 4, polygon: 7, star: 10 }[tool]);
+    }
+    const circle = { ...area('circle', G.shape('circle', { x: 5, y: 8 }, { x: -5, y: 30 })), kind: 'ellipse' };
+    assert.equal(G.area(circle), 121 * Math.PI);
+    const before = structuredClone(circle), sized = G.resize([circle], 100, 30, false)[0], b = M.bounds(sized);
+    assert.ok(Math.abs(b.maxX - b.minX - 100) < 1e-10);
+    assert.ok(Math.abs(b.maxY - b.minY - 30) < 1e-10);
+    assert.equal(G.valid(sized), true);
+    assert.deepEqual(circle, before);
+    assert.throws(() => G.resize([{ ...area('text', [{ x: 0, y: 0 }]), kind: 'text', text: 'Read me' }], 100, 20, false), /비율/);
+    assert.throws(() => G.resize([circle], Infinity, 20), /양수/);
+});
+
+test('repeated copies isolate instance IDs and groups and reject excessive or overlapping arrays', () => {
+    const first = { ...area('a', box(0, 0, 10, 10)), group: 'pair' }, second = { ...area('b', box(12, 0, 10, 10)), group: 'pair' }, before = structuredClone([first, second]);
+    const copies = G.repeat([first, second], 3, 2, 40, -30, 2);
+    assert.equal(copies.length, 10);
+    assert.equal(new Set(copies.map(m => m.id)).size, 10);
+    assert.equal(new Set(copies.map(m => m.group)).size, 5);
+    assert.equal(copies[0].group, copies[1].group);
+    assert.notEqual(copies[0].group, 'pair');
+    assert.deepEqual(copies.at(-1).points[0], { x: 92, y: -30 });
+    assert.deepEqual([first, second], before);
+    assert.ok(G.validSet(copies));
+    assert.throws(() => G.repeat([first], 2, 1, 0, 1), /간격/);
+    assert.throws(() => G.repeat([first, second], 20, 20, 10, 10, 500), /1,000/);
+});
+
+test('appearance fields are bounded and fill fields cannot leak onto lines or text', () => {
+    const a = area('styled', box(0, 0, 10, 10));
+    assert.ok(G.valid({ ...a, fillColor: '#ff0000', fillOpacity: 0.25, dash: 'dashdot' }));
+    for (const change of [{ fillColor: 'url(javascript:bad)' }, { fillOpacity: NaN }, { fillOpacity: 0 }, { dash: 'unknown' }, { kind: 'route', fillColor: '#112233' }])
+        assert.equal(G.valid({ ...a, ...change }), false);
+});
+
 const wall = (x1, y1, x2, y2, extra = {}) => ({
     type: "LINE", p: {x: x1, y: y1}, q: {x: x2, y: y2}, ...extra,
 });

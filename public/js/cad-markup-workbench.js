@@ -7,6 +7,24 @@
         const host = document.getElementById("markup-workbench");
         if (!host) return null;
         host.innerHTML = `
+        <details open><summary>선 · 채우기</summary>
+          <p class="note">위의 색상은 선·글자 색입니다. 채우기는 별도 색을 지정할 수 있습니다. 새 표시에 기본값으로 적용됩니다.</p>
+          <label>선 모양<select id="mw-dash"><option value="solid">실선</option><option value="dash">파선</option><option value="dot">점선</option><option value="dashdot">일점쇄선</option></select></label>
+          <label>영역 채우기<select id="mw-fill-mode"><option value="same">선과 같은 색</option><option value="color">별도 색</option><option value="none">채우기 없음</option></select></label>
+          <div class="action-grid"><label>채우기 색<input id="mw-fill-color" type="color" value="#38bdf8"></label><label>채우기 농도 (%)<input id="mw-fill-opacity" type="number" min="5" max="100" value="35"></label></div>
+          <label><input id="mw-fill-independent" type="checkbox"> 채우기 농도를 별도로 지정</label>
+          <button id="mw-appearance-apply">선택 표시의 선·채우기 적용</button>
+          <label>다각형 꼭짓점 수<input id="mw-polygon-sides" type="number" min="3" max="12" step="1" value="6"></label>
+        </details>
+        <details><summary>정밀 이동 · 크기 · 반복 복사</summary>
+          <p class="note">값은 도면 좌표 단위입니다. +X는 오른쪽, +Y는 위쪽입니다. 크기는 선택 전체의 중심을 유지합니다.</p>
+          <output id="mw-selection-bounds"></output>
+          <div class="action-grid"><label>X 이동<input id="mw-move-x" type="number" step="any" value="0"></label><label>Y 이동<input id="mw-move-y" type="number" step="any" value="0"></label></div><button id="mw-move">입력한 거리만큼 이동</button>
+          <div class="action-grid"><label>너비<input id="mw-resize-width" type="number" min="0.000001" step="any" value="100"></label><label>높이<input id="mw-resize-height" type="number" min="0.000001" step="any" value="100"></label></div>
+          <label><input id="mw-keep-ratio" type="checkbox" checked> 비율 유지 (너비 기준)</label><button id="mw-resize">정확한 크기 적용</button>
+          <div class="action-grid"><label>열 수<input id="mw-repeat-columns" type="number" min="1" max="20" value="2"></label><label>행 수<input id="mw-repeat-rows" type="number" min="1" max="20" value="1"></label><label>X 반복 간격<input id="mw-repeat-x" type="number" step="any" value="100"></label><label>Y 반복 간격<input id="mw-repeat-y" type="number" step="any" value="-100"></label></div>
+          <p class="note">원본을 포함한 행·열 수입니다. 간격은 같은 기준점 사이 거리이며 아래로 반복하려면 Y에 음수를 입력합니다.</p><button id="mw-repeat">선택 표시 반복 복사</button>
+        </details>
         <details open><summary>영역 · 그룹 · 정렬</summary>
           <p class="note">Alt+꼭짓점 클릭: 삭제 · Alt+변 클릭: 점 추가. 빼기는 먼저 선택한 영역에서 나머지를 뺍니다.</p>
           <div class="action-grid"><button id="mw-union">영역 합치기</button><button id="mw-difference">영역 빼기</button><button id="mw-intersection">겹친 영역</button><button id="mw-group">그룹 묶기</button><button id="mw-ungroup">그룹 풀기</button><button id="mw-same">같은 색 선택</button></div>
@@ -23,6 +41,7 @@
           <label>줄 간격<input id="mw-line-height" type="number" min="1" max="3" step="0.1" value="1.35"></label>
           <label>배경 색<input id="mw-background" type="color" value="#ffffff"></label>
           <div class="action-grid"><label><input id="mw-no-background" type="checkbox"> 투명 배경</label><label><input id="mw-border" type="checkbox" checked> 테두리</label></div><button id="mw-text-apply">선택 문자 서식 적용</button>
+          <label><input id="mw-text-default" type="checkbox"> 새 문자·메모에도 위 서식과 글자 높이 사용</label>
           <label>배관 꺾임<select id="mw-route-angle"><option value="90">90°</option><option value="45">45°</option><option value="0">자유</option></select></label><label>흐름 방향<select id="mw-arrows"><option value="end">진행 방향</option><option value="both">양방향</option><option value="none">없음</option></select></label><button id="mw-route-apply">선택 경로에 적용</button>
           <label>지우개 반경 (화면 px)<input id="mw-eraser-size" type="number" min="4" max="80" value="12"></label>
         </details>
@@ -92,6 +111,30 @@
         const locked = (item) =>
             item.locked ||
             layers().some((layer) => layer.id === item.layer && layer.locked);
+        function appearance(item) {
+            item.dash = $('dash').value;
+            if (['area', 'ellipse'].includes(item.kind)) {
+                const mode = $('fill-mode').value;
+                if (mode === 'same') delete item.fillColor;
+                else item.fillColor = mode === 'none' ? 'none' : $('fill-color').value;
+                if ($('fill-independent').checked) item.fillOpacity = Number($('fill-opacity').value) / 100;
+                else delete item.fillOpacity;
+            }
+            return item;
+        }
+        act('appearance-apply', () => replace(selected().map(appearance)));
+        act('move', () => {
+            const next = selected(), dx = Number($('move-x').value), dy = Number($('move-y').value);
+            if (![dx, dy].every(n => Number.isFinite(n) && Math.abs(n) <= 1e9)) throw Error('이동 거리를 확인하세요.');
+            if (!dx && !dy) return;
+            replace(next.map(m => M.translate(m, dx, dy)));
+        });
+        act('resize', () => replace(G.resize(selected(), Number($('resize-width').value), Number($('resize-height').value), $('keep-ratio').checked)));
+        act('repeat', () => {
+            const copies = G.repeat(selected(), Number($('repeat-columns').value), Number($('repeat-rows').value), Number($('repeat-x').value), Number($('repeat-y').value), editor.items().length);
+            editor.apply([...editor.items(), ...copies], copies.map(m => m.id));
+            api.status(`${copies.length}개 복사 완료 · 실행 취소로 한 번에 되돌릴 수 있습니다.`);
+        });
         for (const operation of ["union", "difference", "intersection"])
             act(operation, () => {
                 const chosen = selected(),
@@ -154,7 +197,7 @@
             const item = editor.chosen()[0];
             if (!item) return;
             format = Object.fromEntries(
-                ["color", "opacity", "width", "size", "pattern", "textStyle"]
+                ["color", "opacity", "width", "size", "pattern", "textStyle", "dash", "fillColor", "fillOpacity"]
                     .filter((k) => item[k] !== undefined)
                     .map((k) => [k, structuredClone(item[k])]),
             );
@@ -167,6 +210,8 @@
                 const style = structuredClone(format);
                 if (!["text", "callout"].includes(m.kind))
                     delete style.textStyle;
+                for (const field of ['dash', 'fillColor', 'fillOpacity']) delete m[field];
+                if (!['area', 'ellipse'].includes(m.kind)) { delete style.fillColor; delete style.fillOpacity; }
                 Object.assign(m, style);
             });
             replace(next);
@@ -451,7 +496,17 @@
             if (nextChosenKey !== chosenKey) {
                 chosenKey = nextChosenKey;
                 const one = selection[0];
+                $('selection-bounds').textContent = '';
                 if (one) {
+                    const b = G.bounds(selection), w = b.maxX - b.minX, h = b.maxY - b.minY;
+                    $('selection-bounds').textContent = `선택 범위 ${Number(w.toPrecision(7))} × ${Number(h.toPrecision(7))}`;
+                    $('resize-width').value = Number(w.toPrecision(12));
+                    $('resize-height').value = Number(h.toPrecision(12));
+                    $('dash').value = one.dash || 'solid';
+                    $('fill-mode').value = one.fillColor === 'none' ? 'none' : one.fillColor ? 'color' : 'same';
+                    $('fill-color').value = one.fillColor && one.fillColor !== 'none' ? one.fillColor : one.color;
+                    $('fill-independent').checked = one.fillOpacity !== undefined;
+                    $('fill-opacity').value = Math.round((one.fillOpacity ?? one.opacity) * 100);
                     $("label").value = one.label || "";
                     if (one.symbol) $("symbol").value = one.symbol;
                     if (["callout", "text"].includes(one.kind)) {
@@ -529,7 +584,7 @@
             if (measurement) {
                 const area =
                     selection
-                        .filter((m) => m.kind === "area")
+                        .filter((m) => ['area', 'ellipse'].includes(m.kind))
                         .reduce((n, m) => n + G.area(m), 0) *
                     measurement.metersPerUnit ** 2;
                 const length =
@@ -567,12 +622,19 @@
             locked,
             calibrate,
             routeAngle: () => Number($("route-angle").value),
+            polygonSides: () => Number($('polygon-sides').value),
             eraserRadius: () =>
                 Math.max(
                     4,
                     Math.min(80, Number($("eraser-size").value) || 12),
                 ) / api.scale(),
             decorate: (item) => {
+                appearance(item);
+                if (['text', 'callout'].includes(item.kind) && $('text-default').checked) {
+                    // Invalid defaults are rejected at commit, without changing existing marks.
+                    try { item.textStyle = textStyle(); } catch { item.size = NaN; return item; }
+                    item.size = Number($('text-size').value);
+                }
                 const layer = $("layer").value;
                 if (layer) item.layer = layer;
                 if (item.kind === "pin")
