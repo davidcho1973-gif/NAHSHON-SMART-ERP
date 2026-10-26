@@ -5,7 +5,7 @@
         eps = 1e-8;
     G.rings = (item) => [item.points, ...(item.holes || [])];
     G.pointCount = (item) =>
-        G.rings(item).reduce((n, ring) => n + ring.length, 0);
+        G.rings(item).reduce((n, ring) => n + ring.length, 0) + (item.kind === 'part' ? (root.CADParts?.pointCount(item.part) ?? 50001) : 0);
     G.map = (item, fn) => ({
         ...structuredClone(item),
         points: item.points.map(fn),
@@ -129,6 +129,8 @@
             return false;
         if (!Number.isFinite(item.size) || item.size <= 0 || item.size > 1e9)
             return false;
+        if (item.kind === 'part') return !!root.CADParts?.valid(item);
+        if (item.part !== undefined) return false;
         if (item.kind === 'ellipse') {
             const f = M.ellipseFrame(item.points);
             return item.points.length === 4 && !item.holes && !!f && Math.abs(f.determinant) >= 1e-12 &&

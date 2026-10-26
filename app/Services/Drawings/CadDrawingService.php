@@ -218,6 +218,7 @@ class CadDrawingService
         $this->validateDxf($dxf);
         if ($markups !== null) {
             $markups = app(CadMarkupValidator::class)->validate($markups);
+            $markups = app(CadPartLibrary::class)->canonicalize($drawing, $markups);
         }
         if ($workspace !== null) {
             $workspace = app(CadWorkspaceValidator::class)->validate($workspace);
@@ -260,6 +261,7 @@ class CadDrawingService
         $this->access($user, $drawing, true);
         $this->validateDxf($dxf);
         $markups = app(CadMarkupValidator::class)->validate($markups);
+        $markups = app(CadPartLibrary::class)->canonicalize($drawing, $markups);
         $workspace = app(CadWorkspaceValidator::class)->validate($workspace);
         $layerIds = array_column($workspace['layers'] ?? [], 'id');
         foreach ($markups as $item) {

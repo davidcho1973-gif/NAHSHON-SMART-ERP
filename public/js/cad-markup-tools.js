@@ -681,6 +681,7 @@
                               )
                             : (() => {
                                   if (item.kind === 'ellipse') return G.resizeEllipse(item, g.grip, end);
+                                  if (item.kind === 'part') return window.CADParts.resize(item, g.grip, end);
                                   const result = clone(item),
                                       handle = handles(result)[g.grip];
                                   if (handle) {
@@ -804,7 +805,7 @@
                     g.preview.some(
                         (item) =>
                             !item.points.every(finite) ||
-                            (["area", "ellipse", "cloud"].includes(item.kind) &&
+                            (["area", "ellipse", "cloud", "part"].includes(item.kind) &&
                                 !(G
                                     ? G.valid(item)
                                     : M.validPolygon(item.points))),
@@ -1116,6 +1117,10 @@
                 !["callout", "pin", "text", "cloud", "route"].includes(
                     one[0].kind,
                 );
+            if (one.some(m => m.kind === 'part')) {
+                $("markup-pattern").disabled = true;
+                $("markup-size").disabled = true;
+            }
             $("markup-lock").disabled = !permitted() || !one.length;
             $("markup-lock").textContent =
                 one.length && one.every((m) => m.locked) ? "잠금 해제" : "잠금";
@@ -1158,6 +1163,7 @@
                         text: "문자",
                         route: "경로",
                         detail: "확대 상세도",
+                        part: "부품 · " + (item.part?.name || ""),
                     }[item.kind] +
                     (item.text
                         ? " · " + item.text.replace(/\n/g, " ").slice(0, 35)
@@ -1448,7 +1454,7 @@
             },
             items,
             selected: chosen,
-            apply,select,
+            apply,select,setMode,setTool,
             pickRegion: receiver => {setMode("markup");setTool("region");regionReceiver=receiver;api.render();},
         };
     };

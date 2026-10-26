@@ -355,6 +355,8 @@ Route::middleware('auth')->group(function (): void {
         Route::delete('/admin-api/cad/ai/connections/{connection}', [CadConnectionController::class, 'revoke'])->whereUuid('connection');
         require __DIR__.'/cad_ai.php';
     });
+    require __DIR__.'/cad_parts.php';
+
     Route::prefix('admin-api/cad')->controller(CadDrawingController::class)->group(function (): void {
         Route::get('/', 'drawings');
         Route::get('/capabilities', 'capabilities');

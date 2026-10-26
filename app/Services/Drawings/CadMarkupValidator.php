@@ -19,9 +19,10 @@ class CadMarkupValidator
         }
         $validated = Validator::make(['markups' => $markups], [
             'markups' => 'present|array|max:1000',
-            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail,dash,fillColor,fillOpacity',
+            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail,dash,fillColor,fillOpacity,part',
             'markups.*.id' => ['required', 'string', 'max:80', 'distinct:strict', 'regex:/^[a-zA-Z0-9_-]+$/'],
-            'markups.*.kind' => ['required', Rule::in(['area', 'ellipse', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail'])],
+            'markups.*.kind' => ['required', Rule::in(['area', 'ellipse', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail', 'part'])],
+            'markups.*.part' => 'sometimes|array',
             'markups.*.points' => 'required|array|min:1|max:2048',
             'markups.*.points.*' => 'required|array:x,y',
             'markups.*.points.*.x' => 'required|numeric|between:-1000000000,1000000000',
@@ -84,6 +85,19 @@ class CadMarkupValidator
                 $point = ['x' => (float) $point['x'], 'y' => (float) $point['y']];
             }
             unset($point);
+            if ($item['kind'] === 'part') {
+                $item['part'] = app(CadPartGeometry::class)->placement($item);
+                foreach ($item['part']['geometry']['items'] as $child) {
+                    foreach ([$child['points'], ...($child['holes'] ?? [])] as $ring) {
+                        $count += count($ring);
+                    }
+                }
+                if ($count > 50000) {
+                    $fail();
+                }
+            } elseif (isset($item['part'])) {
+                $fail();
+            }
             if ($item['kind'] === 'ellipse') {
                 if ($n !== 4 || ! $this->simpleRing($item['points'])) {
                     $fail();

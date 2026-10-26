@@ -250,7 +250,7 @@
             const outline = ellipsePoints(item);
             return outline.some((a, i) => segmentDistance(p, a, outline[(i + 1) % outline.length]) <= tolerance);
         }
-        if(item.kind === 'detail') return inside(p,item.points);
+        if(['detail', 'part'].includes(item.kind)) return inside(p,item.points);
         if (item.kind === "pin")
             return distance(p, item.points[0]) <= item.size + tolerance;
         if (
@@ -298,6 +298,7 @@
         };
     }
     function draw(ctx, item, screen, scale, options = {}) {
+        if (item.kind === 'part') return root.CADParts?.draw(ctx, item, screen, scale, options);
         const ps = item.points.map(screen),
             size = item.size * scale;
         ctx.save();

@@ -65,7 +65,7 @@
     if(proofMode){$('sites').disabled=true;$('drawings').disabled=true;$('history').disabled=true;}
     let gesture = null, inspectorKey = "",hoverPoint=null,snapMark=null,textDraft=null;
     let measurements=[];
-    let markup=null, sketch=null, recovery=null, reviewWorkbench=null, workflow=null, packets=null, printing=false, cadBaseline="";
+    let markup=null, parts=null, sketch=null, recovery=null, reviewWorkbench=null, workflow=null, packets=null, printing=false, cadBaseline="";
     const backgroundKey = 'cad:canvas-background:' + (document.body.dataset.editorOwner || 'guest');
     let canvasBackground = 'dark';
     try { if (localStorage.getItem(backgroundKey) === 'white') canvasBackground = 'white'; } catch (_) {}
@@ -484,6 +484,7 @@
             }[tool] || "점을 순서대로 지정 · Esc 취소");
         renderGuides();
         markup?.render(ctx,{paper:printing,background:canvasBackground,color:printing?undefined:displayColor});
+        if(!printing)parts?.render(ctx,screen,scale);
         if(!printing)workflow?.renderOverlay(ctx,screen);
         if(!printing)sketch?.render(ctx);
         ctx.restore();
@@ -1510,6 +1511,8 @@
         },
         clearCAD:()=>{cancelGesture();selected.clear();points=[];hoverPoint=null;snapMark=null;setTool('select');},
         pan:(dx,dy)=>{origin.x+=dx;origin.y+=dy;render();}});
+    parts=window.createCADPartLibrary?.({canvas,markup,request:api,scale:()=>scale,world,snap,render,status,focus:focusBounds,
+        state:()=>({doc,record,dirty,busy:busy||!!gesture,canWrite:canAnnotate,canExport:!!record?.canExport})});
     sketch=window.createCADSketchTools?.({canvas,document:()=>doc,recordId:()=>record?.id,
         active:()=>markup?.mode()==='cad',tool:()=>tool,setTool,selection:()=>selected,
         select:ids=>{selected=new Set(ids);render();},visible:entities,hit:hitEntity,editable,
