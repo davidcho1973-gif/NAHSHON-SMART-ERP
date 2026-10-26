@@ -53,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -140,7 +140,7 @@ jobs:
       ENV_LABEL: staging
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Trigger Laravel Cloud deployment
         id: hook
@@ -184,7 +184,7 @@ jobs:
       ENV_LABEL: 운영
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Trigger Laravel Cloud deployment
         id: hook
@@ -241,7 +241,7 @@ jobs:
       BASE: ${{ vars.NAHSHON_URL || 'https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud' }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Trigger Laravel Cloud deployment
         id: hook
