@@ -7,6 +7,22 @@
         const host = document.getElementById("markup-workbench");
         if (!host) return null;
         host.innerHTML = `
+        <details open><summary>정밀 맞춤 · 곡선</summary>
+          <label><input id="mw-snap" type="checkbox" checked> 끝점·중점·중심·직선 교차점 맞춤</label>
+          <label><input id="mw-infer" type="checkbox" checked> 수평·수직·기준선 평행 방향 맞춤</label>
+          <label>각도 간격<select id="mw-step"><option value="0">자유</option><option value="15">15°</option><option value="30">30°</option><option value="45">45°</option><option value="90">90°</option></select></label>
+          <p class="note">그리는 중 → X 고정 · ↑/← Y 고정 · ↓ 해제 · Shift 45° · Backspace 마지막 점 취소. 점을 찍은 뒤 숫자를 입력하면 화면 아래에서 치수를 확정합니다.</p>
+          <label><input id="mw-clockwise" type="checkbox"> 중심 호·부채꼴을 시계 방향으로</label>
+          <label>둥근 모서리 반지름 (도면 단위)<input id="mw-corner-radius" type="number" min="0.000001" step="any" value="5"></label>
+        </details>
+        <details><summary>경계 편집 · 간격 복사</summary>
+          <p class="note">다각형 영역은 선택 후 영역 나누기·내부 비우기를 사용하세요. 자르기·연장은 직선 표시의 클릭한 부분에 적용됩니다.</p>
+          <label>복사 간격 (도면 단위)<input id="mw-offset-distance" type="number" step="any" value="5"></label><button id="mw-offset">일정 간격으로 복사</button>
+          <p class="note">영역·원은 + 바깥쪽 / − 안쪽. 열린 경로는 진행 방향의 왼쪽이 +입니다. 복잡한 경계가 겹치면 원본을 유지합니다.</p>
+          <label>모서리 반지름 / 모따기 거리<input id="mw-corner-distance" type="number" min="0.000001" step="any" value="5"></label>
+          <div class="action-grid"><button id="mw-fillet">두 직선 둥글게 연결</button><button id="mw-chamfer">두 직선 모따기</button></div>
+          <p class="note">직선 표시 두 개를 Shift로 선택합니다. 교차점에서 먼 쪽 끝을 유지하며 연결합니다. Ctrl+Z로 되돌릴 수 있습니다.</p>
+        </details>
         <details open><summary>선 · 채우기</summary>
           <p class="note">위의 색상은 선·글자 색입니다. 채우기는 별도 색을 지정할 수 있습니다. 새 표시에 기본값으로 적용됩니다.</p>
           <label>선 모양<select id="mw-dash"><option value="solid">실선</option><option value="dash">파선</option><option value="dot">점선</option><option value="dashdot">일점쇄선</option></select></label>
@@ -15,6 +31,7 @@
           <label><input id="mw-fill-independent" type="checkbox"> 채우기 농도를 별도로 지정</label>
           <button id="mw-appearance-apply">선택 표시의 선·채우기 적용</button>
           <label>다각형 꼭짓점 수<input id="mw-polygon-sides" type="number" min="3" max="12" step="1" value="6"></label>
+          <label>공종 표현 예시<select id="mw-trade-style"><option value="water">급수 · 파랑</option><option value="fire">소방 · 빨강 사선</option><option value="drain">배수 · 초록</option><option value="demolition">철거 · 주황 교차</option></select></label><button id="mw-trade-apply">서식 적용 / 새 표시 기본값</button>
         </details>
         <details><summary>정밀 이동 · 크기 · 반복 복사</summary>
           <p class="note">값은 도면 좌표 단위입니다. +X는 오른쪽, +Y는 위쪽입니다. 크기는 선택 전체의 중심을 유지합니다.</p>
@@ -64,6 +81,13 @@
           <label>번호 / 기호 분류<input id="mw-symbol" maxlength="40" value="일반" placeholder="예: 스프링클러"></label><button id="mw-symbol-apply">선택 기호 분류 적용</button><p class="note">수량은 표시한 위치의 개수입니다. 기성·발주 수량으로 자동 반영되지 않습니다.</p><div id="mw-counts"></div>
         </details>`;
         const $ = (name) => document.getElementById("mw-" + name);
+        $("snap").checked = document.getElementById("snap").checked;
+        $("snap").onchange = () => {
+            document.getElementById("snap").checked = $("snap").checked;
+        };
+        document.getElementById("snap").addEventListener("change", () => {
+            $("snap").checked = document.getElementById("snap").checked;
+        });
         const workspace = () => api.document()?.workspace || {};
         const layers = () => workspace().layers || [];
         const enabled = () =>
@@ -112,28 +136,113 @@
             item.locked ||
             layers().some((layer) => layer.id === item.layer && layer.locked);
         function appearance(item) {
-            item.dash = $('dash').value;
-            if (['area', 'ellipse'].includes(item.kind)) {
-                const mode = $('fill-mode').value;
-                if (mode === 'same') delete item.fillColor;
-                else item.fillColor = mode === 'none' ? 'none' : $('fill-color').value;
-                if ($('fill-independent').checked) item.fillOpacity = Number($('fill-opacity').value) / 100;
+            item.dash = $("dash").value;
+            if (M.filled(item)) {
+                const mode = $("fill-mode").value;
+                if (mode === "same") delete item.fillColor;
+                else
+                    item.fillColor =
+                        mode === "none" ? "none" : $("fill-color").value;
+                if ($("fill-independent").checked)
+                    item.fillOpacity = Number($("fill-opacity").value) / 100;
                 else delete item.fillOpacity;
             }
             return item;
         }
-        act('appearance-apply', () => replace(selected().map(appearance)));
-        act('move', () => {
-            const next = selected(), dx = Number($('move-x').value), dy = Number($('move-y').value);
-            if (![dx, dy].every(n => Number.isFinite(n) && Math.abs(n) <= 1e9)) throw Error('이동 거리를 확인하세요.');
-            if (!dx && !dy) return;
-            replace(next.map(m => M.translate(m, dx, dy)));
+        act("appearance-apply", () => replace(selected().map(appearance)));
+        act("offset", () => {
+            const chosen = selected();
+            if (chosen.length !== 1)
+                throw Error("간격 복사할 표시 하나를 선택하세요.");
+            const next = G.offsetPath(
+                chosen[0],
+                Number($("offset-distance").value),
+            );
+            next.id = crypto.randomUUID();
+            delete next.group;
+            editor.apply([...editor.items(), next], [next.id]);
+            api.status("원본을 유지하고 일정 간격의 표시를 복사했습니다.");
         });
-        act('resize', () => replace(G.resize(selected(), Number($('resize-width').value), Number($('resize-height').value), $('keep-ratio').checked)));
-        act('repeat', () => {
-            const copies = G.repeat(selected(), Number($('repeat-columns').value), Number($('repeat-rows').value), Number($('repeat-x').value), Number($('repeat-y').value), editor.items().length);
-            editor.apply([...editor.items(), ...copies], copies.map(m => m.id));
-            api.status(`${copies.length}개 복사 완료 · 실행 취소로 한 번에 되돌릴 수 있습니다.`);
+        for (const name of ["fillet", "chamfer"])
+            act(name, () => {
+                const chosen = selected(),
+                    next = G.cornerLines(
+                        chosen,
+                        Number($("corner-distance").value),
+                        name === "fillet",
+                    ),
+                    ids = new Set(chosen.map((m) => m.id));
+                editor.apply(
+                    [...editor.items().filter((m) => !ids.has(m.id)), ...next],
+                    next.map((m) => m.id),
+                );
+            });
+        act("trade-apply", () => {
+            if (!enabled()) return;
+            const [color, pattern] = {
+                water: ["#0284c7", "solid"],
+                fire: ["#dc2626", "diagonal"],
+                drain: ["#059669", "solid"],
+                demolition: ["#ea580c", "cross"],
+            }[$("trade-style").value];
+            if (editor.chosen().length)
+                replace(
+                    selected().map((m) => ({
+                        ...m,
+                        color,
+                        pattern,
+                        ...(M.filled(m)
+                            ? { fillColor: color, fillOpacity: 0.25 }
+                            : {}),
+                    })),
+                );
+            document.getElementById("markup-color").value = color;
+            document.getElementById("markup-pattern").value = pattern;
+            $("fill-mode").value = "color";
+            $("fill-color").value = color;
+            $("fill-opacity").value = 25;
+            $("fill-independent").checked = true;
+            api.status(
+                "공종 표현 서식을 적용했습니다. 실제 공종 분류는 레이어에서 지정하세요.",
+            );
+        });
+        act("move", () => {
+            const next = selected(),
+                dx = Number($("move-x").value),
+                dy = Number($("move-y").value);
+            if (
+                ![dx, dy].every((n) => Number.isFinite(n) && Math.abs(n) <= 1e9)
+            )
+                throw Error("이동 거리를 확인하세요.");
+            if (!dx && !dy) return;
+            replace(next.map((m) => M.translate(m, dx, dy)));
+        });
+        act("resize", () =>
+            replace(
+                G.resize(
+                    selected(),
+                    Number($("resize-width").value),
+                    Number($("resize-height").value),
+                    $("keep-ratio").checked,
+                ),
+            ),
+        );
+        act("repeat", () => {
+            const copies = G.repeat(
+                selected(),
+                Number($("repeat-columns").value),
+                Number($("repeat-rows").value),
+                Number($("repeat-x").value),
+                Number($("repeat-y").value),
+                editor.items().length,
+            );
+            editor.apply(
+                [...editor.items(), ...copies],
+                copies.map((m) => m.id),
+            );
+            api.status(
+                `${copies.length}개 복사 완료 · 실행 취소로 한 번에 되돌릴 수 있습니다.`,
+            );
         });
         for (const operation of ["union", "difference", "intersection"])
             act(operation, () => {
@@ -197,7 +306,17 @@
             const item = editor.chosen()[0];
             if (!item) return;
             format = Object.fromEntries(
-                ["color", "opacity", "width", "size", "pattern", "textStyle", "dash", "fillColor", "fillOpacity"]
+                [
+                    "color",
+                    "opacity",
+                    "width",
+                    "size",
+                    "pattern",
+                    "textStyle",
+                    "dash",
+                    "fillColor",
+                    "fillOpacity",
+                ]
                     .filter((k) => item[k] !== undefined)
                     .map((k) => [k, structuredClone(item[k])]),
             );
@@ -210,8 +329,12 @@
                 const style = structuredClone(format);
                 if (!["text", "callout"].includes(m.kind))
                     delete style.textStyle;
-                for (const field of ['dash', 'fillColor', 'fillOpacity']) delete m[field];
-                if (!['area', 'ellipse'].includes(m.kind)) { delete style.fillColor; delete style.fillOpacity; }
+                for (const field of ["dash", "fillColor", "fillOpacity"])
+                    delete m[field];
+                if (!M.filled(m)) {
+                    delete style.fillColor;
+                    delete style.fillOpacity;
+                }
                 Object.assign(m, style);
             });
             replace(next);
@@ -260,7 +383,9 @@
             replace(next);
         });
         act("route-apply", () => {
-            const next = selected().filter((m) => m.kind === "route");
+            const next = selected().filter(
+                (m) => m.kind === "route" || (M.curved(m) && !M.filled(m)),
+            );
             next.forEach((m) => {
                 m.arrows = $("arrows").value;
                 m.label = $("label").value.trim();
@@ -482,7 +607,7 @@
                 selection = editor.chosen(),
                 signature = JSON.stringify([
                     workspace(),
-                    marks,
+                    api.version ? api.version() : marks,
                     selection.map((m) => m.id),
                     api.canManage(),
                     api.busy(),
@@ -496,17 +621,31 @@
             if (nextChosenKey !== chosenKey) {
                 chosenKey = nextChosenKey;
                 const one = selection[0];
-                $('selection-bounds').textContent = '';
+                $("selection-bounds").textContent = "";
                 if (one) {
-                    const b = G.bounds(selection), w = b.maxX - b.minX, h = b.maxY - b.minY;
-                    $('selection-bounds').textContent = `선택 범위 ${Number(w.toPrecision(7))} × ${Number(h.toPrecision(7))}`;
-                    $('resize-width').value = Number(w.toPrecision(12));
-                    $('resize-height').value = Number(h.toPrecision(12));
-                    $('dash').value = one.dash || 'solid';
-                    $('fill-mode').value = one.fillColor === 'none' ? 'none' : one.fillColor ? 'color' : 'same';
-                    $('fill-color').value = one.fillColor && one.fillColor !== 'none' ? one.fillColor : one.color;
-                    $('fill-independent').checked = one.fillOpacity !== undefined;
-                    $('fill-opacity').value = Math.round((one.fillOpacity ?? one.opacity) * 100);
+                    const b = G.bounds(selection),
+                        w = b.maxX - b.minX,
+                        h = b.maxY - b.minY;
+                    $("selection-bounds").textContent =
+                        `선택 범위 ${Number(w.toPrecision(7))} × ${Number(h.toPrecision(7))}`;
+                    $("resize-width").value = Number(w.toPrecision(12));
+                    $("resize-height").value = Number(h.toPrecision(12));
+                    $("dash").value = one.dash || "solid";
+                    $("fill-mode").value =
+                        one.fillColor === "none"
+                            ? "none"
+                            : one.fillColor
+                              ? "color"
+                              : "same";
+                    $("fill-color").value =
+                        one.fillColor && one.fillColor !== "none"
+                            ? one.fillColor
+                            : one.color;
+                    $("fill-independent").checked =
+                        one.fillOpacity !== undefined;
+                    $("fill-opacity").value = Math.round(
+                        (one.fillOpacity ?? one.opacity) * 100,
+                    );
                     $("label").value = one.label || "";
                     if (one.symbol) $("symbol").value = one.symbol;
                     if (["callout", "text"].includes(one.kind)) {
@@ -584,12 +723,16 @@
             if (measurement) {
                 const area =
                     selection
-                        .filter((m) => ['area', 'ellipse'].includes(m.kind))
+                        .filter(M.filled)
                         .reduce((n, m) => n + G.area(m), 0) *
                     measurement.metersPerUnit ** 2;
                 const length =
                     selection
-                        .filter((m) => m.kind === "route")
+                        .filter(
+                            (m) =>
+                                m.kind === "route" ||
+                                (M.curved(m) && !M.filled(m)),
+                        )
                         .reduce((n, m) => n + G.length(m), 0) *
                     measurement.metersPerUnit;
                 const imperial = ["in", "ft"].includes(measurement.unit),
@@ -622,7 +765,7 @@
             locked,
             calibrate,
             routeAngle: () => Number($("route-angle").value),
-            polygonSides: () => Number($('polygon-sides').value),
+            polygonSides: () => Number($("polygon-sides").value),
             eraserRadius: () =>
                 Math.max(
                     4,
@@ -630,10 +773,18 @@
                 ) / api.scale(),
             decorate: (item) => {
                 appearance(item);
-                if (['text', 'callout'].includes(item.kind) && $('text-default').checked) {
+                if (
+                    ["text", "callout"].includes(item.kind) &&
+                    $("text-default").checked
+                ) {
                     // Invalid defaults are rejected at commit, without changing existing marks.
-                    try { item.textStyle = textStyle(); } catch { item.size = NaN; return item; }
-                    item.size = Number($('text-size').value);
+                    try {
+                        item.textStyle = textStyle();
+                    } catch {
+                        item.size = NaN;
+                        return item;
+                    }
+                    item.size = Number($("text-size").value);
                 }
                 const layer = $("layer").value;
                 if (layer) item.layer = layer;
@@ -641,7 +792,8 @@
                     item.symbol = $("symbol").value.trim() || "일반";
                 if (["cloud", "route"].includes(item.kind))
                     item.label = $("label").value.trim();
-                if (item.kind === "route") item.arrows = $("arrows").value;
+                if (item.kind === "route" || M.curved(item))
+                    item.arrows = $("arrows").value;
                 return item;
             },
         };
