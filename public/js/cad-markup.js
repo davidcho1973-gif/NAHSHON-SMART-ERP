@@ -398,7 +398,7 @@
                 ctx.stroke();
                 const [a, b] = ps,
                     angle = Math.atan2(a.y - b.y, a.x - b.x),
-                    arrow = Math.min(14, size * 0.65);
+                    arrow = Math.min(14 * lineScale, size * 0.65);
                 ctx.beginPath();
                 ctx.moveTo(a.x, a.y);
                 ctx.lineTo(
@@ -451,7 +451,7 @@
             ) {
                 const arrow = (a, b) => {
                     const angle = Math.atan2(b.y - a.y, b.x - a.x),
-                        length = Math.min(14, Math.max(6, size * 0.6));
+                        length = Math.min(14 * lineScale, Math.max(6 * lineScale, size * 0.6));
                     ctx.beginPath();
                     ctx.moveTo(b.x, b.y);
                     ctx.lineTo(
