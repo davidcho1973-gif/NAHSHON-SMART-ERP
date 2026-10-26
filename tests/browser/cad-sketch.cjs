@@ -15,7 +15,7 @@ try{
         if(u.pathname==='/admin-api/cad/capabilities')json={dwgRead:false,dwgWrite:false};
         else if(u.pathname==='/admin-api/cad')json={sites:[{id:1,name:'Synthetic'}],drawings:[drawing],canManage:!readonly};
         else if(u.pathname==='/admin-api/cad/9'&&method==='PUT'){writes++;drawing={...drawing,...route.request().postDataJSON(),revision:drawing.revision+1};json=drawing;}
-        else if(u.pathname==='/admin-api/cad/9')json={...drawing,canManage:!readonly};else return route.fulfill({status:404,json:{message:'not found'}});
+        else if(u.pathname==='/admin-api/cad/9'){await new Promise(resolve=>setTimeout(resolve,150));json={...drawing,canManage:!readonly};}else return route.fulfill({status:404,json:{message:'not found'}});
         return route.fulfill({json});
     });
     await page.goto('https://synthetic.test/cad?drawing_id=9');await expect(page.locator('#status')).toContainText('SYNTHETIC Sketch');
@@ -44,7 +44,7 @@ try{
     // Context operations select the clicked shape and use the same undo transaction.
     await key('Space');await click(45,50,'right');await menu('그룹 만들기');await save();const group=polys().find(e=>e.sketchGroup);assert.ok(group);
     await click(45,50,'right');await menu('잠금');await save();assert.ok(polys().some(e=>e.sketchLocked));
-    await page.locator('#reload').click();await expect(page.locator('#dirty')).not.toContainText('저장 안 됨');await frame();
+    await page.locator('#reload').click();await expect(page.locator('#dirty')).toHaveText(`개정 ${drawing.revision}`);await expect(page.locator('#reload')).toBeEnabled();await frame();
     await click(45,50,'right');await expect(page.locator('#sketch-menu').getByRole('menuitem',{name:'지우기',exact:true})).toBeDisabled();await menu('잠금 해제');await save();assert.ok(!polys().some(e=>e.sketchLocked));
     await click(45,50,'right');await menu('숨기기');await save();assert.ok(polys().some(e=>e.hidden));
     await click(150,100,'right');await menu('숨김 모두 표시');await save();assert.ok(!polys().some(e=>e.hidden));
@@ -66,7 +66,7 @@ try{
     await key('Shift+s');await expect(page.locator('#sketch-search')).toBeVisible();await page.locator('#sketch-search-query').fill('줄자');await page.locator('#sketch-search-results button').click();await expect(page.locator('[data-sketch-command="tape"]')).toHaveAttribute('aria-pressed','true');
     fs.mkdirSync('test-results/assistant-browser',{recursive:true});await page.screenshot({path:'test-results/assistant-browser/SYNTHETIC-cad-sketch.png',fullPage:true});
     await click(150,100,'right');await page.screenshot({path:'test-results/assistant-browser/SYNTHETIC-cad-sketch-menu.png',fullPage:true});await page.keyboard.press('Escape');
-    readonly=true;await page.locator('#reload').click();await frame();await key('r');await click(120,10);await click(130,20);await expect(page.locator('#status')).toContainText('읽기 전용');
+    readonly=true;await page.locator('#reload').click();await expect(page.locator('#reload')).toBeEnabled();await frame();await key('r');await click(120,10);await click(130,20);await expect(page.locator('#status')).toContainText('읽기 전용');
     const count=writes;await key('e');await click(45,50);await expect(page.locator('#status')).toContainText('읽기 전용');assert.equal(writes,count);
     assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,writes,toolbar:true,transform:true,contextPersistence:true,readonly:true,errors}));
 }catch(e){if(page){fs.mkdirSync('test-results/assistant-browser',{recursive:true});await page.screenshot({path:'test-results/assistant-browser/SYNTHETIC-cad-sketch-failure.png',fullPage:true}).catch(()=>{});console.error(await page.locator('#status').textContent().catch(()=>''));}throw e;}
