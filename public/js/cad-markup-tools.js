@@ -1513,6 +1513,7 @@
                                   end.y - g.start.y,
                               )
                             : (() => {
+                                  if (item.kind === 'part') return window.CADParts.resize(item, g.grip, end);
                                   if (["ellipse", "arc"].includes(item.kind))
                                       return G.resizeEllipse(item, g.grip, end);
                                   const result = clone(item),
@@ -1705,6 +1706,7 @@
                                 "arc",
                                 "curve",
                                 "cloud",
+                                "part",
                             ].includes(item.kind) &&
                                 !(G
                                     ? G.valid(item)
@@ -2017,6 +2019,10 @@
                 !["callout", "pin", "text", "cloud", "route"].includes(
                     one[0].kind,
                 );
+            if (one.some(m => m.kind === 'part')) {
+                $("markup-pattern").disabled = true;
+                $("markup-size").disabled = true;
+            }
             $("markup-lock").disabled = !permitted() || !one.length;
             $("markup-lock").textContent =
                 one.length && one.every((m) => m.locked) ? "잠금 해제" : "잠금";
@@ -2059,6 +2065,7 @@
                         text: "문자",
                         route: "경로",
                         detail: "확대 상세도",
+                        part: "부품 · " + (item.part?.name || ""),
                     }[item.kind] +
                     (item.text
                         ? " · " + item.text.replace(/\n/g, " ").slice(0, 35)
@@ -2507,6 +2514,8 @@
             selected: chosen,
             apply,
             select,
+            setMode,
+            setTool,
             pickRegion: (receiver) => {
                 setMode("markup");
                 setTool("region");

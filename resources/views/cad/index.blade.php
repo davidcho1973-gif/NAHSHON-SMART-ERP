@@ -6,6 +6,7 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <title>{{ \App\Support\Org::name() }} · CAD 도면 편집</title>
 <link rel="stylesheet" href="{{ asset('css/cad-editor.css') }}?v={{ filemtime(public_path('css/cad-editor.css')) }}">
+<link rel="stylesheet" href="{{ asset('css/cad-parts.css') }}?v={{ filemtime(public_path('css/cad-parts.css')) }}">
 <script defer src="{{ asset('js/cad-core.js') }}?v={{ filemtime(public_path('js/cad-core.js')) }}">
 </script>
 <script defer src="{{ asset('js/cad-fidelity.js') }}?v={{ filemtime(public_path('js/cad-fidelity.js')) }}"></script>
@@ -14,6 +15,7 @@
 </script>
 <script defer src="{{ asset('vendor/polygon-clipping/polygon-clipping.js') }}?v=0.15.7"></script>
 <script defer src="{{ asset('js/cad-markup-geometry.js') }}?v={{ filemtime(public_path('js/cad-markup-geometry.js')) }}"></script>
+<script defer src="{{ asset('js/cad-parts.js') }}?v={{ filemtime(public_path('js/cad-parts.js')) }}"></script>
 <script defer src="{{ asset('js/cad-markup-workbench.js') }}?v={{ filemtime(public_path('js/cad-markup-workbench.js')) }}"></script>
 <script defer src="{{ asset('js/cad-recovery.js') }}?v={{ filemtime(public_path('js/cad-recovery.js')) }}"></script>
 <script defer src="{{ asset('js/cad-print.js') }}?v={{ filemtime(public_path('js/cad-print.js')) }}"></script>

@@ -5,7 +5,7 @@
         eps = 1e-8;
     G.rings = (item) => [item.points, ...(item.holes || [])];
     G.pointCount = (item) =>
-        G.rings(item).reduce((n, ring) => n + ring.length, 0);
+        G.rings(item).reduce((n, ring) => n + ring.length, 0) + (item.kind === 'part' ? (root.CADParts?.pointCount(item.part) ?? 50001) : 0);
     const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
         add = (a, b, t = 1) => ({ x: a.x + b.x * t, y: a.y + b.y * t }),
         cross = (a, b) => a.x * b.y - a.y * b.x;
@@ -621,6 +621,8 @@
             return false;
         if (!Number.isFinite(item.size) || item.size <= 0 || item.size > 1e9)
             return false;
+        if (item.kind === 'part') return !!root.CADParts?.valid(item);
+        if (item.part !== undefined) return false;
         if (["ellipse", "arc"].includes(item.kind)) {
             const f = M.ellipseFrame(item.points);
             return (
@@ -945,7 +947,7 @@
                         : ps,
                 ];
             }
-            if (["area", "detail"].includes(item.kind))
+            if (["area", "detail", "part"].includes(item.kind))
                 paths = G.rings(item).map(close);
             if (item.kind === "cloud")
                 paths = [

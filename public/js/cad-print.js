@@ -171,8 +171,8 @@
             const layer = (doc.workspace?.layers || []).find(
                     (l) => l.id === item.layer,
                 ),
-                name = layer?.name || names[item.kind] || item.kind,
-                key = name + item.color;
+                name = item.kind === 'part' ? [item.part.name, item.part.specification].filter(Boolean).join(' · ') : layer?.name || names[item.kind] || item.kind,
+                key = (item.kind === 'part' ? item.part.id : name) + item.color;
             if (!result.has(key))
                 result.set(key, { color: item.color, name, count: 0 });
             result.get(key).count++;

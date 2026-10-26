@@ -1,0 +1,15 @@
+#cad-parts-dialog{width:min(680px,92vw);max-height:90vh;overflow:auto;padding:22px;border:1px solid #52647a;border-radius:12px;background:#172332;color:#e7edf6}
+#cad-parts-dialog::backdrop{background:#0009}
+#cad-parts-dialog h2{margin-top:0}
+#cad-parts-dialog .action-grid{display:flex;gap:8px;align-items:end;margin:10px 0;flex-wrap:wrap}
+#cad-parts-dialog .action-grid>*{flex:1;min-width:140px}
+#cad-parts-dialog label{display:block;margin:8px 0}
+#cad-parts-dialog input,#cad-parts-dialog select{width:100%;box-sizing:border-box;background:#101925;color:#e7edf6;border:1px solid #52647a;border-radius:5px;padding:8px}
+#cad-parts-dialog button{padding:8px 12px;border:1px solid #52647a;border-radius:5px;background:#24364a;color:#f3f7fb;cursor:pointer}
+#cad-parts-dialog button:disabled{opacity:.45;cursor:default}
+#cad-parts-dialog .note,#pl-basis{font-size:12px;color:#b8c8d9;line-height:1.5}
+#pl-preview{display:block;max-width:100%;height:auto;margin:10px auto;background:#101925;border-radius:6px}
+#pl-counts{display:grid;gap:6px;margin:8px 0;max-height:180px;overflow:auto}
+#pl-counts button{text-align:left}
+#pl-message{min-height:1.4em;color:#7dd3fc}
+#cad-parts-dialog summary{cursor:pointer;padding:10px 0}
