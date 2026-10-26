@@ -283,17 +283,28 @@
         return { x: origin.x + p.x * scale, y: origin.y - p.y * scale };
     }
     function snap(p, exclude = new Set()) {
+        const raw={...p};
         snapMark=null;
         if($('snap').checked||['measure','dimension','tape'].includes(tool)){
             let best=12/scale;for(const e of entities()){if(exclude.has(e.id))continue;for(const q of C.snapPoints(e)){const distance=C.distance(p,q);if(distance<best){best=distance;snapMark={...q};}}}
             if(guides().length&&doc?.workspace?.guidesVisible!==false){const q=C.guideSnap(p,guides(),12/scale,sourceEdges(p));if(q&&(!snapMark||q.kind!=='guide-projection'||C.distance(p,q)<C.distance(p,snapMark)))snapMark={...q};}
+            // Tape used to snap only to discrete vertices; an edge hit must retain its
+            // own projected point so hover, the first click and the guide agree.
+            const reference=tool==='tape'&&points.length&&tapeMode()==='parallel'?tapeEdge:null;
+            // Once anchored, do not magnetize a small gap back onto its own baseline.
+            if(reference&&snapMark&&Math.abs(C.parallelGuide(reference,reference.p,snapMark).offset)<1e-8)snapMark=null;
+            tapeHover=tool==='tape'?nearestTapeEdge(raw,reference):null;
+            if(tapeHover&&(!snapMark||!points.length&&['auto','parallel'].includes($('tape-mode').value))){
+                const q=snapMark&&C.segmentDistance(snapMark,tapeHover.p,tapeHover.q)<1e-8?snapMark:tapeHover.point;
+                snapMark={x:q.x,y:q.y,kind:'edge-projection'};
+            }
             if(snapMark)p={x:snapMark.x,y:snapMark.y};
         }
         const orthoAnchor=points.length&&['line','polyline','move','copy'].includes(tool)?points.at(-1):gesture?.kind==='draw'&&gesture.tool==='line'?gesture.start:gesture?.kind==='move'?gesture.start:null;
         if($('ortho').checked&&orthoAnchor){if(Math.abs(p.x-orthoAnchor.x)>Math.abs(p.y-orthoAnchor.y))p.y=orthoAnchor.y;else p.x=orthoAnchor.x;}
         const anchor=gesture?.kind==='draw'&&gesture.tool==='line'?gesture.start:points.length&&['line','polyline','tape'].includes(tool)?points.at(-1):null;
         inference=null;
-        if(anchor&&!(tool==='tape'&&$('tape-mode').value==='parallel')){const lock=axisLock??shiftLock;if(!snapMark||lock!==null){const found=C.inferDirection(anchor,p,{enabled:$('direction-inference').checked,lock,reference:referenceAngle,step:Number($('inference-step').value)||0});if(found.kind){inference=found;p=found.point;if(lock!==null)snapMark=null;}}}
+        if(anchor&&!(tool==='tape'&&tapeMode()==='parallel')){const lock=axisLock??shiftLock;if(!snapMark||lock!==null){const found=C.inferDirection(anchor,p,{enabled:$('direction-inference').checked,lock,reference:referenceAngle,step:Number($('inference-step').value)||0});if(found.kind){inference=found;p=found.point;if(lock!==null)snapMark=null;}}}
         return p;
     }
 
@@ -498,7 +509,7 @@
     function setTool(t) {
         if (!doc || busy) return;
         cancelGesture();
-        tool = t;axisLock=null;shiftLock=null;inference=null;tapeEdge=null;referenceAngle=null;$('numeric-length').value='';
+        tool = t;axisLock=null;shiftLock=null;inference=null;tapeEdge=null;tapeHover=null;tapeMeasurement=null;referenceAngle=null;$('numeric-length').value='';
         sketch?.reset();
         canvas.style.cursor=t==='select'?'default':'crosshair';
         points = [];
@@ -550,7 +561,7 @@
             render();
         }
     }
-    let rawHover=null,tapeEdge=null,tapeMeasurement=null,axisLock=null,shiftLock=null,inference=null,referenceAngle=null,guidePanelKey='',edgeCache=null;
+    let rawHover=null,tapeEdge=null,tapeHover=null,tapeMeasurement=null,axisLock=null,shiftLock=null,inference=null,referenceAngle=null,guidePanelKey='',edgeCache=null;
     function numericSettings(){return {unit:unitSettings?.unit||'drawing',mmPerUnit:C.drawingUnit(doc)?.mmPerUnit||C.lengthUnits[$('source-unit').value]||doc?.workspace?.measurement?.metersPerUnit*1000||null};}
     function sourceEdges(point){
         const visibility=JSON.stringify(Object.entries(doc.layers).map(([name,layer])=>[name,layer.visible]));
@@ -569,24 +580,33 @@
         if((x1-x0+1)*(y1-y0+1)>4096){for(let i=0;i<edges.length;i++)ids.add(i);}else for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)for(const id of grid.get(x+','+y)||[])ids.add(id);
         return [...ids].map(id=>edges[id]).filter(e=>e.minX<=point.x+tolerance&&e.maxX>=point.x-tolerance&&e.minY<=point.y+tolerance&&e.maxY>=point.y-tolerance).map(e=>({...e,distance:C.segmentDistance(point,e.p,e.q)})).filter(e=>e.distance<tolerance).sort((a,b)=>a.distance-b.distance).slice(0,64);
     }
-    function nearestTapeEdge(p){let edge=null,best=12/scale;for(const candidate of sourceEdges(p)){const d=C.segmentDistance(p,candidate.p,candidate.q);if(d<best&&C.distance(candidate.p,candidate.q)>1e-10){edge=candidate;best=d;}}return edge;}
+    function nearestTapeEdge(p,reference=null){if(!doc)return null;let edge=null,best=12/scale;for(const candidate of sourceEdges(p)){if(reference&&[candidate.p,candidate.q].every(q=>Math.abs(C.parallelGuide(reference,reference.p,q).offset)<1e-8))continue;const point=C.segmentPoint(p,candidate.p,candidate.q),d=C.distance(p,point);if(d<best&&C.distance(candidate.p,candidate.q)>1e-10){edge={...candidate,point};best=d;}}return edge;}
+    function tapeMode(){const mode=$('tape-mode').value;return mode==='auto'?(tapeEdge?'parallel':'distance'):mode;}
+    function cancelTapeReference(){if(tool!=='tape')return;points=[];tapeEdge=null;tapeHover=null;tapeMeasurement=null;snapMark=null;inference=null;axisLock=null;shiftLock=null;$('numeric-length').value='';}
     function guides(){return doc?.workspace?.guides||[];}
     function guideWritable(){return !!doc&&canAnnotate&&!busy&&!gesture;}
-    function addGuide(data){if(!guideWritable())throw Error('읽기 전용이거나 저장 중에는 안내선을 수정할 수 없습니다.');if(guides().length>=256)throw Error('안내선·안내점은 최대 256개입니다.');if(!Number.isFinite(data.p.x)||!Number.isFinite(data.p.y)||Math.abs(data.p.x)>1e9||Math.abs(data.p.y)>1e9)throw Error('안내 좌표 범위를 확인하세요.');snapshot();doc.workspace=doc.workspace||{};doc.workspace.guides=[...guides(),{id:C.uid(),...data}];doc.workspace.guidesVisible=true;points=[];tapeEdge=null;$('numeric-length').value='';render();status('안내를 추가했습니다. 저장하면 다음에 다시 사용할 수 있습니다.');}
+    function addGuide(data){if(!guideWritable())throw Error('읽기 전용이거나 저장 중에는 안내선을 수정할 수 없습니다.');if(guides().length>=256)throw Error('안내선·안내점은 최대 256개입니다.');if(!Number.isFinite(data.p.x)||!Number.isFinite(data.p.y)||Math.abs(data.p.x)>1e9||Math.abs(data.p.y)>1e9)throw Error('안내 좌표 범위를 확인하세요.');snapshot();doc.workspace=doc.workspace||{};doc.workspace.guides=[...guides(),{id:C.uid(),...data}];doc.workspace.guidesVisible=true;points=[];tapeEdge=null;tapeHover=null;$('numeric-length').value='';render();status('안내를 추가했습니다. 저장하면 다음에 다시 사용할 수 있습니다.');}
     function tapePoint(p){
-        const mode=$('tape-mode').value;
-        if(!points.length){if(mode==='parallel'){tapeEdge=nearestTapeEdge(p);if(!tapeEdge){status('기준이 될 직선 또는 직선 폴리선의 선분을 클릭하세요.');return;}const dx=tapeEdge.q.x-tapeEdge.p.x,dy=tapeEdge.q.y-tapeEdge.p.y,t=((p.x-tapeEdge.p.x)*dx+(p.y-tapeEdge.p.y)*dy)/(dx*dx+dy*dy);points=[{x:tapeEdge.p.x+t*dx,y:tapeEdge.p.y+t*dy}];}else points=[p];referenceAngle=nearestTapeEdge(p);referenceAngle=referenceAngle?Math.atan2(referenceAngle.q.y-referenceAngle.p.y,referenceAngle.q.x-referenceAngle.p.x)*180/Math.PI:null;hoverPoint=p;render();return;}
-        try{if(mode==='distance'){if(C.distance(points[0],p)<1e-10)throw Error('서로 다른 두 점을 지정하세요.');tapeMeasurement={p:points[0],q:p};points=[];render();return;}
+        if(!points.length){
+            const mode=$('tape-mode').value,edge=tapeHover&&C.segmentDistance(p,tapeHover.p,tapeHover.q)<1e-8?tapeHover:nearestTapeEdge(p);
+            tapeEdge=['auto','parallel'].includes(mode)?edge:null;
+            if(mode==='parallel'&&!tapeEdge){status('기준이 될 직선 또는 직선 폴리선의 선분을 클릭하세요.');return;}
+            points=[tapeEdge?C.segmentPoint(p,tapeEdge.p,tapeEdge.q):p];tapeMeasurement=null;
+            referenceAngle=edge?Math.atan2(edge.q.y-edge.p.y,edge.q.x-edge.p.x)*180/Math.PI:null;
+            hoverPoint=points[0];render();return;
+        }
+        const mode=tapeMode();
+        try{if(mode==='distance'){if(C.distance(points[0],p)<1e-10)throw Error('서로 다른 두 점을 지정하세요.');tapeMeasurement={p:points[0],q:p};points=[];tapeHover=null;render();return;}
             if(mode==='point')addGuide({type:'point',p});
-            else {const d=C.distance(tapeEdge.p,tapeEdge.q),direction={x:(tapeEdge.q.x-tapeEdge.p.x)/d,y:(tapeEdge.q.y-tapeEdge.p.y)/d},normal={x:-direction.y,y:direction.x},offset=(p.x-tapeEdge.p.x)*normal.x+(p.y-tapeEdge.p.y)*normal.y;if(Math.abs(offset)<1e-10)throw Error('기준 선에서 떨어진 곳을 지정하세요.');addGuide({type:'line',p:{x:tapeEdge.p.x+normal.x*offset,y:tapeEdge.p.y+normal.y*offset},direction});}
+            else {const m=C.parallelGuide(tapeEdge,points[0],p);if(Math.abs(m.offset)<1e-10)throw Error('기준 선에서 떨어진 곳을 지정하세요.');tapeMeasurement={p:m.p,q:m.q,parallel:true};if($('tape-mode').value==='auto'&&!canAnnotate){points=[];tapeEdge=null;tapeHover=null;render();status('읽기 전용: 평행 간격만 측정했습니다.');}else addGuide({type:'line',p:m.q,direction:m.direction});}
         }catch(error){status(error.message);}
     }
     function numericAnchor(){return gesture?.kind==='draw'?gesture.start:points.at(-1);}
-    function numericResult(){const a=numericAnchor();if(!a||!hoverPoint)throw Error('시작점을 클릭하고 마우스로 방향을 가리키세요.');if(tool==='tape'&&$('tape-mode').value==='parallel'){if(!tapeEdge)throw Error('기준 선을 먼저 클릭하세요.');const distance=C.parseLengthInput($('numeric-length').value,numericSettings()),d=C.distance(tapeEdge.p,tapeEdge.q),n={x:-(tapeEdge.q.y-tapeEdge.p.y)/d,y:(tapeEdge.q.x-tapeEdge.p.x)/d},side=(hoverPoint.x-a.x)*n.x+(hoverPoint.y-a.y)*n.y<0?-1:1;return {p:a,q:{x:a.x+n.x*distance*side,y:a.y+n.y*distance*side}};}return C.numericDrawing(tool,a,hoverPoint,$('numeric-length').value,numericSettings());}
+    function numericResult(){const a=numericAnchor();if(!a||!hoverPoint)throw Error('시작점을 클릭하고 마우스로 방향을 가리키세요.');if(tool==='tape'&&tapeMode()==='parallel'){if(!tapeEdge)throw Error('기준 선을 먼저 클릭하세요.');return C.parallelGuide(tapeEdge,a,hoverPoint,C.parseLengthInput($('numeric-length').value,numericSettings()));}return C.numericDrawing(tool,a,hoverPoint,$('numeric-length').value,numericSettings());}
     function commitNumeric(){if(!doc||busy||!['line','polyline','rectangle','circle','tape'].includes(tool))return;try{const result=numericResult();if(tool==='tape')tapePoint(result.q);else{if(!canManage||doc.layers[$('layer').value]?.locked)throw Error('읽기 전용 또는 레이어 잠금입니다.');if(gesture)cancelGesture();if(!points.length)points=[result.p];point(result.q);}$('numeric-length').value='';canvas.focus();render();}catch(error){status(error.message);}}
     function refreshGuideControls(){
         if(!doc)return;const visible=doc.workspace?.guidesVisible!==false;
-        const mode=$('tape-mode').value,labels={line:['선 길이','1200mm 또는 1200mm<80'],polyline:['다음 선분 길이','1200mm · Enter로 다음 점'],rectangle:['사각형 폭,높이','1200mm,800mm · ,800mm'],circle:['원 반지름 / D 지름','250mm 또는 D500mm'],tape:mode==='parallel'?['안내선 간격','기준 선에서 300mm']:mode==='point'?['안내점 거리','500mm 또는 500mm<80']:['측정 거리','두 번째 점까지 길이']};
+        const mode=tapeMode(),labels={line:['선 길이','1200mm 또는 1200mm<80'],polyline:['다음 선분 길이','1200mm · Enter로 다음 점'],rectangle:['사각형 폭,높이','1200mm,800mm · ,800mm'],circle:['원 반지름 / D 지름','250mm 또는 D500mm'],tape:mode==='parallel'?['평행 간격','기준 선에서 300mm']:mode==='point'?['안내점 거리','500mm 또는 500mm<80']:['측정 거리','두 번째 점까지 길이']};
         $('numeric-label').textContent=labels[tool]?.[0]||'길이 입력';$('numeric-length').placeholder=labels[tool]?.[1]||'그리기 도구를 선택하세요';$('numeric-length').disabled=busy||!labels[tool]||(tool!=='tape'&&!canManage);
         const key=JSON.stringify([guides(),visible,canAnnotate,busy]);if(key!==guidePanelKey){guidePanelKey=key;$('guide-visible').checked=visible;$('guide-visible').disabled=!canAnnotate||busy;$('guide-clear').disabled=!canAnnotate||busy||!guides().length;$('guide-list').replaceChildren();for(const [i,g]of guides().entries()){const button=document.createElement('button');button.textContent=(g.type==='line'?'안내선 ':'안내점 ')+(i+1)+' 삭제';button.disabled=!canAnnotate||busy;button.onclick=()=>{if(!guideWritable())return;snapshot();doc.workspace.guides=guides().filter(item=>item.id!==g.id);render();};$('guide-list').append(button);}}
         return visible;
@@ -597,14 +617,22 @@
         const line=(a,b)=>{const u=screen(a),v=screen(b);ctx.beginPath();ctx.moveTo(u.x,u.y);ctx.lineTo(v.x,v.y);ctx.stroke();};
         if(visible)for(const g of guides()){if(g.type==='point'){const p=screen(g.p);ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.stroke();}else{const length=(canvas.clientWidth+canvas.clientHeight)/scale+Math.hypot(g.p.x-(canvas.clientWidth/2-origin.x)/scale,g.p.y-(origin.y-canvas.clientHeight/2)/scale);line({x:g.p.x-g.direction.x*length,y:g.p.y-g.direction.y*length},{x:g.p.x+g.direction.x*length,y:g.p.y+g.direction.y*length});}}
         const a=numericAnchor();let cursor=hoverPoint,viewInference=inference;if($('numeric-length').value&&a)try{cursor=numericResult().q;if($('numeric-length').value.includes('<'))viewInference={angle:Math.atan2(cursor.y-a.y,cursor.x-a.x)*180/Math.PI,kind:'angle'};}catch(_){}
-        if(tool==='tape'){let m=points.length&&cursor?{p:points[0],q:cursor}:tapeMeasurement;if(m&&points.length&&tapeEdge&&$('tape-mode').value==='parallel'){const d=C.distance(tapeEdge.p,tapeEdge.q),n={x:-(tapeEdge.q.y-tapeEdge.p.y)/d,y:(tapeEdge.q.x-tapeEdge.p.x)/d},offset=(cursor.x-points[0].x)*n.x+(cursor.y-points[0].y)*n.y;m={p:points[0],q:{x:points[0].x+n.x*offset,y:points[0].y+n.y*offset}};}if(m){line(m.p,m.q);$('tape-readout').textContent='거리 '+C.formatLength(C.distance(m.p,m.q),unitSettings)+(unitSettings?'':' 도면 단위')+(viewInference?' · '+viewInference.angle.toFixed(1)+'°':'');}else{const edge=hoverPoint&&nearestTapeEdge(hoverPoint);$('tape-readout').textContent=edge?'선 길이 '+C.formatLength(C.distance(edge.p,edge.q),unitSettings):'시작점 또는 기준 선을 클릭하세요.';}}
+        const parallel=tool==='tape'&&tapeEdge&&tapeMode()==='parallel';
+        if(tool==='tape'){
+            const edge=tapeEdge||(!points.length?tapeHover:null);
+            if(edge){ctx.save();ctx.strokeStyle='#38bdf8';ctx.lineWidth=3;ctx.setLineDash([]);line(edge.p,edge.q);ctx.restore();}
+            let m=points.length&&cursor?{p:points[0],q:cursor}:tapeHover?null:tapeMeasurement;
+            if(m&&points.length&&parallel){m={...C.parallelGuide(tapeEdge,points[0],cursor),parallel:true};cursor=m.q;viewInference=null;}
+            if(m){line(m.p,m.q);$('tape-readout').textContent=(m.parallel?'평행 간격 ':'거리 ')+C.formatLength(C.distance(m.p,m.q),unitSettings)+(unitSettings?'':' 도면 단위')+(viewInference?' · '+viewInference.angle.toFixed(1)+'°':'');}
+            else $('tape-readout').textContent=edge?(['auto','parallel'].includes($('tape-mode').value)?'기준선 · 선 길이 ':'선 위 점 · 선 길이 ')+C.formatLength(C.distance(edge.p,edge.q),unitSettings)+' · 클릭하여 시작':'선 위에 마우스를 올리거나 시작점을 클릭하세요.';
+        }
         else $('tape-readout').textContent=viewInference?'방향 '+viewInference.angle.toFixed(1)+'° · '+({x:'X 가로',y:'Y 세로',parallel:'기준선 평행',perpendicular:'기준선 직각',locked:'방향 잠금',angle:'각도 간격'}[viewInference.kind]||'자유'):'';
-        if(a&&cursor&&['line','polyline','rectangle','circle','tape'].includes(tool)){ctx.strokeStyle=viewInference&&(viewInference.kind==='x'||viewInference.kind==='locked'&&Math.abs(viewInference.angle%180)<1e-8)?'#ff7777':viewInference&&(viewInference.kind==='y'||viewInference.kind==='locked'&&Math.abs(Math.abs(viewInference.angle%180)-90)<1e-8)?'#6fe3a1':'#80bfff';if(viewInference){const angle=viewInference.angle*Math.PI/180,L=(canvas.clientWidth+canvas.clientHeight)/scale;ctx.globalAlpha=.45;line({x:a.x-Math.cos(angle)*L,y:a.y-Math.sin(angle)*L},{x:a.x+Math.cos(angle)*L,y:a.y+Math.sin(angle)*L});ctx.globalAlpha=1;}if(tool==='tape'&&tapeEdge&&$('tape-mode').value==='parallel'){const d=C.distance(tapeEdge.p,tapeEdge.q),u={x:(tapeEdge.q.x-tapeEdge.p.x)/d,y:(tapeEdge.q.y-tapeEdge.p.y)/d},n={x:-u.y,y:u.x},offset=(cursor.x-a.x)*n.x+(cursor.y-a.y)*n.y,p={x:a.x+n.x*offset,y:a.y+n.y*offset},L=(canvas.clientWidth+canvas.clientHeight)/scale;line({x:p.x-u.x*L,y:p.y-u.y*L},{x:p.x+u.x*L,y:p.y+u.y*L});}if(tool==='circle'){const p=screen(a);ctx.beginPath();ctx.arc(p.x,p.y,C.distance(a,cursor)*scale,0,Math.PI*2);ctx.stroke();}else if(tool==='rectangle'){line(a,{x:cursor.x,y:a.y});line({x:cursor.x,y:a.y},cursor);line(cursor,{x:a.x,y:cursor.y});line({x:a.x,y:cursor.y},a);}else line(a,cursor);}
+        if(a&&cursor&&['line','polyline','rectangle','circle','tape'].includes(tool)){ctx.strokeStyle=viewInference&&(viewInference.kind==='x'||viewInference.kind==='locked'&&Math.abs(viewInference.angle%180)<1e-8)?'#ff7777':viewInference&&(viewInference.kind==='y'||viewInference.kind==='locked'&&Math.abs(Math.abs(viewInference.angle%180)-90)<1e-8)?'#6fe3a1':'#80bfff';if(viewInference){const angle=viewInference.angle*Math.PI/180,L=(canvas.clientWidth+canvas.clientHeight)/scale;ctx.globalAlpha=.45;line({x:a.x-Math.cos(angle)*L,y:a.y-Math.sin(angle)*L},{x:a.x+Math.cos(angle)*L,y:a.y+Math.sin(angle)*L});ctx.globalAlpha=1;}if(parallel){const m=C.parallelGuide(tapeEdge,a,cursor),u=m.direction,p=m.q,L=(canvas.clientWidth+canvas.clientHeight)/scale;line({x:p.x-u.x*L,y:p.y-u.y*L},{x:p.x+u.x*L,y:p.y+u.y*L});}if(tool==='circle'){const p=screen(a);ctx.beginPath();ctx.arc(p.x,p.y,C.distance(a,cursor)*scale,0,Math.PI*2);ctx.stroke();}else if(tool==='rectangle'){line(a,{x:cursor.x,y:a.y});line({x:cursor.x,y:a.y},cursor);line(cursor,{x:a.x,y:cursor.y});line({x:a.x,y:cursor.y},a);}else if(tool!=='tape')line(a,cursor);}
         ctx.restore();
     }
     $('numeric-length').addEventListener('input',()=>render());
     $('numeric-length').addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Enter'){e.preventDefault();e.stopPropagation();commitNumeric();}else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();$('numeric-length').value='';points=[];tapeEdge=null;cancelGesture();setTool('select');canvas.focus();}else if((e.ctrlKey||e.metaKey)&&['z','y'].includes(e.key.toLowerCase())){e.preventDefault();e.stopPropagation();$('numeric-length').value='';$(e.key.toLowerCase()==='y'||e.shiftKey?'redo':'undo').click();canvas.focus();}});
-    $('tape-mode').onchange=()=>{points=[];tapeEdge=null;tapeMeasurement=null;$('numeric-length').value='';render();};
+    $('tape-mode').onchange=()=>{points=[];tapeEdge=null;tapeHover=null;tapeMeasurement=null;inference=null;axisLock=null;shiftLock=null;snapMark=null;$('numeric-length').value='';render();};
     $('guide-visible').onchange=()=>{if(!guideWritable())return;snapshot();doc.workspace=doc.workspace||{};doc.workspace.guidesVisible=$('guide-visible').checked;render();};
     $('guide-clear').onclick=()=>{if(!guideWritable()||!guides().length)return;snapshot();doc.workspace.guides=[];render();};
     $('tape-calibration').onclick=()=>{document.querySelector('.mode-switch [data-workspace="markup"]').click();const panel=$('markup-workbench');if(panel){const details=[...panel.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes('단위'));if(details){details.open=true;details.scrollIntoView({block:'center'});}}status('이 설정은 표시의 면적·길이 환산 기준입니다. 원본 CAD 크기는 바뀌지 않습니다.');};
@@ -755,7 +783,7 @@
     };
     canvas.onpointercancel=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
     canvas.onlostpointercapture=e=>{if(pan?.pointerId===e.pointerId)pan=null;if(gesture?.pointerId===e.pointerId)cancelGesture();};
-    canvas.onpointerleave=()=>{if(!gesture){snapMark=null;if(!numericAnchor())hoverPoint=null;render();}};
+    canvas.onpointerleave=()=>{if(!gesture){snapMark=null;tapeHover=null;if(!numericAnchor())hoverPoint=null;render();}};
     canvas.ondblclick=e=>{if(tool!=='select'||busy||gesture)return;const hit=hitEntity(world(e));if(hit&&['TEXT','MTEXT'].includes(hit.type)){selected=new Set([hit.id]);openTextEditor(hit);}};
     canvas.oncontextmenu = (e) => e.preventDefault();
     canvas.addEventListener(
@@ -875,7 +903,7 @@
         if(j.reference){await window.CADReference.load(j.reference);parsed.reference=C.clone(j.reference);}
         if(activeIO?.token!==token)return;
         if(aiSession)stopAISharing(true,'도면을 다시 열어 공유를 중지했습니다.');
-        doc = parsed;aiVersion++;aiHashCache=null;edgeCache=null;tapeMeasurement=null;tapeEdge=null;axisLock=null;inference=null;
+        doc = parsed;aiVersion++;aiHashCache=null;edgeCache=null;tapeMeasurement=null;tapeEdge=null;tapeHover=null;axisLock=null;inference=null;
         doc.markups = C.clone(j.markups || []);
         doc.workspace = C.clone(j.workspace || {});
         cadBaseline = C.exportDXF(parsed);
@@ -1100,6 +1128,7 @@
         if (undo.length) {
             redo.push(C.copyDocument(doc));
             doc = undo.pop();
+            cancelTapeReference();
             loadUnits();
             markup?.changed();
             selected.clear();
@@ -1113,6 +1142,7 @@
         if (redo.length) {
             undo.push(C.copyDocument(doc));
             doc = redo.pop();
+            cancelTapeReference();
             loadUnits();
             markup?.changed();
             selected.clear();

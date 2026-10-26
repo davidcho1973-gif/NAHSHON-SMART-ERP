@@ -1160,7 +1160,7 @@
     function distance(a, b) {
         return Math.hypot(a.x - b.x, a.y - b.y);
     }
-    function segmentDistance(p, a, b) {
+    function segmentPoint(p, a, b) {
         const l = distance(a, b) ** 2,
             t = l
                 ? Math.max(
@@ -1173,10 +1173,20 @@
                       ),
                   )
                 : 0;
-        return distance(p, {
+        return {
             x: a.x + t * (b.x - a.x),
             y: a.y + t * (b.y - a.y),
-        });
+        };
+    }
+    function segmentDistance(p, a, b) { return distance(p, segmentPoint(p, a, b)); }
+    // Preview, typed distance and committed guides must use the same signed normal.
+    function parallelGuide(edge, anchor, cursor, length) {
+        const d=distance(edge.p,edge.q);
+        if(!Number.isFinite(d)||d<1e-10)throw Error('길이가 있는 기준 선을 선택하세요.');
+        const direction={x:(edge.q.x-edge.p.x)/d,y:(edge.q.y-edge.p.y)/d},normal={x:-direction.y,y:direction.x};
+        let offset=(cursor.x-anchor.x)*normal.x+(cursor.y-anchor.y)*normal.y;
+        if(length!==undefined){if(!Number.isFinite(length)||length<=0)throw Error('간격은 0보다 커야 합니다.');offset=length*(offset<0?-1:1);}
+        return {p:{...anchor},q:{x:anchor.x+normal.x*offset,y:anchor.y+normal.y*offset},direction,offset};
     }
     function newEntity(type, data, layer = "0") {
         return {
@@ -1600,7 +1610,7 @@
         nativeDimensionPlainText, nativeDimensionLayout, nativeDimensionParts, nativeDimensionGrips,
         editHatch, hatchForPolyline, findPolylineFill, explodeBlock,
         allows, planarXY,
-        parseLengthInput, pointAtLength, numericDrawing, guideSnap, inferDirection,
+        parseLengthInput, pointAtLength, numericDrawing, guideSnap, inferDirection, parallelGuide,
         canvasColor,
         renderEntities,
         quantities, aiGeometry, aiContext, applyAIActions, utf8Size,
@@ -1617,6 +1627,7 @@
         transform,
         distance,
         segmentDistance,
+        segmentPoint,
         newEntity,
         clone,
         copyDocument,

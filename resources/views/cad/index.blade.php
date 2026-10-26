@@ -88,12 +88,12 @@
 <div id="tool-buttons">
 </div>
 <section id="tape-panel" aria-label="줄자와 수치 그리기">
-<label>줄자 모드<select id="tape-mode"><option value="distance">거리 측정 · 저장 안 함</option><option value="parallel">평행 안내선 · 기준 선 클릭</option><option value="point">안내점 · 시작점 클릭</option></select></label>
+<label>줄자 모드<select id="tape-mode"><option value="auto">자동 · 선 선택 / 두 점 거리</option><option value="distance">두 점 거리 · 저장 안 함</option><option value="parallel">평행 안내선 · 기준 선 클릭</option><option value="point">안내점 · 시작점 클릭</option></select></label>
 <label><input id="direction-inference" type="checkbox" checked> 자동 방향 추론 (2D XY)</label><label>각도 간격 °<input id="inference-step" type="number" min="0" max="180" value="15" step="1"></label><p class="note">가로 X 빨강 · 세로 Y 초록 · 기준선 평행/직각 파랑. 3° 이내 자동 맞춤. → X, ←/↑ Y, ↓ 해제, Shift 현재 방향 고정. 1200mm&lt;80 으로 정확한 80°.</p>
 
 <p id="numeric-help" class="note">선: 1200mm · 사각형: 1200mm,800mm · 원: 반지름 또는 D500mm. 캔버스에서 바로 입력 후 Enter. Esc 취소.</p>
 <label><input id="guide-visible" type="checkbox" checked> 안내선·안내점 보기 / 스냅</label><button id="guide-clear" type="button">안내선·안내점 모두 삭제</button><div id="guide-list"></div>
-<details><summary>줄자 사용 안내</summary><p class="note">T: 줄자. 거리: 두 점 클릭. 평행선: 선·폴리선의 선분 클릭 → 옆으로 이동 → 클릭 또는 거리 입력. 안내점: 시작점 → 방향 → 거리 입력 또는 클릭. 방향키 → X / ↑ Y, ↓ 잠금 해제. Shift: 가까운 축. 끝점·중점·중심과 안내선의 점·교차점에 스냅됩니다.</p><p class="note">안내선은 저장·실행 취소할 수 있지만 DXF·DWG·수량에는 포함하지 않습니다. 실제 단위는 원본 기준을 먼저 지정하세요. 전체 모델 크기는 바꾸지 않습니다.</p><button id="tape-calibration" type="button">표시 면적·길이의 단위·축척 설정 열기</button></details>
+<details><summary>줄자 사용 안내</summary><p class="note">T: 줄자. 자동 모드에서 직선 위에 마우스를 올리면 파란색 기준선이 표시됩니다. 선의 아무 위치나 클릭 → 옆으로 이동하면 평행선과 수직 간격이 표시됩니다. 클릭하거나 300mm처럼 입력 후 Enter로 안내선을 놓으세요. 수평·수직·기울어진 선과 직선 폴리선, 블록 안의 직선을 사용할 수 있습니다. 선 밖에서 시작하면 두 점 거리를 측정합니다. 선 위 두 점의 거리는 ‘두 점 거리’ 모드를 선택하세요. Esc: 취소. 방향키 → X / ↑ Y, ↓ 잠금 해제. Shift: 방향 고정. 끝점·중점·중심, 선 위 임의 위치와 안내선 교차점에 스냅됩니다.</p><p class="note">안내선은 저장·실행 취소할 수 있지만 DXF·DWG·수량에는 포함하지 않습니다. 실제 단위는 원본 기준을 먼저 지정하세요. 전체 모델 크기는 바꾸지 않습니다.</p><button id="tape-calibration" type="button">표시 면적·길이의 단위·축척 설정 열기</button></details>
 </section>
 <label>치수 표시 단위<select id="dimension-unit" aria-label="치수 표시 단위">
 <option value="drawing">원본 도면 단위</option>
