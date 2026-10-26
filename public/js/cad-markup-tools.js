@@ -2210,8 +2210,16 @@
                     " · Space+드래그 화면 이동";
             }
             if (!options.paper) {
-                hud.hidden = mode !== "markup" || !polygon.length || !!gesture;
-                if (!hud.hidden) {
+                hud.hidden = mode !== "markup";
+                const entering =
+                    polygon.length > 0 &&
+                    !gesture &&
+                    (multiTools.has(tool) ||
+                        clickShapes.has(tool) ||
+                        ["area", "freecloud", "route", "hole"].includes(tool));
+                $("markup-numeric").disabled = !entering || !permitted();
+                $("markup-numeric-apply").disabled = !entering || !permitted();
+                if (entering) {
                     const a = polygon.at(-1),
                         p = hover || a;
                     let label = [
@@ -2238,6 +2246,11 @@
                     $("markup-numeric-label").textContent = label;
                     $("markup-drawing-readout").textContent =
                         `${names[tool]} · ${polygon.length}점 지정 · 거리 ${Number(M.distance(a, p).toPrecision(6))} · 각도 ${Number(((Math.atan2(p.y - a.y, p.x - a.x) * 180) / Math.PI).toFixed(1))}°`;
+                } else {
+                    $("markup-numeric-label").textContent = "치수";
+                    $("markup-drawing-readout").textContent =
+                        names[tool] +
+                        " · 점을 지정하면 길이·각도를 입력할 수 있습니다.";
                 }
                 canvas.dataset.markupSnap = preciseMark?.kind || "";
                 if (preciseMark && mode === "markup") {

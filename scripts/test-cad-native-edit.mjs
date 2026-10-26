@@ -11,7 +11,8 @@ if(!dotnet||!converter||!directory)throw Error('Usage: node scripts/test-cad-nat
 mkdirSync(directory,{recursive:true});
 const require=createRequire(import.meta.url),fixture=require('../tests/Fixtures/cad-native-edit.cjs');
 const context=vm.createContext({});
-for(const file of ['cad-core','cad-fidelity'])vm.runInContext(readFileSync(`public/js/${file}.js`,'utf8'),context);
+context.window=context;
+for(const file of ['cad-core','cad-fidelity','cad-move-tools'])vm.runInContext(readFileSync(`public/js/${file}.js`,'utf8'),context);
 const C=context.CADCore,at=name=>path.resolve(directory,name);
 const number=(e,code,fallback=0)=>Number(e.raw.find(p=>p[0]===code)?.[1]??fallback);
 const value=(e,code)=>e.raw.find(p=>p[0]===code)?.[1];
@@ -142,3 +143,14 @@ const offsetBox=C.offset(savedBox,2);groupedSaved.entities.push(offsetBox);
 const unlocked=roundtrip('sketch-offset-unlocked',groupedSaved),finalBox=unlocked.entities.find(e=>e.sketchGroup==='native_roundtrip_group');
 assert.equal(finalBox.sketchLocked,false);assert.equal(finalBox.hidden,false);assert.equal(unlocked.entities.filter(e=>e.type==='LWPOLYLINE').length,grouped.entities.filter(e=>e.type==='LWPOLYLINE').length+1);
 console.log('PASS: grouped, locked and hidden native shapes persist through DWG; unlock and rectangle offset remain editable.');
+
+const moveDoc=C.copyDocument(unlocked),G=context.CADMoveGeometry;
+const snapBox=C.newEntity('LWPOLYLINE',{p:{x:0,y:0},points:[{x:0,y:0},{x:20,y:0},{x:20,y:10},{x:0,y:10}],closed:true,sketchGroup:'move_connections',sketchSnaps:Array.from({length:16},(_,i)=>({x:i+.125,y:0,angle:0}))});
+const movedBox=C.transform(snapBox,{dx:10,dy:20}),arrayBoxes=G.copies([movedBox],{x:30,y:0},G.arrayInput('3x'));
+const stretchLine=C.newEntity('LINE',{p:{x:0,y:0},q:{x:20,y:0},color:0x16ab39}),stretched=G.stretch(G.stretchPlan([stretchLine],[stretchLine],{point:stretchLine.q,tolerance:.1}),{x:5,y:7})[0];
+moveDoc.entities.push(movedBox,...arrayBoxes,stretched);
+const moveSaved=roundtrip('sketch-move-array-connections',moveDoc),connectionBoxes=moveSaved.entities.filter(e=>e.sketchSnaps?.length===16);
+assert.equal(connectionBoxes.length,4,'All array connection metadata survives native DWG');assert.equal(new Set(connectionBoxes.map(e=>e.sketchGroup)).size,4,'Copies remain separate groups');
+for(const [i,e] of connectionBoxes.entries()){near(e.sketchSnaps[0].x,10.125+30*i,'Moved connection X');near(e.sketchSnaps[0].y,20,'Moved connection Y');assert.ok(C.allows(e,'copy'));}
+const savedStretch=moveSaved.entities.find(e=>e.color===0x16ab39);near(savedStretch.p.x,0,'Stationary end');near(savedStretch.q.x,25,'Stretched end X');near(savedStretch.q.y,7,'Stretched end Y');
+console.log('PASS: moving, copy arrays, long connection-point XDATA and endpoint stretches survive actual DXF/DWG roundtrips.');

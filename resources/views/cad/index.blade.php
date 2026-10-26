@@ -23,6 +23,7 @@
 <script defer src="{{ asset('js/cad-packets.js') }}?v={{ filemtime(public_path('js/cad-packets.js')) }}"></script>
 <script defer src="{{ asset('js/cad-markup-tools.js') }}?v={{ filemtime(public_path('js/cad-markup-tools.js')) }}">
 </script>
+<script defer src="{{ asset('js/cad-move-tools.js') }}?v={{ filemtime(public_path('js/cad-move-tools.js')) }}"></script>
 <script defer src="{{ asset('js/cad-sketch-tools.js') }}?v={{ filemtime(public_path('js/cad-sketch-tools.js')) }}"></script>
 <script defer src="{{ asset('js/cad-editor.js') }}?v={{ filemtime(public_path('js/cad-editor.js')) }}">
 </script>

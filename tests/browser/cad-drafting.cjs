@@ -65,6 +65,8 @@ const fs = require("node:fs"),
             "cad-review",
             "cad-review-workbench",
             "cad-markup-tools",
+            "cad-move-tools",
+            "cad-sketch-tools",
             "cad-editor",
         ];
         const html = fs
@@ -150,6 +152,14 @@ const fs = require("node:fs"),
         });
         const click = async (x, y) => {
             const p = screen(x, y);
+            assert.equal(
+                await page.evaluate(
+                    (p) => document.elementFromPoint(p.x, p.y)?.id,
+                    p,
+                ),
+                "canvas",
+                "numeric controls must not intercept drawing points",
+            );
             await page.mouse.click(p.x, p.y);
         };
         const drag = async (a, b) => {
@@ -165,9 +175,28 @@ const fs = require("node:fs"),
         const save = async () => {
             const revision = drawing.revision;
             await page.locator("#save").click();
-            await expect(page.locator("#dirty")).toHaveText(
-                `개정 ${revision + 1} 저장됨`,
-            );
+            try {
+                await expect(page.locator("#dirty")).toHaveText(
+                    `개정 ${revision + 1} 저장됨`,
+                );
+            } catch (error) {
+                fs.mkdirSync("test-results", { recursive: true });
+                await page.screenshot({
+                    path: "test-results/cad-drafting-failure.png",
+                });
+                console.error(
+                    JSON.stringify({
+                        status: await page.locator("#status").textContent(),
+                        hint: await page.locator("#hint").textContent(),
+                        canvas: await page.locator("#canvas").boundingBox(),
+                        last: drawing.markups.at(-1),
+                        hud: await page
+                            .locator("#markup-drawing-hud")
+                            .boundingBox(),
+                    }),
+                );
+                throw error;
+            }
         };
         const detail = async (text) => {
             const panel = page
