@@ -251,6 +251,43 @@ file_put_contents($argv[5], str_repeat("x", 1025)); echo "{}";');
         $this->actingAs($viewer)->putJson('/admin-api/cad/'.$id, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$mark]])->assertForbidden();
     }
 
+    public function test_parametric_curves_roundtrip_with_revisions_and_reject_malformed_geometry_atomically(): void
+    {
+        $id = $this->upload()->json('id');
+        $url = '/admin-api/cad/'.$id;
+        $arc = array_replace($this->markup(), ['id' => 'arc', 'kind' => 'arc',
+            'points' => [['x' => 0, 'y' => 0], ['x' => 20, 'y' => 0], ['x' => 20, 'y' => 20], ['x' => 0, 'y' => 20]],
+            'arc' => ['start' => 0, 'sweep' => -M_PI, 'pie' => false], 'arrows' => 'end']);
+        $pie = array_replace($arc, ['id' => 'pie', 'arc' => ['start' => .5, 'sweep' => M_PI * 1.5, 'pie' => true], 'fillColor' => '#ff6600', 'fillOpacity' => .25]);
+        $curve = array_replace($this->markup(), ['id' => 'bezier', 'kind' => 'curve',
+            'points' => [['x' => 0, 'y' => 0], ['x' => 0, 'y' => 20], ['x' => 20, 'y' => 0], ['x' => 20, 'y' => 20]], 'arrows' => 'both']);
+        $this->putJson($url, ['revision' => 1, 'dxf' => self::DXF, 'markups' => [$arc, $pie, $curve]])->assertOk()
+            ->assertJsonPath('markups.0.arc.sweep', -M_PI)->assertJsonPath('markups.1.fillOpacity', .25)->assertJsonPath('markups.2.arrows', 'both');
+        $this->getJson($url.'/history?revision=2')->assertOk()->assertJsonPath('markups.1.arc.pie', true);
+        $this->putJson($url, ['revision' => 2, 'dxf' => self::DXF])->assertOk()->assertJsonPath('markups.2.kind', 'curve');
+        foreach ([
+            array_replace($arc, ['arc' => []]),
+            array_replace($arc, ['arc' => ['start' => 0, 'sweep' => 0, 'pie' => false]]),
+            array_replace($arc, ['arc' => ['start' => 0, 'sweep' => 7, 'pie' => false]]),
+            array_replace($arc, ['arc' => ['start' => 0, 'sweep' => 1, 'pie' => false, 'script' => 'bad']]),
+            array_replace($arc, ['arc' => ['start' => 0, 'sweep' => 1]]),
+            array_replace($arc, ['kind' => 'route']),
+            array_replace($arc, ['fillColor' => '#ffffff']),
+            array_replace($arc, ['holes' => []]),
+            array_replace($arc, ['points' => array_slice($arc['points'], 0, 3)]),
+            array_replace($arc, ['points' => [['x' => 0, 'y' => 0], ['x' => 20, 'y' => 0], ['x' => 19, 'y' => 20], ['x' => 0, 'y' => 20]]]),
+            array_replace($curve, ['points' => array_fill(0, 4, ['x' => 0, 'y' => 0])]),
+            array_replace($curve, ['points' => array_slice($curve['points'], 0, 3)]),
+            array_replace($curve, ['holes' => []]),
+            array_replace($curve, ['fillColor' => '#ffffff']),
+        ] as $invalid) {
+            $this->putJson($url, ['revision' => 3, 'dxf' => self::DXF, 'markups' => [$invalid]])->assertUnprocessable();
+        }
+        $this->getJson($url)->assertOk()->assertJsonPath('revision', 3)->assertJsonPath('markups.2.points', $curve['points']);
+        $this->assertDatabaseCount('cad_drawing_revisions', 3);
+        $this->get($url.'/download?format=original')->assertStreamedContent(self::DXF);
+    }
+
     public function test_ellipse_and_independent_fill_styles_roundtrip_and_reject_invalid_frames_atomically(): void
     {
         $id = $this->upload()->json('id');
