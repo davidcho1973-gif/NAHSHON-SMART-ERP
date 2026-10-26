@@ -14,13 +14,14 @@
 .sketch-mode-note{margin-left:auto;white-space:nowrap;font-size:11px;color:#5e7182;padding:0 4px;}
 #sketch-menu{position:fixed;z-index:1000;min-width:228px;max-height:calc(100dvh - 12px);overflow:auto;padding:5px;border:1px solid #a8b4c3;border-radius:7px;background:#f8fafc;color:#213449;box-shadow:0 8px 30px #0005;}
 #sketch-menu[hidden],#sketch-input-bar[hidden]{display:none;}
+#viewport:has(#sketch-input-bar:not([hidden])) #measurement-hud{display:none;}
 #sketch-menu button{display:flex;justify-content:space-between;gap:24px;width:100%;border:0;border-radius:3px;background:transparent;color:inherit;padding:5px 9px;text-align:left;font-size:12px;}
 #sketch-menu button:hover:not(:disabled),#sketch-menu button:focus-visible{background:#dbeefa;outline:1px solid #8bbcd9;}
 #sketch-menu button:disabled{color:#8998a6;cursor:default;}
 #sketch-menu kbd{color:#72879a;font:11px system-ui;}
 #sketch-menu hr{border:0;border-top:1px solid #dae0e7;margin:4px;}
 #sketch-input-bar{position:absolute;bottom:46px;right:12px;display:flex;align-items:center;gap:7px;max-width:calc(100% - 24px);padding:7px 10px;background:#162b42ed;border:1px solid #4e829f;border-radius:7px;z-index:5;color:#e8f5ff;}
-#sketch-value{width:130px;}#sketch-sides{width:56px;}#sketch-copy-state{color:#7ee3a5;white-space:nowrap;}
+#sketch-value{width:210px;min-width:0;}#sketch-sides{width:56px;}#sketch-copy-state{color:#7ee3a5;white-space:nowrap;}
 #sketch-search{width:min(500px,94vw);max-height:80dvh;overflow:auto;background:#f8fafc;border:1px solid #8ca1b7;border-radius:10px;color:#243b52;padding:18px;}
 #sketch-search::backdrop{background:#0007;}#sketch-search form{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
 #sketch-search-query{width:100%;background:white;color:#243b52;border-color:#a0b5c7;}

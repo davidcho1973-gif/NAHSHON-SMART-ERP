@@ -20,8 +20,8 @@
     ]);
     function readSketchMetadata(raw){
         const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT');if(at<0||raw.filter(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT').length!==1)return null;
-        let payload='';for(let i=at+1;i<raw.length&&raw[i][0]!==1001;i++){if(raw[i][0]!==1000)return null;payload+=raw[i][1];if(payload.length>1024)return null;}
-        try{const m=JSON.parse(payload);if(m.v!==1||Object.keys(m).some(k=>!['v','group','locked'].includes(k))||m.group!==null&&m.group!==undefined&&(typeof m.group!=='string'||! /^[a-zA-Z0-9_-]{1,100}$/.test(m.group))||m.locked!==undefined&&typeof m.locked!=='boolean')return null;return m;}catch(_){return null;}
+        let payload='';for(let i=at+1;i<raw.length&&raw[i][0]!==1001;i++){if(raw[i][0]!==1000)return null;payload+=raw[i][1];if(payload.length>8192)return null;}
+        try{const m=JSON.parse(payload);if(m.v!==1||Object.keys(m).some(k=>!['v','group','locked','snaps'].includes(k))||m.group!==null&&m.group!==undefined&&(typeof m.group!=='string'||! /^[a-zA-Z0-9_-]{1,100}$/.test(m.group))||m.locked!==undefined&&typeof m.locked!=='boolean')return null;if(m.snaps!==undefined&&(!Array.isArray(m.snaps)||m.snaps.length>16||m.snaps.some(s=>!s||Object.keys(s).some(k=>!['x','y','angle'].includes(k))||![s.x,s.y,s.angle].every(Number.isFinite)||Math.abs(s.x)>1e9||Math.abs(s.y)>1e9)))return null;return m;}catch(_){return null;}
     }
 
     // Raw DXF and tessellated block geometry are read-only assets, not edit state.
@@ -117,7 +117,7 @@
             if(raw){const at=raw.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_DIM');if(at>=0){let end=at+1;while(end<raw.length&&raw[end][0]!==1001)end++;raw.splice(at,end-at);}}
             if(!raw)raw=[[0,type],[100,'AcDbEntity'],[8,e.layer],[100,type==='LINE'?'AcDbLine':'AcDbText']];
             raw.push([1001,'ERP_CAD_DIM']);for(let i=0;i<payload.length;i+=200)raw.push([1000,payload.slice(i,i+200)]);
-            return newEntity(type,{...shape,id:e.id+'-'+index,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',raw,dirty:true,hidden:e.hidden,sketchGroup:e.sketchGroup,sketchLocked:e.sketchLocked},e.layer);
+            return newEntity(type,{...shape,id:e.id+'-'+index,color:e.color,lineWeight:e.lineWeight??25,lineType:e.lineType||'BYLAYER',raw,dirty:true,hidden:e.hidden,sketchGroup:e.sketchGroup,sketchLocked:e.sketchLocked,...(index===0&&e.sketchSnaps?{sketchSnaps:e.sketchSnaps}:{})},e.layer);
         });
     }
     function restoreDimensions(doc){
@@ -132,7 +132,7 @@
             const expected=dimensionParts(e),near=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=Math.max(1,Math.abs(a),Math.abs(b))*1e-8;
             if(entries.some(({e:actual},i)=>{const wanted=expected[i];return !actual.editable||actual.type!==wanted.type||actual.layer!==wanted.layer||actual.color!==wanted.color||actual.lineWeight!==wanted.lineWeight||canonicalLineType(actual.lineType)!==canonicalLineType(wanted.lineType)||!near(actual.p.x,wanted.p.x)||!near(actual.p.y,wanted.p.y)||(actual.type==='LINE'? !near(actual.q.x,wanted.q.x)||!near(actual.q.y,wanted.q.y):actual.text!==wanted.text||!near(actual.height,wanted.height)||Math.abs(((actual.angle-wanted.angle+180)%360+360)%360-180)>1e-8);}))continue;
             if(entries.some(x=>x.e.sketchGroup!==entries[0].e.sketchGroup||x.e.sketchLocked!==entries[0].e.sketchLocked||x.e.hidden!==entries[0].e.hidden))continue;
-            Object.assign(e,{hidden:entries[0].e.hidden,sketchGroup:entries[0].e.sketchGroup,sketchLocked:entries[0].e.sketchLocked});
+            Object.assign(e,{hidden:entries[0].e.hidden,sketchGroup:entries[0].e.sketchGroup,sketchLocked:entries[0].e.sketchLocked,...(entries.find(x=>x.e.sketchSnaps)?.e.sketchSnaps?{sketchSnaps:entries.find(x=>x.e.sketchSnaps).e.sketchSnaps}:{})});
             e.dirty=false;e.rawParts=entries.map(x=>x.e.raw);replace.set(entries[0].e.id,e);entries.slice(1).forEach(x=>remove.add(x.e.id));
         }catch(_){}}
         doc.entities=doc.entities.filter(e=>!remove.has(e.id)).map(e=>replace.get(e.id)||e);return doc;
@@ -514,7 +514,7 @@
             e.color = r.some((p) => p[0] === 420) ? num(r, 420) : null;
             e.aci = num(r, 62, 256);
             e.hidden = !!num(r, 60) || e.aci < 0;
-            const editMeta=readSketchMetadata(r);if(editMeta){if(editMeta.group)e.sketchGroup=editMeta.group;e.sketchLocked=!!editMeta.locked;}
+            const editMeta=readSketchMetadata(r);if(editMeta){if(editMeta.group)e.sketchGroup=editMeta.group;e.sketchLocked=!!editMeta.locked;if(editMeta.snaps)e.sketchSnaps=editMeta.snaps;}
             e.paper = !!num(r, 67) || (val(r, 410) && val(r, 410) !== "Model");
             e.lineType = val(r, 6, "BYLAYER");
             e.lineWeight = num(r, 370, -1);
@@ -801,14 +801,19 @@
             },
         );
     }
+    function transformSketchSnaps(e,n,o){
+        if(!e.sketchSnaps)return n;
+        const c=o.center||{x:0,y:0},s=o.scale??1,a=(o.angle||0)*Math.PI/180;
+        n.sketchSnaps=e.sketchSnaps.map(p=>{let x=(p.x-c.x)*s,y=(p.y-c.y)*s,angle=p.angle;if(o.mirror==='x'){y=-y;angle=-angle;}if(o.mirror==='y'){x=-x;angle=180-angle;}return {x:c.x+x*Math.cos(a)-y*Math.sin(a)+(o.dx||0),y:c.y+x*Math.sin(a)+y*Math.cos(a)+(o.dy||0),angle:angle+(o.angle||0)};});return n;
+    }
     function transform(e, o) {
         const operation=o.mirror?'mirror':o.scale!==undefined?'scale':o.angle!==undefined?'rotate':'move';
         if (!allows(e,operation))
             throw Error(
                 "지원하지 않는 객체는 원본 보존을 위해 편집할 수 없습니다.",
             );
-        if(e.nativeDimension?.compatible)return nativeDimensionTransform(e,o);
-        if(e.type==='HATCH')return transformHatch(e,o);
+        if(e.nativeDimension?.compatible)return transformSketchSnaps(e,nativeDimensionTransform(e,o),o);
+        if(e.type==='HATCH')return transformSketchSnaps(e,transformHatch(e,o),o);
         const n = copyEditState(e, entityAssets),
             a = ((o.angle || 0) * Math.PI) / 180,
             s = o.scale ?? 1,
@@ -858,7 +863,7 @@
             n.end += o.angle || 0;
         }
         n.dirty = true;
-        return n;
+        return transformSketchSnaps(e,n,o);
     }
     // DXF raw sections can contain hundreds of thousands of pairs. Passing them
     // as function arguments exceeds browser call-stack limits; copy as data.
@@ -1057,7 +1062,7 @@
                 at++;
             prefix = replaceRecords(prefix, at, 0, records);
         }
-        for(const appId of [...(hasDimensions?['ERP_CAD_DIM']:[]),...(d.entities.some(e=>e.sketchGroup||e.sketchLocked)?['ERP_CAD_EDIT']:[])]){
+        for(const appId of [...(hasDimensions?['ERP_CAD_DIM']:[]),...(d.entities.some(e=>e.sketchGroup||e.sketchLocked||e.sketchSnaps?.length)?['ERP_CAD_EDIT']:[])]){
             let table=prefix.findIndex((p,i)=>p[0]===0&&p[1]==='TABLE'&&prefix[i+1]?.[1]==='APPID'),end=table;
             if(table>=0){while(end<prefix.length&&!(prefix[end][0]===0&&prefix[end][1]==='ENDTAB'))end++;}
             const exists=prefix.some((p,i)=>p[0]===0&&p[1]==='APPID'&&prefix.slice(i+1,i+9).some(p=>p[0]===2&&p[1]===appId));
@@ -1108,7 +1113,7 @@
             if(e.hidden!==undefined){set(60,e.hidden?1:0);if(!e.hidden&&num(r,62)<0)set(62,Math.abs(num(r,62)));}
             // Keep persistent selection groups and locks on the DXF entities,
             // not in a side table keyed by IDs that change when DXF is reopened.
-            const editRecords=()=>{if(e.sketchGroup===undefined&&e.sketchLocked===undefined)return;const at=r.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT');if(at>=0){if(!readSketchMetadata(r))throw Error('지원하지 않는 편집 메타데이터가 있습니다. 원본을 보존합니다.');let end=at+1;while(end<r.length&&r[end][0]!==1001)end++;r.splice(at,end-at);}if(e.sketchGroup||e.sketchLocked)r.push([1001,'ERP_CAD_EDIT'],[1000,JSON.stringify({v:1,group:e.sketchGroup||null,locked:!!e.sketchLocked})]);};
+            const editRecords=()=>{if(e.sketchGroup===undefined&&e.sketchLocked===undefined&&e.sketchSnaps===undefined)return;const at=r.findIndex(p=>p[0]===1001&&p[1]==='ERP_CAD_EDIT');if(at>=0){if(!readSketchMetadata(r))throw Error('지원하지 않는 편집 메타데이터가 있습니다. 원본을 보존합니다.');let end=at+1;while(end<r.length&&r[end][0]!==1001)end++;r.splice(at,end-at);}if(e.sketchGroup||e.sketchLocked||e.sketchSnaps?.length){const payload=JSON.stringify({v:1,group:e.sketchGroup||null,locked:!!e.sketchLocked,...(e.sketchSnaps?.length?{snaps:e.sketchSnaps}:{})}),records=[[1001,'ERP_CAD_EDIT']];for(let i=0;i<payload.length;i+=200)records.push([1000,payload.slice(i,i+200)]);if(!readSketchMetadata(records))throw Error('연결점 메타데이터를 확인하세요.');r.push(...records);}};
             if(e.type==='HATCH'){editRecords();appendRecords(out,r);continue;}
             set(10, e.p.x);
             set(20, e.p.y);

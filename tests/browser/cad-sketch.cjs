@@ -6,7 +6,7 @@ const source='0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n9\n$INSUNITS\n70\n4
 try{
     page=await browser.newPage({viewport:{width:1500,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
     let drawing={id:9,title:'SYNTHETIC Sketch 2D',site_id:1,revision:1,canManage:true,canExport:true,dxf:source,workspace:{},markups:[]},writes=0,readonly=false;
-    const scripts=['cad-core','cad-fidelity','cad-markup','cad-markup-tools','cad-sketch-tools','cad-editor'];
+    const scripts=['cad-core','cad-fidelity','cad-markup','cad-markup-tools','cad-move-tools','cad-sketch-tools','cad-editor'];
     const html=fs.readFileSync('resources/views/cad/index.blade.php','utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'<link rel="stylesheet" href="/cad-editor.css">').replace('{{ csrf_token() }}','synthetic').replaceAll('{{ \\App\\Support\\Org::name() }}','SYNTHETIC ERP').replace('</body>',scripts.map(n=>`<script src="/${n}.js"></script>`).join('')+'</body>');
     await page.route('https://synthetic.test/**',async route=>{const u=new URL(route.request().url()),method=route.request().method();let json;
         if(u.pathname==='/cad')return route.fulfill({contentType:'text/html',body:html});

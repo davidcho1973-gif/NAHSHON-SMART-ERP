@@ -546,7 +546,7 @@
     function add(type, data) {
         const text=type==='TEXT'||type==='MTEXT';
         const color=parseInt($(text?'default-text-color':'default-color').value.slice(1),16),width=Number($('default-width').value);
-        const e=C.newEntity(type,{...data,color,lineWeight:standardWeight(Number.isFinite(width)?width:.25)},$('layer').value||'0');doc.entities.push(e);return e;
+        const e=C.newEntity(type,{...data,color,lineWeight:standardWeight(Number.isFinite(width)?width:.25),...(sketch?.editingGroup()?{sketchGroup:sketch.editingGroup()}:{})},$('layer').value||'0');doc.entities.push(e);return e;
     }
     function finishPolyline() {
         if(!doc||!canManage||busy||gesture||doc.layers[$("layer").value]?.locked)return;
@@ -567,9 +567,9 @@
         const visibility=JSON.stringify(Object.entries(doc.layers).map(([name,layer])=>[name,layer.visible]));
         if(edgeCache?.source!==doc||edgeCache.version!==aiVersion||edgeCache.visibility!==visibility){
             const edges=[];let visited=0,limited=false;
-            const add=(p,q)=>{if(edges.length>=100000){limited=true;return;}if(p&&q&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(q.x)&&Number.isFinite(q.y))edges.push({p,q,minX:Math.min(p.x,q.x),maxX:Math.max(p.x,q.x),minY:Math.min(p.y,q.y),maxY:Math.max(p.y,q.y)});};
-            const collect=e=>{if(limited)return;if(++visited>200000){limited=true;return;}if(e.hidden||e.paper||doc.layers[e.layer]?.visible===false)return;if(e.type==='INSERT'&&e.renderParts){e.renderParts.forEach(collect);return;}if(e.type==='LINE'){const path=e.displayGeometry||[e.p,e.q];if(path.length===2)add(path[0],path[1]);}else if(['LWPOLYLINE','POLYLINE'].includes(e.type)&&!e.points?.some(p=>p.bulge)){const ps=e.displayGeometry||e.points||[];if(ps.length>100000){limited=true;return;}for(let i=1;i<ps.length;i++)add(ps[i-1],ps[i]);if(e.closed&&ps.length>2)add(ps.at(-1),ps[0]);}};
-            entities().forEach(collect);
+            const add=(p,q,owner)=>{if(edges.length>=100000){limited=true;return;}if(p&&q&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(q.x)&&Number.isFinite(q.y))edges.push({p,q,owner,minX:Math.min(p.x,q.x),maxX:Math.max(p.x,q.x),minY:Math.min(p.y,q.y),maxY:Math.max(p.y,q.y)});};
+            const collect=(e,owner=e.id)=>{if(limited)return;if(++visited>200000){limited=true;return;}if(e.hidden||e.paper||doc.layers[e.layer]?.visible===false)return;if(e.type==='INSERT'&&e.renderParts){e.renderParts.forEach(part=>collect(part,owner));return;}if(e.type==='LINE'){const path=e.displayGeometry||[e.p,e.q];if(path.length===2)add(path[0],path[1],owner);}else if(['LWPOLYLINE','POLYLINE'].includes(e.type)&&!e.points?.some(p=>p.bulge)){const ps=e.displayGeometry||e.points||[];if(ps.length>100000){limited=true;return;}for(let i=1;i<ps.length;i++)add(ps[i-1],ps[i],owner);if(e.closed&&ps.length>2)add(ps.at(-1),ps[0],owner);}};
+            entities().forEach(e=>collect(e));
             if(limited){edgeCache={source:doc,version:aiVersion,visibility,edges:[],grid:new Map(),long:[],cell:1};status('줄자 기준선 검색 한도를 넘었습니다. 불필요한 레이어를 숨기고 다시 시도하세요.');return [];}
             const bounds=edges.reduce((b,e)=>({minX:Math.min(b.minX,e.minX),maxX:Math.max(b.maxX,e.maxX),minY:Math.min(b.minY,e.minY),maxY:Math.max(b.maxY,e.maxY)}),{minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity}),cell=Math.max((Math.max(bounds.maxX-bounds.minX,bounds.maxY-bounds.minY)||64)/64,1e-6),grid=new Map(),long=[];let references=0;
             edges.forEach((e,id)=>{const x0=Math.floor(e.minX/cell),x1=Math.floor(e.maxX/cell),y0=Math.floor(e.minY/cell),y1=Math.floor(e.maxY/cell);const cells=(x1-x0+1)*(y1-y0+1);if(cells>256||references+cells>500000){long.push(id);return;}references+=cells;for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const key=x+','+y;if(!grid.has(key))grid.set(key,[]);grid.get(key).push(id);}});
@@ -1125,6 +1125,7 @@
     $("fit").onclick = fit;
     $("undo").onclick = () => {
         if(busy||gesture||markup?.pending())return;
+        if(sketch?.cancelPendingMove())return;
         if (undo.length) {
             redo.push(C.copyDocument(doc));
             doc = undo.pop();
@@ -1139,6 +1140,7 @@
     };
     $("redo").onclick = () => {
         if(busy||gesture||markup?.pending())return;
+        if(sketch?.cancelPendingMove())return;
         if (redo.length) {
             undo.push(C.copyDocument(doc));
             doc = redo.pop();
@@ -1513,6 +1515,9 @@
         select:ids=>{selected=new Set(ids);render();},visible:entities,hit:hitEntity,editable,
         writable:()=>!!doc&&canManage,panning:()=>!!pan,busy:()=>busy||!!gesture||!!pan||$('text-dialog').open,
         commit:fn=>{snapshot();fn();render();},add,world,screen,snap,scale:()=>scale,numericSettings,
+        version:()=>aiVersion,edges:sourceEdges,format:value=>C.formatLength(value,unitSettings)+(unitSettings?'':' 도면 단위'),
+        snapEnabled:()=>$('snap').checked,lastSnap:()=>snapMark,inferenceEnabled:()=>$('direction-inference').checked,ortho:()=>$('ortho').checked,
+        applyMove:(next,ids,token=null)=>{if(!canManage||busy||gesture)throw Error('현재 이동을 적용할 수 없습니다.');if(token){if(token.doc!==doc||token.version!==aiVersion)throw Error('다른 편집 후에는 이전 이동을 수정할 수 없습니다.');mark();}else snapshot();doc.entities=next;selected=new Set(ids);return {doc,version:aiVersion};},
         status,render,fit,focus:focusBounds,pan:(dx,dy)=>{origin.x+=dx;origin.y+=dy;render();},
         zoom:(p,factor)=>{const s=screen(p);scale=Math.max(1e-8,Math.min(1e8,scale*factor));origin={x:s.x-p.x*scale,y:s.y+p.y*scale};render();}});
     recovery=window.createCADRecovery?.({
