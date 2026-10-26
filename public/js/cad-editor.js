@@ -65,7 +65,7 @@
     if(proofMode){$('sites').disabled=true;$('drawings').disabled=true;$('history').disabled=true;}
     let gesture = null, inspectorKey = "",hoverPoint=null,snapMark=null,textDraft=null;
     let measurements=[];
-    let markup=null, recovery=null, reviewWorkbench=null, workflow=null, packets=null, printing=false, cadBaseline="";
+    let markup=null, sketch=null, recovery=null, reviewWorkbench=null, workflow=null, packets=null, printing=false, cadBaseline="";
     const backgroundKey = 'cad:canvas-background:' + (document.body.dataset.editorOwner || 'guest');
     let canvasBackground = 'dark';
     try { if (localStorage.getItem(backgroundKey) === 'white') canvasBackground = 'white'; } catch (_) {}
@@ -224,7 +224,7 @@
         return [...new Set(messages)].join(' ')||'요청을 처리하지 못했습니다. (HTTP '+statusCode+')';
     }
     function guard() {
-        if(markup?.pending()){status('표시를 완성하거나 Esc로 취소하세요.');return false;}
+        if(markup?.pending()||sketch?.pending()){status('편집을 완성하거나 Esc로 취소하세요.');return false;}
         if($('text-dialog').open){status('문자 입력창에서 확인하거나 취소한 뒤 진행하세요.');return false;}
 
         if(gesture){status("드래그를 끝내거나 Esc로 취소하세요.");return false;}
@@ -260,7 +260,7 @@
     }
     function editable(e) {
         if(e?.transient)return true;
-        return e.editable && !doc.layers[e.layer]?.locked;
+        return e.editable && !e.sketchLocked && !doc.layers[e.layer]?.locked;
     }
     function entities() {
         return doc
@@ -342,7 +342,7 @@
     }
     function gripAt(p){
         if(!doc||busy)return null;
-        let result=null,best=8/scale;for(const e of [...doc.entities,...measurements].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient)))for(const grip of C.grips(e)){const d=C.distance(p,grip.point);if(d<best){best=d;result={entity:e,key:grip.key};}}
+        let result=null,best=8/scale;for(const e of [...doc.entities,...measurements].filter(e=>selected.has(e.id)&&!e.sketchGroup&&editable(e)&&(canManage||e.transient)))for(const grip of C.grips(e)){const d=C.distance(p,grip.point);if(d<best){best=d;result={entity:e,key:grip.key};}}
         return result;
 
     }
@@ -436,7 +436,7 @@
             ctx.strokeStyle=displayColor($('default-color').value);ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
             const a=screen(gesture.start),b=screen(gesture.end);if(['rectangle','text'].includes(gesture.tool))ctx.rect(a.x,a.y,b.x-a.x,b.y-a.y);else {ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}ctx.stroke();ctx.setLineDash([]);
         }
-        if(!printing&&tool==='select'&&!busy)for(const e of [...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e)].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient))){for(const grip of C.grips(e)){const p=screen(grip.point);ctx.fillStyle='#101827';ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.fillRect(p.x-4,p.y-4,8,8);ctx.strokeRect(p.x-4,p.y-4,8,8);}}
+        if(!printing&&tool==='select'&&!busy)for(const e of [...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e)].filter(e=>selected.has(e.id)&&!e.sketchGroup&&editable(e)&&(canManage||e.transient))){for(const grip of C.grips(e)){const p=screen(grip.point);ctx.fillStyle='#101827';ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.fillRect(p.x-4,p.y-4,8,8);ctx.strokeRect(p.x-4,p.y-4,8,8);}}
         if(!printing&&snapMark){const marker=screen(snapMark);ctx.strokeStyle=displayColor('#ffb347');ctx.lineWidth=2;ctx.setLineDash([]);ctx.strokeRect(marker.x-6,marker.y-6,12,12);ctx.beginPath();ctx.moveTo(marker.x-10,marker.y);ctx.lineTo(marker.x+10,marker.y);ctx.moveTo(marker.x,marker.y-10);ctx.lineTo(marker.x,marker.y+10);ctx.stroke();}
         canvas.dataset.snapActive=String(!!snapMark);if(snapMark){canvas.dataset.snapX=snapMark.x;canvas.dataset.snapY=snapMark.y;}
         const measured=annotation||measurements.find(e=>selected.has(e.id))||doc?.entities.find(e=>e.type==='ERP_DIMENSION'&&selected.has(e.id));
@@ -474,6 +474,7 @@
         renderGuides();
         markup?.render(ctx,{paper:printing,background:canvasBackground,color:printing?undefined:displayColor});
         if(!printing)workflow?.renderOverlay(ctx,screen);
+        if(!printing)sketch?.render(ctx);
         ctx.restore();
     }
     function focusBounds(b){const width=Math.max(b.maxX-b.minX,1e-6),height=Math.max(b.maxY-b.minY,1e-6);scale=Math.min(canvas.clientWidth/(width*1.4),canvas.clientHeight/(height*1.4));origin={x:canvas.clientWidth/2-(b.minX+b.maxX)/2*scale,y:canvas.clientHeight/2+(b.minY+b.maxY)/2*scale};render();}
@@ -498,6 +499,7 @@
         if (!doc || busy) return;
         cancelGesture();
         tool = t;axisLock=null;shiftLock=null;inference=null;tapeEdge=null;referenceAngle=null;$('numeric-length').value='';
+        sketch?.reset();
         canvas.style.cursor=t==='select'?'default':'crosshair';
         points = [];
         document
@@ -611,6 +613,7 @@
         if(tool==='tape'){tapePoint(p);return;}
         if (tool === "select") {
             const hit=hitEntity(p);
+            if(sketch&&hit&&!hit.transient){sketch.choose([hit],{shiftKey:shift});return;}
             if(!shift)selected.clear();
             if(hit){if(shift&&selected.has(hit.id))selected.delete(hit.id);else selected.add(hit.id);}
             render();
@@ -638,6 +641,7 @@
             status("선택 도구로 객체를 먼저 선택하세요.");
             return;
         }
+        if(tool==='polyline'&&points.length>2&&C.distance(points[0],p)*scale<10){snapshot();add('LWPOLYLINE',{p:points[0],points:C.clone(points),closed:true});points=[];render();return;}
         points.push(p);hoverPoint=p;
         const needed = {
             line: 2,
@@ -690,18 +694,12 @@
                 if (!selected.has(e.id) || !editable(e)) return e;
                 const n = C.transform(e, o);
                 if (tool === "copy") {
-                    n.id = "copy" + Math.random();
-                    if(n.type==='ERP_DIMENSION'){n.groupId=C.uid();delete n.rawParts;}
-                    if (n.raw)
-                        n.raw = n.raw.filter(
-                            (p) => ![5, 330, 360].includes(p[0]),
-                        );
                     copies.push(n);
                     return e;
                 }
                 return n;
             });
-            doc.entities.push(...copies);
+            doc.entities.push(...C.copyEntities(copies));
         }
         points = [];
         if(['line','rectangle','circle','arc'].includes(tool)){selected.clear();hoverPoint=null;}
@@ -709,14 +707,15 @@
     }
     canvas.onpointerdown = e => {
         if(gesture||pan)return;canvas.focus();
-        if(e.button===1||e.button===2){e.preventDefault();canvas.style.cursor='grabbing';pan={pointerId:e.pointerId,x:e.clientX,y:e.clientY,ox:origin.x,oy:origin.y};canvas.setPointerCapture(e.pointerId);return;}
+        if(e.button===1||(!sketch&&e.button===2)){e.preventDefault();canvas.style.cursor='grabbing';pan={pointerId:e.pointerId,x:e.clientX,y:e.clientY,ox:origin.x,oy:origin.y};canvas.setPointerCapture(e.pointerId);return;}
         if(e.button!==0||!doc||busy||$('text-dialog').open)return;
         const p=world(e);
         if(!points.length){const edge=nearestTapeEdge(p);referenceAngle=edge?Math.atan2(edge.q.y-edge.p.y,edge.q.x-edge.p.x)*180/Math.PI:null;}
         if(tool==='select'){
-            const grip=!e.shiftKey&&gripAt(p),hit=grip?.entity||hitEntity(p);
-            if(!grip){if(e.shiftKey){if(hit){selected.has(hit.id)?selected.delete(hit.id):selected.add(hit.id);}render();return;}
-                if(!hit||!selected.has(hit.id))selected.clear();if(hit)selected.add(hit.id);}
+            const grip=!e.shiftKey&&!e.ctrlKey&&gripAt(p),hit=grip?.entity||hitEntity(p);
+            if(!grip){if(sketch&&hit&&!hit.transient){if(e.shiftKey||e.ctrlKey||!selected.has(hit.id))sketch.choose([hit],e);if(e.shiftKey||e.ctrlKey)return;}
+                else{if(e.shiftKey){if(hit){selected.has(hit.id)?selected.delete(hit.id):selected.add(hit.id);}render();return;}
+                if(!hit||!selected.has(hit.id))selected.clear();if(hit)selected.add(hit.id);}}
             render();if(!hit||(!canManage&&!hit.transient)||!editable(hit))return;
             try{selectionFor(grip?'resize':'move');}catch(error){status(error.message);return;}
             gesture={kind:grip?'resize':'move',key:grip?.key,entity:hit,start:p,end:p,pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false,originals:grip?[hit]:[...doc.entities,...measurements].filter(e=>selected.has(e.id)&&editable(e)&&(canManage||e.transient)),preview:new Map()};
@@ -919,7 +918,7 @@
     }
     async function save() {
         if($('text-dialog').open){status('문자 입력창을 확인하거나 취소하세요.');return;}
-        if(gesture||markup?.pending()){status('표시를 완성하거나 Esc로 취소한 뒤 저장하세요.');return;}
+        if(gesture||markup?.pending()||sketch?.pending()){status('편집을 완성하거나 Esc로 취소한 뒤 저장하세요.');return;}
         if (!record || !dirty || !canAnnotate || busy) return;
         busy = true;
         $("save").disabled = true;
@@ -1200,7 +1199,7 @@
         }
         if (e.key === "Enter") finishPolyline();
         if (e.key === "Delete") setTool("delete");
-        if (e.key.toLowerCase() === "f") fit();
+        if (!sketch&&e.key.toLowerCase() === "f") fit();
     });
     function chosen() {
         return doc
@@ -1461,7 +1460,7 @@
 
     window.addEventListener('pagehide',()=>{const session=aiSession;if(session)fetch('/admin-api/cad/ai'+aiPath(session),{method:'DELETE',credentials:'same-origin',keepalive:true,headers:{'X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content,'X-CAD-Editor-Token':session.editorToken,Accept:'application/json'}}).catch(()=>{});});
     window.addEventListener("beforeunload", (e) => {
-        if (dirty||$('text-dialog').open||markup?.pending()) {
+        if (dirty||$('text-dialog').open||markup?.pending()||sketch?.pending()) {
             e.preventDefault();
             e.returnValue = "";
         }
@@ -1479,6 +1478,13 @@
         },
         clearCAD:()=>{cancelGesture();selected.clear();points=[];hoverPoint=null;snapMark=null;setTool('select');},
         pan:(dx,dy)=>{origin.x+=dx;origin.y+=dy;render();}});
+    sketch=window.createCADSketchTools?.({canvas,document:()=>doc,recordId:()=>record?.id,
+        active:()=>markup?.mode()==='cad',tool:()=>tool,setTool,selection:()=>selected,
+        select:ids=>{selected=new Set(ids);render();},visible:entities,hit:hitEntity,editable,
+        writable:()=>!!doc&&canManage,panning:()=>!!pan,busy:()=>busy||!!gesture||!!pan||$('text-dialog').open,
+        commit:fn=>{snapshot();fn();render();},add,world,screen,snap,scale:()=>scale,numericSettings,
+        status,render,fit,focus:focusBounds,pan:(dx,dy)=>{origin.x+=dx;origin.y+=dy;render();},
+        zoom:(p,factor)=>{const s=screen(p);scale=Math.max(1e-8,Math.min(1e8,scale*factor));origin={x:s.x-p.x*scale,y:s.y+p.y*scale};render();}});
     recovery=window.createCADRecovery?.({
         state:()=>({record,version:aiVersion,dirty,canWrite:canAnnotate,busy,pending:!!gesture||markup.pending()||$('text-dialog').open}),
         capture:()=>({dxf:dxfContent(),markups:C.clone(doc.markups||[]),workspace:C.clone(doc.workspace||{})}),status,
