@@ -23,6 +23,7 @@
 <script defer src="{{ asset('js/cad-packets.js') }}?v={{ filemtime(public_path('js/cad-packets.js')) }}"></script>
 <script defer src="{{ asset('js/cad-markup-tools.js') }}?v={{ filemtime(public_path('js/cad-markup-tools.js')) }}">
 </script>
+<script defer src="{{ asset('js/cad-sketch-tools.js') }}?v={{ filemtime(public_path('js/cad-sketch-tools.js')) }}"></script>
 <script defer src="{{ asset('js/cad-editor.js') }}?v={{ filemtime(public_path('js/cad-editor.js')) }}">
 </script>
 </head>
@@ -154,7 +155,7 @@
 <button id="array">선택 객체 사각 배열</button>
 </section>
 <h2>화면 / 보조</h2>
-<button id="fit">전체 보기 F</button>
+<button id="fit">전체 보기 Shift+Z</button>
 <button id="undo">실행 취소 Ctrl+Z</button>
 <button id="redo">다시 실행 Ctrl+Y</button>
 <label>

@@ -17,6 +17,7 @@ on:
       - 'tests/js/cad-native-dimension.test.mjs'
       - 'tests/Fixtures/cad-native-edit.cjs'
       - 'tests/js/cad-numeric.test.mjs'
+      - 'tests/js/cad-sketch.test.mjs'
       - 'tests/js/cad-export-large.test.mjs'
       - 'tests/js/cad-history.test.mjs'
       - 'tests/Fixtures/cad-history.cjs'
@@ -78,6 +79,7 @@ jobs:
           node --test tests/js/cad-native-edit.test.mjs
           node --test tests/js/cad-native-dimension.test.mjs
           node --test tests/js/cad-numeric.test.mjs
+          node --test tests/js/cad-sketch.test.mjs
           node --test tests/js/cad-export-large.test.mjs
           node --test tests/js/cad-history.test.mjs
           node --test tests/js/cad-markup.test.mjs

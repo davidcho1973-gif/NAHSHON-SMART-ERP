@@ -1,6 +1,33 @@
 * {
     box-sizing: border-box;
 }
+/* Compact desktop-style toolbar, sharing the CAD command registry. */
+#sketch-toolbar{flex:none;background:linear-gradient(#f7f9fc,#e4e9ef);border-bottom:1px solid #aebdcc;padding:3px 12px 6px;color:#45596d;box-shadow:0 2px 7px #0002;z-index:4;}
+.sketch-caption{display:block;font-size:11px;line-height:16px;color:#637185;letter-spacing:.1px;}
+.sketch-tool-row{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:thin;}
+.sketch-tool-family{display:flex;flex:none;align-items:stretch;}
+#sketch-toolbar button{display:grid;place-items:center;width:33px;height:33px;padding:2px;border:1px solid transparent;border-radius:4px;background:transparent;color:#465c73;box-shadow:none;}
+#sketch-toolbar button:hover,#sketch-toolbar button:focus-visible{background:#d8edf8;border-color:#80adcb;outline:2px solid #b0d4ea;}
+#sketch-toolbar button.active{background:#c9e9fb;border-color:#5191bc;box-shadow:inset 0 0 0 1px #fff8;}
+#sketch-toolbar button svg{width:28px;height:28px;}
+#sketch-toolbar button.sketch-more{width:13px;font-size:10px;padding:0;}
+.sketch-mode-note{margin-left:auto;white-space:nowrap;font-size:11px;color:#5e7182;padding:0 4px;}
+#sketch-menu{position:fixed;z-index:1000;min-width:228px;max-height:calc(100dvh - 12px);overflow:auto;padding:5px;border:1px solid #a8b4c3;border-radius:7px;background:#f8fafc;color:#213449;box-shadow:0 8px 30px #0005;}
+#sketch-menu[hidden],#sketch-input-bar[hidden]{display:none;}
+#sketch-menu button{display:flex;justify-content:space-between;gap:24px;width:100%;border:0;border-radius:3px;background:transparent;color:inherit;padding:5px 9px;text-align:left;font-size:12px;}
+#sketch-menu button:hover:not(:disabled),#sketch-menu button:focus-visible{background:#dbeefa;outline:1px solid #8bbcd9;}
+#sketch-menu button:disabled{color:#8998a6;cursor:default;}
+#sketch-menu kbd{color:#72879a;font:11px system-ui;}
+#sketch-menu hr{border:0;border-top:1px solid #dae0e7;margin:4px;}
+#sketch-input-bar{position:absolute;bottom:46px;right:12px;display:flex;align-items:center;gap:7px;max-width:calc(100% - 24px);padding:7px 10px;background:#162b42ed;border:1px solid #4e829f;border-radius:7px;z-index:5;color:#e8f5ff;}
+#sketch-value{width:130px;}#sketch-sides{width:56px;}#sketch-copy-state{color:#7ee3a5;white-space:nowrap;}
+#sketch-search{width:min(500px,94vw);max-height:80dvh;overflow:auto;background:#f8fafc;border:1px solid #8ca1b7;border-radius:10px;color:#243b52;padding:18px;}
+#sketch-search::backdrop{background:#0007;}#sketch-search form{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+#sketch-search-query{width:100%;background:white;color:#243b52;border-color:#a0b5c7;}
+#sketch-search-results{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px;}
+#sketch-search-results button{background:#e5edf4;color:#294964;text-align:left;border-color:#c4d4e1;}
+#sketch-search p{font-size:11px;color:#63788a;}
+@media(max-width:720px){#sketch-toolbar{padding-left:6px;padding-right:6px;}.sketch-mode-note{display:none;}#sketch-input-bar{font-size:11px;right:6px;max-width:calc(100% - 12px);}#sketch-value{width:92px;}}
 body {
     margin: 0;
     font:
