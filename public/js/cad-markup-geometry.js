@@ -6,6 +6,428 @@
     G.rings = (item) => [item.points, ...(item.holes || [])];
     G.pointCount = (item) =>
         G.rings(item).reduce((n, ring) => n + ring.length, 0) + (item.kind === 'part' ? (root.CADParts?.pointCount(item.part) ?? 50001) : 0);
+    const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
+        add = (a, b, t = 1) => ({ x: a.x + b.x * t, y: a.y + b.y * t }),
+        cross = (a, b) => a.x * b.y - a.y * b.x;
+    const norm = (a) => Math.hypot(a.x, a.y),
+        unit = (a) => {
+            const d = norm(a);
+            if (d < 1e-10) throw Error("서로 다른 점을 지정하세요.");
+            return { x: a.x / d, y: a.y / d };
+        };
+    const tau = 2 * Math.PI,
+        positive = (a) => ((a % tau) + tau) % tau;
+    G.arcFromCenter = (center, start, end, clockwise = false, pie = false) => {
+        const radius = norm(sub(start, center));
+        if (radius < 1e-8) throw Error("반지름이 너무 작습니다.");
+        const angle = Math.atan2(start.y - center.y, start.x - center.x),
+            stop = Math.atan2(end.y - center.y, end.x - center.x);
+        let sweep = positive(stop - angle);
+        if (clockwise) sweep -= tau;
+        if (Math.abs(sweep) < 1e-6 || Math.abs(sweep) > tau - 1e-6)
+            throw Error("호의 시작 방향과 끝 방향을 다르게 지정하세요.");
+        return {
+            kind: "arc",
+            points: root.CADMarkup.rect(
+                { x: center.x - radius, y: center.y - radius },
+                { x: center.x + radius, y: center.y + radius },
+            ),
+            arc: { start: angle, sweep, pie },
+        };
+    };
+    G.arcThrough = (a, b, c) => {
+        const u = sub(b, a),
+            v = sub(c, a),
+            det = 2 * cross(u, v),
+            span = Math.max(norm(u), norm(v));
+        if (span < 1e-8 || Math.abs(det) < span * span * 1e-9)
+            throw Error("세 점이 일직선입니다. 곡률을 더 크게 지정하세요.");
+        const u2 = u.x * u.x + u.y * u.y,
+            v2 = v.x * v.x + v.y * v.y,
+            center = add(a, {
+                x: (v.y * u2 - u.y * v2) / det,
+                y: (u.x * v2 - v.x * u2) / det,
+            });
+        const start = Math.atan2(a.y - center.y, a.x - center.x),
+            middle = Math.atan2(b.y - center.y, b.x - center.x),
+            end = Math.atan2(c.y - center.y, c.x - center.x);
+        return G.arcFromCenter(
+            center,
+            a,
+            c,
+            positive(middle - start) > positive(end - start),
+            false,
+        );
+    };
+    G.bezierThrough = (a, b, c) => ({
+        kind: "curve",
+        points: [a, add(a, sub(b, a), 2 / 3), add(c, sub(b, c), 2 / 3), c],
+    });
+    G.rotatedBox = (a, b, p) => {
+        const u = unit(sub(b, a)),
+            n = { x: -u.y, y: u.x },
+            h = (p.x - a.x) * n.x + (p.y - a.y) * n.y;
+        if (Math.abs(h) < 1e-8) throw Error("사각형의 폭을 지정하세요.");
+        return [a, b, add(b, n, h), add(a, n, h)];
+    };
+    G.roundedBox = (a, b, radius) => {
+        const x = Math.min(a.x, b.x),
+            y = Math.min(a.y, b.y),
+            w = Math.abs(b.x - a.x),
+            h = Math.abs(b.y - a.y),
+            r = Math.min(radius, w / 2, h / 2);
+        if (r <= 0) return root.CADMarkup.rect(a, b);
+        const ps = [];
+        for (const [cx, cy, start] of [
+            [x + w - r, y + r, -Math.PI / 2],
+            [x + w - r, y + h - r, 0],
+            [x + r, y + h - r, Math.PI / 2],
+            [x + r, y + r, Math.PI],
+        ])
+            for (let i = 0; i <= 16; i++) {
+                const t = start + (i * Math.PI) / 32;
+                const p = { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
+                if (!ps.length || norm(sub(p, ps.at(-1))) > 1e-9) ps.push(p);
+            }
+        if (norm(sub(ps[0], ps.at(-1))) < 1e-9) ps.pop();
+        return ps;
+    };
+    const polygonResult = (item, polygons) =>
+        polygons.map((rings, i) => ({
+            ...structuredClone(item),
+            id: i ? crypto.randomUUID() : item.id,
+            points: rings[0].slice(0, -1).map(([x, y]) => ({ x, y })),
+            holes: rings
+                .slice(1)
+                .map((r) => r.slice(0, -1).map(([x, y]) => ({ x, y }))),
+        }));
+    G.splitArea = (item, a, b) => {
+        if (item.kind !== "area" || item.locked)
+            throw Error("잠기지 않은 다각형 영역 하나를 선택하세요.");
+        const u = unit(sub(b, a)),
+            n = { x: -u.y, y: u.x },
+            bounds = G.bounds([item]),
+            center = {
+                x: (bounds.minX + bounds.maxX) / 2,
+                y: (bounds.minY + bounds.maxY) / 2,
+            };
+        const origin = add(
+                a,
+                u,
+                (center.x - a.x) * u.x + (center.y - a.y) * u.y,
+            ),
+            extent =
+                Math.hypot(
+                    bounds.maxX - bounds.minX,
+                    bounds.maxY - bounds.minY,
+                ) *
+                    4 +
+                norm(sub(origin, center)) * 2 +
+                1;
+        const left = add(origin, u, -extent),
+            right = add(origin, u, extent),
+            poly = G.rings(item).map((r) => r.map((p) => [p.x, p.y]));
+        const halves = [1, -1].map((sign) =>
+            root.polygonClipping.intersection(poly, [
+                [
+                    left,
+                    right,
+                    add(right, n, extent * sign),
+                    add(left, n, extent * sign),
+                ].map((p) => [p.x, p.y]),
+            ]),
+        );
+        if (halves.some((h) => !h.length))
+            throw Error("영역 안쪽을 가로지르는 두 점을 지정하세요.");
+        const result = polygonResult(item, halves.flat());
+        if (
+            !G.validSet(result) ||
+            Math.abs(result.reduce((s, m) => s + G.area(m), 0) - G.area(item)) >
+                Math.max(1, G.area(item)) * 1e-7
+        )
+            throw Error(
+                "분할 경계가 너무 작거나 복잡합니다. 다른 위치에서 나누세요.",
+            );
+        return result;
+    };
+    G.hole = (item, ring) => {
+        if (item.kind !== "area" || item.locked)
+            throw Error("다각형 영역 하나를 선택하세요.");
+        const result = {
+            ...structuredClone(item),
+            holes: [...(item.holes || []), ring],
+        };
+        if (!G.valid(result))
+            throw Error(
+                "빈 공간은 영역 내부에 있어야 하며 다른 경계와 닿거나 겹칠 수 없습니다.",
+            );
+        return result;
+    };
+    G.lineIntersection = (a, b, c, d) => {
+        const u = sub(b, a),
+            v = sub(d, c),
+            det = cross(u, v);
+        if (Math.abs(det) < norm(u) * norm(v) * 1e-12) return null;
+        const w = sub(c, a),
+            t = cross(w, v) / det,
+            s = cross(w, u) / det;
+        return { point: add(a, u, t), t, s };
+    };
+    G.snapIndex = (points) => {
+        if (points.length > 200000)
+            throw Error(
+                "맞춤점 한도를 넘었습니다. 불필요한 레이어를 숨기세요.",
+            );
+        const b = points.reduce(
+            (b, p) => ({
+                minX: Math.min(b.minX, p.x),
+                minY: Math.min(b.minY, p.y),
+                maxX: Math.max(b.maxX, p.x),
+                maxY: Math.max(b.maxY, p.y),
+            }),
+            {
+                minX: Infinity,
+                minY: Infinity,
+                maxX: -Infinity,
+                maxY: -Infinity,
+            },
+        );
+        const cell = Math.max(
+                (Math.max(b.maxX - b.minX, b.maxY - b.minY) || 1) / 128,
+                1e-6,
+            ),
+            grid = new Map();
+        for (const p of points) {
+            const k = Math.floor(p.x / cell) + "," + Math.floor(p.y / cell);
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push(p);
+        }
+        return {
+            query(p, tolerance) {
+                let found = null,
+                    best = tolerance;
+                const offer = (q) => {
+                    const d = norm(sub(p, q));
+                    if (d < best) {
+                        best = d;
+                        found = q;
+                    }
+                };
+                const x0 = Math.floor((p.x - tolerance) / cell),
+                    x1 = Math.floor((p.x + tolerance) / cell),
+                    y0 = Math.floor((p.y - tolerance) / cell),
+                    y1 = Math.floor((p.y + tolerance) / cell);
+                if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) {
+                    points.forEach(offer);
+                } else
+                    for (let x = x0; x <= x1; x++)
+                        for (let y = y0; y <= y1; y++)
+                            for (const q of grid.get(x + "," + y) || [])
+                                offer(q);
+                return found;
+            },
+        };
+    };
+    G.offsetPath = (item, d) => {
+        if (!Number.isFinite(d) || !d || Math.abs(d) > 1e9)
+            throw Error("0이 아닌 간격을 입력하세요.");
+        const M = root.CADMarkup;
+        if (item.kind === "ellipse" || item.kind === "arc") {
+            const f = M.ellipseFrame(item.points),
+                r = norm(f.u);
+            if (
+                Math.abs(norm(f.v) - r) > r * 1e-8 ||
+                Math.abs(f.u.x * f.v.x + f.u.y * f.v.y) > r * r * 1e-8
+            )
+                throw Error(
+                    "타원은 일정 거리 복사를 지원하지 않습니다. 원 또는 원호를 선택하세요.",
+                );
+            if (r + d <= 1e-8) throw Error("간격이 반지름보다 큽니다.");
+            return G.map(item, (p) =>
+                add(f.center, sub(p, f.center), (r + d) / r),
+            );
+        }
+        if (!["area", "route"].includes(item.kind))
+            throw Error("다각형 영역·직선 경로·원·원호를 선택하세요.");
+        const offsetRing = (ps, closed, amount) => {
+            const segments = [];
+            for (let i = 0; i < (closed ? ps.length : ps.length - 1); i++) {
+                const a = ps[i],
+                    b = ps[(i + 1) % ps.length],
+                    u = unit(sub(b, a)),
+                    n = { x: -u.y, y: u.x };
+                segments.push({ a: add(a, n, amount), b: add(b, n, amount) });
+            }
+            const output = [];
+            if (!closed) output.push(segments[0].a);
+            for (let i = closed ? 0 : 1; i < segments.length; i++) {
+                const before =
+                        segments[(i + segments.length - 1) % segments.length],
+                    after = segments[i],
+                    hit = G.lineIntersection(
+                        before.a,
+                        before.b,
+                        after.a,
+                        after.b,
+                    );
+                const p = hit?.point || after.a;
+                if (norm(sub(p, ps[i])) > Math.abs(amount) * 20)
+                    throw Error(
+                        "모서리가 너무 뾰족합니다. 간격을 줄이거나 경계를 정리하세요.",
+                    );
+                output.push(p);
+            }
+            if (!closed) output.push(segments.at(-1).b);
+            return output;
+        };
+        const closed = item.kind === "area",
+            result = {
+                ...structuredClone(item),
+                points: offsetRing(
+                    item.points,
+                    closed,
+                    closed ? -Math.sign(M.signedArea(item.points)) * d : d,
+                ),
+            };
+        if (item.holes)
+            result.holes = item.holes.map((r) =>
+                offsetRing(r, true, Math.sign(M.signedArea(r)) * d),
+            );
+        if (
+            !G.valid(result) ||
+            (closed &&
+                Math.sign(M.signedArea(result.points)) !==
+                    Math.sign(M.signedArea(item.points)))
+        )
+            throw Error(
+                "간격으로 인해 경계가 겹치거나 사라집니다. 간격을 줄이세요.",
+            );
+        // A valid ring alone does not prove an offset: reject collapsed/reversed edges.
+        for (const [i, ring] of G.rings(result).entries()) {
+            const old = G.rings(item)[i];
+            for (let j = closed ? 0 : 1; j < ring.length; j++) {
+                const k = (j + ring.length - 1) % ring.length,
+                    u = sub(ring[j], ring[k]),
+                    v = sub(old[j], old[k]);
+                if (u.x * v.x + u.y * v.y <= 0)
+                    throw Error(
+                        "간격으로 경계가 뒤집힙니다. 더 작은 간격을 지정하세요.",
+                    );
+            }
+        }
+        return result;
+    };
+    G.cornerLines = (items, radius, rounded = true) => {
+        if (
+            items.length !== 2 ||
+            items.some(
+                (m) => m.kind !== "route" || m.points.length !== 2 || m.locked,
+            )
+        )
+            throw Error("잠기지 않은 직선 표시 두 개를 선택하세요.");
+        if (!Number.isFinite(radius) || radius <= 0)
+            throw Error("양수 반지름 또는 모따기 거리를 입력하세요.");
+        const hit = G.lineIntersection(...items[0].points, ...items[1].points);
+        if (!hit) throw Error("평행한 선은 모서리로 연결할 수 없습니다.");
+        const o = hit.point,
+            far = items.map((m) =>
+                m.points.reduce((a, b) =>
+                    norm(sub(a, o)) > norm(sub(b, o)) ? a : b,
+                ),
+            ),
+            u = unit(sub(far[0], o)),
+            v = unit(sub(far[1], o)),
+            theta = Math.acos(Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y))),
+            trim = rounded ? radius / Math.tan(theta / 2) : radius;
+        if (
+            theta < 1e-6 ||
+            Math.PI - theta < 1e-6 ||
+            trim >= Math.min(...far.map((p) => norm(sub(p, o)))) - 1e-8
+        )
+            throw Error("선 길이에 비해 모서리 크기가 큽니다.");
+        const a = add(o, u, trim),
+            b = add(o, v, trim),
+            result = items.map((m, i) => ({
+                ...structuredClone(m),
+                points:
+                    m.points.indexOf(far[i]) === 0
+                        ? [far[i], i ? b : a]
+                        : [i ? b : a, far[i]],
+            }));
+        let middle = { kind: "route", points: [a, b], arrows: "none" };
+        if (rounded) {
+            const center = add(
+                o,
+                unit(add(u, v)),
+                radius / Math.sin(theta / 2),
+            );
+            middle = G.arcFromCenter(
+                center,
+                a,
+                b,
+                cross(sub(a, center), sub(b, center)) < 0,
+            );
+        }
+        const connector = {
+            ...structuredClone(items[0]),
+            ...middle,
+            id: crypto.randomUUID(),
+            arrows: "none",
+        };
+        delete connector.label;
+        result.push(connector);
+        return result;
+    };
+    G.trimRoute = (item, cutters, point, extend = false) => {
+        if (item.kind !== "route" || item.points.length !== 2)
+            throw Error("자르기·연장은 직선 표시에서 사용하세요.");
+        if (cutters.length > 150000)
+            throw Error(
+                "주변 경계가 너무 많습니다. 레이어를 숨겨 경계를 줄이세요.",
+            );
+        const [a, b] = item.points,
+            u = sub(b, a),
+            d = u.x * u.x + u.y * u.y;
+        if (d < 1e-16) throw Error("선 길이가 너무 작습니다.");
+        const clicked = ((point.x - a.x) * u.x + (point.y - a.y) * u.y) / d,
+            hits = cutters
+                .map(([c, e]) => G.lineIntersection(a, b, c, e))
+                .filter((h) => h && h.s >= -1e-9 && h.s <= 1 + 1e-9);
+        if (extend) {
+            const start = clicked < 0.5,
+                ts = hits
+                    .map((h) => h.t)
+                    .filter((t) => (start ? t < -1e-9 : t > 1 + 1e-9));
+            if (!ts.length) throw Error("연장 방향에 닿는 경계가 없습니다.");
+            const t = start ? Math.max(...ts) : Math.min(...ts);
+            return [
+                {
+                    ...structuredClone(item),
+                    points: start ? [add(a, u, t), b] : [a, add(a, u, t)],
+                },
+            ];
+        }
+        const ts = [
+            0,
+            1,
+            ...hits.map((h) => h.t).filter((t) => t > 1e-9 && t < 1 - 1e-9),
+        ]
+            .sort((a, b) => a - b)
+            .filter((t, i, all) => !i || t - all[i - 1] > 1e-9);
+        if (ts.length === 2) throw Error("직선과 교차하는 경계가 없습니다.");
+        const i = Math.max(
+                0,
+                Math.min(ts.length - 2, ts.findIndex((t) => t >= clicked) - 1),
+            ),
+            ranges = [];
+        if (ts[i] > 1e-9) ranges.push([0, ts[i]]);
+        if (ts[i + 1] < 1 - 1e-9) ranges.push([ts[i + 1], 1]);
+        return ranges.map(([s, t], j) => ({
+            ...structuredClone(item),
+            id: j ? crypto.randomUUID() : item.id,
+            points: [add(a, u, s), add(a, u, t)],
+        }));
+    };
     G.map = (item, fn) => ({
         ...structuredClone(item),
         points: item.points.map(fn),
@@ -14,18 +436,49 @@
             : {}),
     });
     G.area = (item) =>
-        item.kind === 'ellipse' ? Math.PI * Math.abs(root.CADMarkup.ellipseFrame(item.points).determinant) : Math.abs(root.CADMarkup.signedArea(item.points)) -
-        (item.holes || []).reduce(
-            (sum, ring) => sum + Math.abs(root.CADMarkup.signedArea(ring)),
-            0,
-        );
-    G.length = (item) =>
-        item.points
-            .slice(1)
-            .reduce(
-                (sum, p, i) => sum + root.CADMarkup.distance(p, item.points[i]),
-                0,
+        item.kind === "arc" && item.arc?.pie
+            ? Math.abs(
+                  (root.CADMarkup.ellipseFrame(item.points).determinant *
+                      item.arc.sweep) /
+                      2,
+              )
+            : item.kind === "ellipse"
+              ? Math.PI *
+                Math.abs(root.CADMarkup.ellipseFrame(item.points).determinant)
+              : Math.abs(root.CADMarkup.signedArea(item.points)) -
+                (item.holes || []).reduce(
+                    (sum, ring) =>
+                        sum + Math.abs(root.CADMarkup.signedArea(ring)),
+                    0,
+                );
+    G.length = (item) => {
+        const M = root.CADMarkup;
+        if (!M.curved(item))
+            return item.points
+                .slice(1)
+                .reduce((sum, p, i) => sum + M.distance(p, item.points[i]), 0);
+        // Integrate actual speed with an error bound; sampled chords understate length.
+        const speed = (t) => norm(M.curveTangent(item, t)),
+            a = speed(0),
+            b = speed(0.5),
+            c = speed(1),
+            whole = (a + 4 * b + c) / 6;
+        const integrate = (lo, hi, fa, fm, fb, estimate, tolerance, depth) => {
+            const mid = (lo + hi) / 2,
+                fl = speed((lo + mid) / 2),
+                fr = speed((mid + hi) / 2);
+            const left = ((mid - lo) * (fa + 4 * fl + fm)) / 6,
+                right = ((hi - mid) * (fm + 4 * fr + fb)) / 6,
+                delta = left + right - estimate;
+            if (!depth || Math.abs(delta) <= 15 * tolerance)
+                return left + right + delta / 15;
+            return (
+                integrate(lo, mid, fa, fl, fm, left, tolerance / 2, depth - 1) +
+                integrate(mid, hi, fm, fr, fb, right, tolerance / 2, depth - 1)
             );
+        };
+        return integrate(0, 1, a, b, c, whole, Math.max(1, whole) * 1e-9, 14);
+    };
     G.rotatePoint = (p, center, angle) => {
         const c = Math.cos(angle),
             s = Math.sin(angle),
@@ -73,7 +526,9 @@
             items.length < 2 ||
             items.some((m) => m.kind !== "area" || m.locked)
         )
-            throw Error("자유·사각·다각형 영역을 두 개 이상 선택하세요. 원·타원 또는 잠긴 표시는 영역 연산에서 제외하세요.");
+            throw Error(
+                "자유·사각·다각형 영역을 두 개 이상 선택하세요. 원·타원 또는 잠긴 표시는 영역 연산에서 제외하세요.",
+            );
         if (
             !["union", "difference", "intersection"].includes(operation) ||
             !root.polygonClipping
@@ -95,9 +550,46 @@
     G.valid = (item) => {
         const M = root.CADMarkup;
         if (!Array.isArray(item.points) || !item.points.length) return false;
-        if (item.dash !== undefined && !['solid', 'dash', 'dot', 'dashdot'].includes(item.dash)) return false;
-        if (item.fillColor !== undefined && (!['area', 'ellipse'].includes(item.kind) || !/^(none|#[0-9a-f]{6})$/i.test(item.fillColor))) return false;
-        if (item.fillOpacity !== undefined && (!['area', 'ellipse'].includes(item.kind) || !Number.isFinite(item.fillOpacity) || item.fillOpacity < 0.05 || item.fillOpacity > 1)) return false;
+        if (
+            item.dash !== undefined &&
+            !["solid", "dash", "dot", "dashdot"].includes(item.dash)
+        )
+            return false;
+        if (
+            item.fillColor !== undefined &&
+            (!M.filled(item) || !/^(none|#[0-9a-f]{6})$/i.test(item.fillColor))
+        )
+            return false;
+        if (
+            item.fillOpacity !== undefined &&
+            (!M.filled(item) ||
+                !Number.isFinite(item.fillOpacity) ||
+                item.fillOpacity < 0.05 ||
+                item.fillOpacity > 1)
+        )
+            return false;
+        if (item.arc !== undefined && item.kind !== "arc") return false;
+        if (
+            item.kind === "curve" &&
+            (item.points.length !== 4 ||
+                item.holes ||
+                item.points.every((p) => M.distance(p, item.points[0]) < 1e-10))
+        )
+            return false;
+        if (
+            item.kind === "arc" &&
+            (!item.arc ||
+                Object.keys(item.arc).some(
+                    (k) => !["start", "sweep", "pie"].includes(k),
+                ) ||
+                !Number.isFinite(item.arc.start) ||
+                Math.abs(item.arc.start) > Math.PI * 2 ||
+                !Number.isFinite(item.arc.sweep) ||
+                Math.abs(item.arc.sweep) < 1e-6 ||
+                Math.abs(item.arc.sweep) > Math.PI * 2 ||
+                typeof item.arc.pie !== "boolean")
+        )
+            return false;
         if (item.kind === "detail" && !root.CADReview?.detailValid(item))
             return false;
         if (["text", "pin"].includes(item.kind) && item.points.length !== 1)
@@ -131,10 +623,21 @@
             return false;
         if (item.kind === 'part') return !!root.CADParts?.valid(item);
         if (item.part !== undefined) return false;
-        if (item.kind === 'ellipse') {
+        if (["ellipse", "arc"].includes(item.kind)) {
             const f = M.ellipseFrame(item.points);
-            return item.points.length === 4 && !item.holes && !!f && Math.abs(f.determinant) >= 1e-12 &&
-                f.residual < Math.max(1, Math.hypot(f.u.x, f.u.y) * 2, Math.hypot(f.v.x, f.v.y) * 2) * 1e-7;
+            return (
+                item.points.length === 4 &&
+                !item.holes &&
+                !!f &&
+                Math.abs(f.determinant) >= 1e-12 &&
+                f.residual <
+                    Math.max(
+                        1,
+                        Math.hypot(f.u.x, f.u.y) * 2,
+                        Math.hypot(f.v.x, f.v.y) * 2,
+                    ) *
+                        1e-7
+            );
         }
         if (!["area", "cloud"].includes(item.kind)) return true;
         if (!G.rings(item).every(M.validPolygon)) return false;
@@ -202,44 +705,107 @@
     };
     G.shape = (tool, a, b, sides = 6) => {
         const M = root.CADMarkup;
-        if (tool === 'circle') {
+        if (tool === "circle") {
             const d = Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y));
-            b = { x: a.x + (b.x < a.x ? -d : d), y: a.y + (b.y < a.y ? -d : d) };
+            b = {
+                x: a.x + (b.x < a.x ? -d : d),
+                y: a.y + (b.y < a.y ? -d : d),
+            };
         }
-        if (['box', 'cloud', 'circle', 'ellipse'].includes(tool)) return M.rect(a, b);
-        const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2,
-            rx = Math.abs(b.x - a.x) / 2, ry = Math.abs(b.y - a.y) / 2;
-        if (tool === 'triangle') return [{ x, y: y + ry }, { x: x - rx, y: y - ry }, { x: x + rx, y: y - ry }];
-        const n = tool === 'star' ? 10 : tool === 'diamond' ? 4 : Math.max(3, Math.min(12, Math.round(sides) || 6));
+        if (["box", "cloud", "circle", "ellipse"].includes(tool))
+            return M.rect(a, b);
+        const x = (a.x + b.x) / 2,
+            y = (a.y + b.y) / 2,
+            rx = Math.abs(b.x - a.x) / 2,
+            ry = Math.abs(b.y - a.y) / 2;
+        if (tool === "triangle")
+            return [
+                { x, y: y + ry },
+                { x: x - rx, y: y - ry },
+                { x: x + rx, y: y - ry },
+            ];
+        const n =
+            tool === "star"
+                ? 10
+                : tool === "diamond"
+                  ? 4
+                  : Math.max(3, Math.min(12, Math.round(sides) || 6));
         return Array.from({ length: n }, (_, i) => {
-            const angle = Math.PI / 2 + i * Math.PI * 2 / n, r = tool === 'star' && i % 2 ? 0.45 : 1;
-            return { x: x + Math.cos(angle) * rx * r, y: y + Math.sin(angle) * ry * r };
+            const angle = Math.PI / 2 + (i * Math.PI * 2) / n,
+                r = tool === "star" && i % 2 ? 0.45 : 1;
+            return {
+                x: x + Math.cos(angle) * rx * r,
+                y: y + Math.sin(angle) * ry * r,
+            };
         });
     };
     G.resizeEllipse = (item, index, target) => {
-        const points = item.points, fixed = points[(index + 2) % 4],
-            u = { x: points[(index + 1) % 4].x - fixed.x, y: points[(index + 1) % 4].y - fixed.y },
-            v = { x: points[(index + 3) % 4].x - fixed.x, y: points[(index + 3) % 4].y - fixed.y },
+        const points = item.points,
+            fixed = points[(index + 2) % 4],
+            u = {
+                x: points[(index + 1) % 4].x - fixed.x,
+                y: points[(index + 1) % 4].y - fixed.y,
+            },
+            v = {
+                x: points[(index + 3) % 4].x - fixed.x,
+                y: points[(index + 3) % 4].y - fixed.y,
+            },
             det = u.x * v.y - u.y * v.x;
         if (!det) return structuredClone(item);
-        const x = target.x - fixed.x, y = target.y - fixed.y,
-            s = (x * v.y - y * v.x) / det, t = (u.x * y - u.y * x) / det,
+        const x = target.x - fixed.x,
+            y = target.y - fixed.y,
+            s = (x * v.y - y * v.x) / det,
+            t = (u.x * y - u.y * x) / det,
             result = structuredClone(item);
         result.points[index] = { ...target };
-        result.points[(index + 1) % 4] = { x: fixed.x + s * u.x, y: fixed.y + s * u.y };
-        result.points[(index + 3) % 4] = { x: fixed.x + t * v.x, y: fixed.y + t * v.y };
+        result.points[(index + 1) % 4] = {
+            x: fixed.x + s * u.x,
+            y: fixed.y + s * u.y,
+        };
+        result.points[(index + 3) % 4] = {
+            x: fixed.x + t * v.x,
+            y: fixed.y + t * v.y,
+        };
         return result;
     };
     G.resize = (items, width, height, keepRatio = true) => {
-        const b = G.bounds(items), w = b.maxX - b.minX, h = b.maxY - b.minY;
-        if (![width, height].every(n => Number.isFinite(n) && n > 0 && n <= 1e9) || w <= 1e-12 || h <= 1e-12)
-            throw Error('너비와 높이가 있는 표시를 선택하고 양수를 입력하세요.');
-        const sx = width / w, sy = keepRatio ? sx : height / h;
-        if (Math.abs(sx - sy) > 1e-9 && items.some(m => !['area', 'ellipse', 'route', 'pen', 'highlight'].includes(m.kind) || m.label))
-            throw Error('문자·구름·번호·상세도가 포함되면 비율 유지를 켜세요.');
+        const b = G.bounds(items),
+            w = b.maxX - b.minX,
+            h = b.maxY - b.minY;
+        if (
+            ![width, height].every(
+                (n) => Number.isFinite(n) && n > 0 && n <= 1e9,
+            ) ||
+            w <= 1e-12 ||
+            h <= 1e-12
+        )
+            throw Error(
+                "너비와 높이가 있는 표시를 선택하고 양수를 입력하세요.",
+            );
+        const sx = width / w,
+            sy = keepRatio ? sx : height / h;
+        if (
+            Math.abs(sx - sy) > 1e-9 &&
+            items.some(
+                (m) =>
+                    ![
+                        "area",
+                        "ellipse",
+                        "arc",
+                        "curve",
+                        "route",
+                        "pen",
+                        "highlight",
+                    ].includes(m.kind) || m.label,
+            )
+        )
+            throw Error("문자·구름·번호·상세도가 포함되면 비율 유지를 켜세요.");
         const center = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
-        return items.map(item => {
-            const result = G.map(item, p => ({ x: center.x + (p.x - center.x) * sx, y: center.y + (p.y - center.y) * sy }));
+        return items.map((item) => {
+            const result = G.map(item, (p) => ({
+                x: center.x + (p.x - center.x) * sx,
+                y: center.y + (p.y - center.y) * sy,
+            }));
             if (Math.abs(sx - sy) <= 1e-9) {
                 result.size *= sx;
                 if (result.textStyle?.boxWidth) result.textStyle.boxWidth *= sx;
@@ -248,26 +814,40 @@
         });
     };
     G.repeat = (items, columns, rows, dx, dy, existingCount = 0) => {
-        if (![columns, rows].every(n => Number.isInteger(n) && n >= 1 && n <= 20) || columns * rows < 2 ||
-            ![dx, dy].every(n => Number.isFinite(n) && Math.abs(n) <= 1e9) ||
-            (columns > 1 && dx === 0) || (rows > 1 && dy === 0))
-            throw Error('열·행은 1~20, 반복 방향의 간격은 0이 아닌 수로 입력하세요.');
+        if (
+            ![columns, rows].every(
+                (n) => Number.isInteger(n) && n >= 1 && n <= 20,
+            ) ||
+            columns * rows < 2 ||
+            ![dx, dy].every((n) => Number.isFinite(n) && Math.abs(n) <= 1e9) ||
+            (columns > 1 && dx === 0) ||
+            (rows > 1 && dy === 0)
+        )
+            throw Error(
+                "열·행은 1~20, 반복 방향의 간격은 0이 아닌 수로 입력하세요.",
+            );
         if (existingCount + items.length * (columns * rows - 1) > 1000)
-            throw Error('반복 결과가 표시 1,000개 한도를 넘습니다.');
+            throw Error("반복 결과가 표시 1,000개 한도를 넘습니다.");
         const result = [];
-        for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
-            if (!row && !column) continue;
-            const groups = new Map();
-            for (const item of items) {
-                const copy = root.CADMarkup.translate(structuredClone(item), dx * column, dy * row);
-                copy.id = crypto.randomUUID();
-                if (copy.group) {
-                    if (!groups.has(copy.group)) groups.set(copy.group, crypto.randomUUID());
-                    copy.group = groups.get(copy.group);
+        for (let row = 0; row < rows; row++)
+            for (let column = 0; column < columns; column++) {
+                if (!row && !column) continue;
+                const groups = new Map();
+                for (const item of items) {
+                    const copy = root.CADMarkup.translate(
+                        structuredClone(item),
+                        dx * column,
+                        dy * row,
+                    );
+                    copy.id = crypto.randomUUID();
+                    if (copy.group) {
+                        if (!groups.has(copy.group))
+                            groups.set(copy.group, crypto.randomUUID());
+                        copy.group = groups.get(copy.group);
+                    }
+                    result.push(copy);
                 }
-                result.push(copy);
             }
-        }
         return result;
     };
     function units(items) {
@@ -358,7 +938,15 @@
             const M = root.CADMarkup,
                 close = (ps) => [...ps, ps[0]];
             let paths = [[...item.points]];
-            if (item.kind === 'ellipse') paths = [close(M.ellipsePoints(item))];
+            if (item.kind === "ellipse") paths = [close(M.ellipsePoints(item))];
+            if (M.curved(item)) {
+                const ps = M.curvePoints(item);
+                paths = [
+                    M.filled(item)
+                        ? close([...ps, M.ellipseFrame(item.points).center])
+                        : ps,
+                ];
+            }
             if (["area", "detail", "part"].includes(item.kind))
                 paths = G.rings(item).map(close);
             if (item.kind === "cloud")
@@ -396,7 +984,10 @@
                 ];
             if (["text", "callout"].includes(item.kind))
                 paths.push(close(M.labelCorners(item)));
-            if (item.label && ["cloud", "area", "ellipse", "route"].includes(item.kind)) {
+            if (
+                item.label &&
+                ["cloud", "area", "ellipse", "route"].includes(item.kind)
+            ) {
                 const b = M.bounds(item);
                 paths.push(
                     close(

@@ -26,6 +26,7 @@ on:
       - 'tests/Fixtures/cad-history.cjs'
       - 'tests/js/cad-markup.test.mjs'
       - 'tests/js/cad-markup-geometry.test.mjs'
+      - 'tests/js/cad-markup-drafting.test.mjs'
       - 'tests/js/cad-print.test.mjs'
       - 'tests/js/cad-fidelity.test.mjs'
       - 'tests/js/cad-review.test.mjs'
@@ -89,6 +90,7 @@ jobs:
           node --test tests/js/cad-markup.test.mjs
           node --test tests/js/cad-markup-geometry.test.mjs
           node --test tests/js/cad-parts.test.mjs
+          node --test tests/js/cad-markup-drafting.test.mjs
           node --test tests/js/cad-print.test.mjs
           node --test tests/js/cad-fidelity.test.mjs
           node --test tests/js/cad-review.test.mjs

@@ -153,6 +153,10 @@ footer {
 }
 #dirty {
     color: #fbbf24;
+    /* Saving a longer revision/recovery label must not wrap the header and move the canvas. */
+    flex: 0 0 240px;
+    width: 240px;
+    white-space: nowrap;
 }
 @media (max-width: 800px) {
     main {
@@ -178,6 +182,15 @@ body.claim-linked main {height:calc(100dvh - 205px);}
 #tools details {margin:10px 0;border:1px solid #40516c;padding:7px;border-radius:6px;}
 #tools summary {cursor:pointer;color:#83d7ff;}
 #canvas {cursor:default;}
+/* A fixed dock keeps numeric controls from intercepting points on the drawing. */
+body[data-workspace=markup] #canvas {height:calc(100% - 88px);}
+body[data-workspace=markup] #hint {bottom:100px;}
+#markup-drawing-hud {position:absolute;left:0;bottom:0;width:100%;height:88px;padding:8px 12px;border-top:1px solid #52738d;background:#142439;z-index:3;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:22px minmax(0,1fr);gap:5px 8px;align-items:center;}
+#markup-drawing-hud[hidden],body[data-workspace=cad] #markup-drawing-hud {display:none;}
+#markup-drawing-hud output {grid-column:1/-1;float:none;color:#bed8ed;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#markup-drawing-hud label {display:flex;align-items:center;gap:6px;margin:0;font-size:12px;min-width:0;}
+#markup-drawing-hud label span {min-width:0;}
+#markup-numeric {width:170px;min-width:58px;max-width:50%;}
 [data-tool="select"],[data-markup-tool="select"] {display:flex;align-items:center;justify-content:center;gap:6px;}
 
 #drawing-state {position:absolute;z-index:3;inset:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:28px;background:rgba(13,22,39,.94);border:1px solid #45607f;border-radius:10px;gap:12px;}

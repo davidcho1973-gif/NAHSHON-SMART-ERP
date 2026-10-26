@@ -19,10 +19,14 @@ class CadMarkupValidator
         }
         $validated = Validator::make(['markups' => $markups], [
             'markups' => 'present|array|max:1000',
-            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail,dash,fillColor,fillOpacity,part',
+            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail,dash,fillColor,fillOpacity,part,arc',
             'markups.*.id' => ['required', 'string', 'max:80', 'distinct:strict', 'regex:/^[a-zA-Z0-9_-]+$/'],
-            'markups.*.kind' => ['required', Rule::in(['area', 'ellipse', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail', 'part'])],
+            'markups.*.kind' => ['required', Rule::in(['area', 'ellipse', 'arc', 'curve', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail', 'part'])],
             'markups.*.part' => 'sometimes|array',
+            'markups.*.arc' => 'sometimes|array:start,sweep,pie',
+            'markups.*.arc.start' => 'required_with:markups.*.arc|numeric|between:-6.283185307179586,6.283185307179586',
+            'markups.*.arc.sweep' => 'required_with:markups.*.arc|numeric|between:-6.283185307179586,6.283185307179586',
+            'markups.*.arc.pie' => 'required_with:markups.*.arc|boolean',
             'markups.*.points' => 'required|array|min:1|max:2048',
             'markups.*.points.*' => 'required|array:x,y',
             'markups.*.points.*.x' => 'required|numeric|between:-1000000000,1000000000',
@@ -98,7 +102,18 @@ class CadMarkupValidator
             } elseif (isset($item['part'])) {
                 $fail();
             }
-            if ($item['kind'] === 'ellipse') {
+            if ($item['kind'] === 'arc') {
+                if (! isset($item['arc']['start'], $item['arc']['sweep'], $item['arc']['pie']) || abs($item['arc']['sweep']) < 1e-6) {
+                    $fail();
+                }
+                $item['arc'] = ['start' => (float) $item['arc']['start'], 'sweep' => (float) $item['arc']['sweep'], 'pie' => (bool) $item['arc']['pie']];
+            } elseif (isset($item['arc'])) {
+                $fail();
+            }
+            if ($item['kind'] === 'curve' && ($n !== 4 || count(array_unique(array_map(fn ($p) => json_encode($p), $item['points']))) < 2)) {
+                $fail();
+            }
+            if (in_array($item['kind'], ['ellipse', 'arc'], true)) {
                 if ($n !== 4 || ! $this->simpleRing($item['points'])) {
                     $fail();
                 }
@@ -111,7 +126,7 @@ class CadMarkupValidator
                     $fail();
                 }
             }
-            if ((isset($item['fillColor']) || isset($item['fillOpacity'])) && ! in_array($item['kind'], ['area', 'ellipse'], true)) {
+            if ((isset($item['fillColor']) || isset($item['fillOpacity'])) && ! in_array($item['kind'], ['area', 'ellipse'], true) && ! ($item['kind'] === 'arc' && $item['arc']['pie'])) {
                 $fail();
             }
             if (isset($item['fillOpacity'])) {
@@ -148,7 +163,7 @@ class CadMarkupValidator
             if (isset($item['textStyle']) && ! in_array($item['kind'], ['callout', 'text'], true)) {
                 $fail();
             }
-            if (isset($item['arrows']) && $item['kind'] !== 'route') {
+            if (isset($item['arrows']) && ! in_array($item['kind'], ['route', 'arc', 'curve'], true)) {
                 $fail();
             }
             if ($item['kind'] === 'detail') {

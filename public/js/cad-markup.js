@@ -72,18 +72,230 @@
         if (!d) return null;
         const u = { x: (b.x - a.x) / 2, y: (b.y - a.y) / 2 },
             v = { x: (d.x - a.x) / 2, y: (d.y - a.y) / 2 };
-        return { center: { x: a.x + u.x + v.x, y: a.y + u.y + v.y }, u, v,
+        return {
+            center: { x: a.x + u.x + v.x, y: a.y + u.y + v.y },
+            u,
+            v,
             determinant: u.x * v.y - u.y * v.x,
-            residual: Math.hypot((c.x - b.x) - (d.x - a.x), (c.y - b.y) - (d.y - a.y)) };
+            residual: Math.hypot(
+                c.x - b.x - (d.x - a.x),
+                c.y - b.y - (d.y - a.y),
+            ),
+        };
     }
     function ellipsePoints(item, count = 128) {
         const f = ellipseFrame(item.points);
         if (!f) return [];
         return Array.from({ length: count }, (_, i) => {
-            const t = i * 2 * Math.PI / count;
-            return { x: f.center.x + f.u.x * Math.cos(t) + f.v.x * Math.sin(t),
-                y: f.center.y + f.u.y * Math.cos(t) + f.v.y * Math.sin(t) };
+            const t = (i * 2 * Math.PI) / count;
+            return {
+                x: f.center.x + f.u.x * Math.cos(t) + f.v.x * Math.sin(t),
+                y: f.center.y + f.u.y * Math.cos(t) + f.v.y * Math.sin(t),
+            };
         });
+    }
+    const curved = (item) => ["arc", "curve"].includes(item.kind);
+    const filled = (item) =>
+        ["area", "ellipse"].includes(item.kind) ||
+        (item.kind === "arc" && item.arc?.pie);
+    function curvePoint(item, t) {
+        if (item.kind === "arc") {
+            const f = ellipseFrame(item.points),
+                a = item.arc.start + item.arc.sweep * t;
+            return {
+                x: f.center.x + f.u.x * Math.cos(a) + f.v.x * Math.sin(a),
+                y: f.center.y + f.u.y * Math.cos(a) + f.v.y * Math.sin(a),
+            };
+        }
+        const [a, b, c, d] = item.points,
+            s = 1 - t;
+        return {
+            x:
+                s * s * s * a.x +
+                3 * s * s * t * b.x +
+                3 * s * t * t * c.x +
+                t * t * t * d.x,
+            y:
+                s * s * s * a.y +
+                3 * s * s * t * b.y +
+                3 * s * t * t * c.y +
+                t * t * t * d.y,
+        };
+    }
+    function curveTangent(item, t) {
+        if (item.kind === "arc") {
+            const f = ellipseFrame(item.points),
+                a = item.arc.start + item.arc.sweep * t;
+            return {
+                x:
+                    (-f.u.x * Math.sin(a) + f.v.x * Math.cos(a)) *
+                    item.arc.sweep,
+                y:
+                    (-f.u.y * Math.sin(a) + f.v.y * Math.cos(a)) *
+                    item.arc.sweep,
+            };
+        }
+        const [a, b, c, d] = item.points,
+            s = 1 - t;
+        return {
+            x:
+                3 * s * s * (b.x - a.x) +
+                6 * s * t * (c.x - b.x) +
+                3 * t * t * (d.x - c.x),
+            y:
+                3 * s * s * (b.y - a.y) +
+                6 * s * t * (c.y - b.y) +
+                3 * t * t * (d.y - c.y),
+        };
+    }
+    function curvePoints(item, count = 128) {
+        return Array.from({ length: count + 1 }, (_, i) =>
+            curvePoint(item, i / count),
+        );
+    }
+    function endpointDirection(item, end) {
+        if (item.kind === "arc") return curveTangent(item, end ? 1 : 0);
+        const points = end ? [...item.points].reverse() : item.points,
+            a = points[0];
+        const b = points.slice(1).find((p) => distance(p, a) > 1e-12) || a;
+        const sign = end ? -1 : 1;
+        return { x: (b.x - a.x) * sign, y: (b.y - a.y) * sign };
+    }
+    // Isolate every stationary point instead of picking a fixed polyline. A
+    // fixed segment count misses the rendered curve when zoomed in on big plans.
+    function polynomialRoots(coefficients, low, high) {
+        const scale = Math.max(...coefficients.map(Math.abs));
+        if (!scale) return [];
+        const c = coefficients.map((v) => v / scale);
+        while (c.length > 1 && Math.abs(c.at(-1)) < 1e-14) c.pop();
+        if (c.length === 1) return [];
+        if (c.length === 2) {
+            const t = -c[0] / c[1];
+            return t >= low && t <= high ? [t] : [];
+        }
+        const evaluate = (t) => c.reduceRight((sum, v) => sum * t + v, 0);
+        const stops = [
+            low,
+            ...polynomialRoots(
+                c.slice(1).map((v, i) => v * (i + 1)),
+                low,
+                high,
+            ),
+            high,
+        ];
+        const roots = stops.filter((t) => Math.abs(evaluate(t)) < 1e-12);
+        for (let i = 1; i < stops.length; i++) {
+            let a = stops[i - 1],
+                b = stops[i],
+                fa = evaluate(a);
+            if (fa * evaluate(b) >= 0) continue;
+            for (let step = 0; step < 48; step++) {
+                const mid = (a + b) / 2,
+                    fm = evaluate(mid);
+                if (fa * fm <= 0) b = mid;
+                else {
+                    a = mid;
+                    fa = fm;
+                }
+            }
+            roots.push((a + b) / 2);
+        }
+        return roots
+            .sort((a, b) => a - b)
+            .filter((t, i, all) => !i || t - all[i - 1] > 1e-12);
+    }
+    function curveDistance(item, p) {
+        const dot = (a, b) => a.x * b.x + a.y * b.y,
+            ts = [0, 1];
+        if (item.kind === "curve") {
+            const [q, r, s, v] = item.points.map((a) => ({
+                x: a.x - p.x,
+                y: a.y - p.y,
+            }));
+            const a = {},
+                b = {},
+                c = {};
+            for (const k of ["x", "y"]) {
+                a[k] = -q[k] + 3 * r[k] - 3 * s[k] + v[k];
+                b[k] = 3 * q[k] - 6 * r[k] + 3 * s[k];
+                c[k] = 3 * (r[k] - q[k]);
+            }
+            ts.push(
+                ...polynomialRoots(
+                    [
+                        dot(q, c),
+                        dot(c, c) + 2 * dot(q, b),
+                        3 * dot(q, a) + 3 * dot(c, b),
+                        4 * dot(c, a) + 2 * dot(b, b),
+                        5 * dot(a, b),
+                        3 * dot(a, a),
+                    ],
+                    0,
+                    1,
+                ),
+            );
+        } else {
+            const f = ellipseFrame(item.points),
+                q = { x: f.center.x - p.x, y: f.center.y - p.y };
+            const C = dot(f.v, f.v) - dot(f.u, f.u),
+                D = dot(f.u, f.v);
+            // Two half-angle charts cover the ellipse with bounded [-1,1] roots.
+            for (const sign of [1, -1]) {
+                const A = sign * dot(q, f.v),
+                    B = -sign * dot(q, f.u);
+                for (const r of polynomialRoots(
+                    [A + D, 2 * (B + C), -6 * D, 2 * (B - C), D - A],
+                    -1,
+                    1,
+                )) {
+                    const angle = 2 * Math.atan(r) + (sign < 0 ? Math.PI : 0);
+                    for (let n = -3; n <= 3; n++) {
+                        const t =
+                            (angle + 2 * n * Math.PI - item.arc.start) /
+                            item.arc.sweep;
+                        if (t > 0 && t < 1) ts.push(t);
+                    }
+                }
+            }
+        }
+        return Math.min(...ts.map((t) => distance(p, curvePoint(item, t))));
+    }
+    function curveExtrema(item) {
+        const ts = [0, 1];
+        if (item.kind === "arc") {
+            const f = ellipseFrame(item.points),
+                { start, sweep } = item.arc;
+            for (const k of ["x", "y"]) {
+                const a = Math.atan2(f.v[k], f.u[k]);
+                for (let n = -4; n <= 4; n++) {
+                    const t = (a + n * Math.PI - start) / sweep;
+                    if (t > 0 && t < 1) ts.push(t);
+                }
+            }
+        } else {
+            for (const k of ["x", "y"]) {
+                const [p, q, r, s] = item.points.map((p) => p[k]),
+                    a = -p + 3 * q - 3 * r + s,
+                    b = 2 * (p - 2 * q + r),
+                    c = q - p;
+                const roots =
+                    Math.abs(a) < 1e-14
+                        ? Math.abs(b) < 1e-14
+                            ? []
+                            : [-c / b]
+                        : b * b - 4 * a * c < 0
+                          ? []
+                          : [
+                                (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a),
+                                (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a),
+                            ];
+                ts.push(...roots.filter((t) => t > 0 && t < 1));
+            }
+        }
+        const ps = ts.map((t) => curvePoint(item, t));
+        if (item.kind === "arc" && item.arc.pie)
+            ps.push(ellipseFrame(item.points).center);
+        return ps;
     }
     function cloud(points, size) {
         const lengths = points.map((p, i) =>
@@ -212,16 +424,27 @@
     }
     function bounds(item) {
         let ps = item.points;
+        if (curved(item)) ps = curveExtrema(item);
         if (item.kind === "ellipse") {
-            const f = ellipseFrame(ps), rx = Math.hypot(f.u.x, f.v.x), ry = Math.hypot(f.u.y, f.v.y);
-            ps = [{ x: f.center.x - rx, y: f.center.y - ry }, { x: f.center.x + rx, y: f.center.y + ry }];
+            const f = ellipseFrame(ps),
+                rx = Math.hypot(f.u.x, f.v.x),
+                ry = Math.hypot(f.u.y, f.v.y);
+            ps = [
+                { x: f.center.x - rx, y: f.center.y - ry },
+                { x: f.center.x + rx, y: f.center.y + ry },
+            ];
         }
         if (item.kind === "cloud")
             ps = cloud(ps, item.size).flatMap((p) => [p.a, p.b, p.c]);
         if (["callout", "text"].includes(item.kind))
             ps = [...ps, ...labelCorners(item)];
-        if (["area", "ellipse", "cloud", "route"].includes(item.kind) && item.label) {
-            const p = item.points[0];
+        if (
+            ["area", "ellipse", "arc", "curve", "cloud", "route"].includes(
+                item.kind,
+            ) &&
+            item.label
+        ) {
+            const p = curved(item) ? curvePoint(item, 0) : item.points[0];
             ps = [
                 ...ps,
                 p,
@@ -240,17 +463,60 @@
         };
     }
     function hit(item, p, tolerance) {
+        if (curved(item)) {
+            const b = bounds(item);
+            if (
+                p.x < b.minX - tolerance ||
+                p.x > b.maxX + tolerance ||
+                p.y < b.minY - tolerance ||
+                p.y > b.maxY + tolerance
+            )
+                return false;
+            if (item.kind === "arc" && item.arc.pie) {
+                const f = ellipseFrame(item.points),
+                    dx = p.x - f.center.x,
+                    dy = p.y - f.center.y;
+                const x = (dx * f.v.y - dy * f.v.x) / f.determinant,
+                    y = (f.u.x * dy - f.u.y * dx) / f.determinant;
+                const turn = 2 * Math.PI,
+                    relative =
+                        (((Math.sign(item.arc.sweep) *
+                            (Math.atan2(y, x) - item.arc.start)) %
+                            turn) +
+                            turn) %
+                        turn;
+                if (
+                    x * x + y * y <= 1 + 1e-12 &&
+                    relative <= Math.abs(item.arc.sweep) + 1e-12
+                )
+                    return true;
+                if (
+                    [0, 1].some(
+                        (t) =>
+                            segmentDistance(p, f.center, curvePoint(item, t)) <=
+                            tolerance,
+                    )
+                )
+                    return true;
+            }
+            return curveDistance(item, p) <= tolerance;
+        }
         if (item.kind === "ellipse") {
             const f = ellipseFrame(item.points);
             if (!f || !f.determinant) return false;
-            const dx = p.x - f.center.x, dy = p.y - f.center.y,
+            const dx = p.x - f.center.x,
+                dy = p.y - f.center.y,
                 x = (dx * f.v.y - dy * f.v.x) / f.determinant,
                 y = (f.u.x * dy - f.u.y * dx) / f.determinant;
             if (x * x + y * y <= 1 + 1e-12) return true;
             const outline = ellipsePoints(item);
-            return outline.some((a, i) => segmentDistance(p, a, outline[(i + 1) % outline.length]) <= tolerance);
+            return outline.some(
+                (a, i) =>
+                    segmentDistance(p, a, outline[(i + 1) % outline.length]) <=
+                    tolerance,
+            );
         }
-        if(['detail', 'part'].includes(item.kind)) return inside(p,item.points);
+        if (["detail", "part"].includes(item.kind)) return inside(p, item.points);
         if (item.kind === "pin")
             return distance(p, item.points[0]) <= item.size + tolerance;
         if (
@@ -302,45 +568,87 @@
         const ps = item.points.map(screen),
             size = item.size * scale;
         ctx.save();
-        const color = !options.paper && options.color ? options.color(item.color) : item.color;
-        ctx.strokeStyle = item.kind === 'highlight' ? item.color : color;
-        ctx.fillStyle = ['area', 'ellipse', 'pin', 'highlight'].includes(item.kind) ? (item.fillColor && item.fillColor !== 'none' ? item.fillColor : item.color) : color;
+        const color =
+            !options.paper && options.color
+                ? options.color(item.color)
+                : item.color;
+        ctx.strokeStyle = item.kind === "highlight" ? item.color : color;
+        ctx.fillStyle =
+            filled(item) || ["pin", "highlight"].includes(item.kind)
+                ? item.fillColor && item.fillColor !== "none"
+                    ? item.fillColor
+                    : item.color
+                : color;
         const lineScale = options.lineScale || 1;
         ctx.lineWidth = item.width * lineScale;
         ctx.lineJoin = ctx.lineCap = "round";
-        const dash = { solid: [], dash: [8, 5], dot: [1, 4], dashdot: [8, 4, 1, 4] }[item.dash || 'solid'];
-        ctx.setLineDash(dash.map(n => n * Math.max(1, item.width / 2) * lineScale));
+        const dash = {
+            solid: [],
+            dash: [8, 5],
+            dot: [1, 4],
+            dashdot: [8, 4, 1, 4],
+        }[item.dash || "solid"];
+        ctx.setLineDash(
+            dash.map((n) => n * Math.max(1, item.width / 2) * lineScale),
+        );
         ctx.globalAlpha = item.opacity;
         ctx.beginPath();
         ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-        if (item.kind === 'detail') {
-            root.CADReview?.drawDetail(ctx,item,screen,scale,options);
-        } else if (["area", "ellipse"].includes(item.kind)) {
+        if (item.kind === "detail") {
+            root.CADReview?.drawDetail(ctx, item, screen, scale, options);
+        } else if (filled(item)) {
             const outline = () => {
-            ctx.beginPath();
-            if (item.kind === 'ellipse') {
-                const f = ellipseFrame(ps);
-                if (!f || Math.abs(f.determinant) < 1e-15) return;
-                ctx.save();
-                ctx.transform(f.u.x, f.u.y, f.v.x, f.v.y, f.center.x, f.center.y);
-                ctx.arc(0, 0, 1, 0, Math.PI * 2);
-                ctx.restore();
-            } else ps.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-            ctx.closePath();
-            for (const ring of item.holes || []) {
-                ring.map(screen).forEach((p, i) =>
-                    i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
-                );
+                ctx.beginPath();
+                if (["ellipse", "arc"].includes(item.kind)) {
+                    const f = ellipseFrame(ps);
+                    if (!f || Math.abs(f.determinant) < 1e-15) return;
+                    ctx.save();
+                    ctx.transform(
+                        f.u.x,
+                        f.u.y,
+                        f.v.x,
+                        f.v.y,
+                        f.center.x,
+                        f.center.y,
+                    );
+                    if (item.kind === "arc") {
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(
+                            Math.cos(item.arc.start),
+                            Math.sin(item.arc.start),
+                        );
+                        ctx.arc(
+                            0,
+                            0,
+                            1,
+                            item.arc.start,
+                            item.arc.start + item.arc.sweep,
+                            item.arc.sweep < 0,
+                        );
+                    } else ctx.arc(0, 0, 1, 0, Math.PI * 2);
+                    ctx.restore();
+                } else
+                    ps.forEach((p, i) =>
+                        i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+                    );
                 ctx.closePath();
-            }
+                for (const ring of item.holes || []) {
+                    ring.map(screen).forEach((p, i) =>
+                        i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+                    );
+                    ctx.closePath();
+                }
             };
             outline();
             ctx.globalAlpha = item.fillOpacity ?? item.opacity;
-            if (item.fillColor !== 'none') ctx.fill("evenodd");
-            if (item.pattern !== "solid" && item.fillColor !== 'none') {
+            if (item.fillColor !== "none") ctx.fill("evenodd");
+            if (item.pattern !== "solid" && item.fillColor !== "none") {
                 ctx.save();
                 ctx.clip("evenodd");
-                ctx.globalAlpha = Math.min(1, (item.fillOpacity ?? item.opacity) + 0.35);
+                ctx.globalAlpha = Math.min(
+                    1,
+                    (item.fillOpacity ?? item.opacity) + 0.35,
+                );
                 ctx.setLineDash([]);
                 const b = bounds(item),
                     a = screen({ x: b.minX, y: b.maxY }),
@@ -417,8 +725,13 @@
             const b = ps[item.kind === "text" ? 0 : 1],
                 style = item.textStyle || {};
             ctx.translate(b.x, b.y);
-            const anchor=item.points[item.kind==='text'?0:1],angle=(item.rotation||0)*Math.PI/180,axis=screen({x:anchor.x+Math.cos(angle),y:anchor.y+Math.sin(angle)});
-            ctx.rotate(Math.atan2(axis.y-b.y,axis.x-b.x));
+            const anchor = item.points[item.kind === "text" ? 0 : 1],
+                angle = ((item.rotation || 0) * Math.PI) / 180,
+                axis = screen({
+                    x: anchor.x + Math.cos(angle),
+                    y: anchor.y + Math.sin(angle),
+                });
+            ctx.rotate(Math.atan2(axis.y - b.y, axis.x - b.x));
             ctx.globalAlpha = 1;
             ctx.fillStyle =
                 style.background || (options.paper ? "#ffffff" : "#152338");
@@ -426,7 +739,7 @@
                 ctx.fillRect(0, 0, box.width * scale, box.height * scale);
             if (style.border !== false)
                 ctx.strokeRect(0, 0, box.width * scale, box.height * scale);
-            ctx.fillStyle = style.background === 'none' ? color : item.color;
+            ctx.fillStyle = style.background === "none" ? color : item.color;
             ctx.textBaseline = "top";
             ctx.font = `${style.italic ? "italic " : ""}${style.bold ? "700 " : "400 "}${Math.max(1, size)}px ${{ sans: "sans-serif", serif: "serif", mono: "monospace" }[style.font] || "sans-serif"}`;
             ctx.textAlign = style.align || "left";
@@ -444,38 +757,99 @@
                 ),
             );
         } else {
+            if (curved(item)) {
+                ctx.beginPath();
+                if (item.kind === "curve") {
+                    ctx.moveTo(ps[0].x, ps[0].y);
+                    ctx.bezierCurveTo(
+                        ps[1].x,
+                        ps[1].y,
+                        ps[2].x,
+                        ps[2].y,
+                        ps[3].x,
+                        ps[3].y,
+                    );
+                } else {
+                    const f = ellipseFrame(ps);
+                    ctx.save();
+                    ctx.transform(
+                        f.u.x,
+                        f.u.y,
+                        f.v.x,
+                        f.v.y,
+                        f.center.x,
+                        f.center.y,
+                    );
+                    ctx.arc(
+                        0,
+                        0,
+                        1,
+                        item.arc.start,
+                        item.arc.start + item.arc.sweep,
+                        item.arc.sweep < 0,
+                    );
+                    ctx.restore();
+                }
+            }
             ctx.stroke();
-            if (
-                item.kind === "route" &&
-                ps.length > 1 &&
-                item.arrows !== "none"
-            ) {
-                const arrow = (a, b) => {
-                    const angle = Math.atan2(b.y - a.y, b.x - a.x),
-                        length = Math.min(14 * lineScale, Math.max(6 * lineScale, size * 0.6));
-                    ctx.beginPath();
-                    ctx.moveTo(b.x, b.y);
-                    ctx.lineTo(
-                        b.x - Math.cos(angle - 0.45) * length,
-                        b.y - Math.sin(angle - 0.45) * length,
+        }
+        if (
+            (item.kind === "route" || curved(item)) &&
+            ps.length > 1 &&
+            item.arrows &&
+            item.arrows !== "none"
+        ) {
+            ctx.fillStyle = color;
+            ctx.globalAlpha = item.opacity;
+            const arrow = (a, b) => {
+                const angle = Math.atan2(b.y - a.y, b.x - a.x),
+                    length = Math.min(
+                        14 * lineScale,
+                        Math.max(6 * lineScale, size * 0.6),
                     );
-                    ctx.lineTo(
-                        b.x - Math.cos(angle + 0.45) * length,
-                        b.y - Math.sin(angle + 0.45) * length,
+                ctx.beginPath();
+                ctx.moveTo(b.x, b.y);
+                ctx.lineTo(
+                    b.x - Math.cos(angle - 0.45) * length,
+                    b.y - Math.sin(angle - 0.45) * length,
+                );
+                ctx.lineTo(
+                    b.x - Math.cos(angle + 0.45) * length,
+                    b.y - Math.sin(angle + 0.45) * length,
+                );
+                ctx.closePath();
+                ctx.fill();
+            };
+            if (curved(item)) {
+                const start = curvePoint(item, 0),
+                    end = curvePoint(item, 1),
+                    u = endpointDirection(item, false),
+                    v = endpointDirection(item, true);
+                arrow(screen({ x: end.x - v.x, y: end.y - v.y }), screen(end));
+                if (item.arrows === "both")
+                    arrow(
+                        screen({ x: start.x + u.x, y: start.y + u.y }),
+                        screen(start),
                     );
-                    ctx.closePath();
-                    ctx.fill();
-                };
+            } else {
                 arrow(ps.at(-2), ps.at(-1));
                 if (item.arrows === "both") arrow(ps[1], ps[0]);
             }
         }
-        if (["cloud", "area", "ellipse", "route"].includes(item.kind) && item.label) {
-            const p = ps[0];
+        if (
+            ["cloud", "area", "ellipse", "arc", "curve", "route"].includes(
+                item.kind,
+            ) &&
+            item.label
+        ) {
+            const p = curved(item) ? screen(curvePoint(item, 0)) : ps[0];
             ctx.globalAlpha = 1;
             ctx.font = `600 ${Math.max(1, size)}px sans-serif`;
             ctx.textBaseline = "bottom";
-            ctx.strokeStyle = options.paper || options.background === 'white' ? "#fff" : "#152338";
+            ctx.strokeStyle =
+                options.paper || options.background === "white"
+                    ? "#fff"
+                    : "#152338";
             ctx.fillStyle = color;
             ctx.lineWidth = 3;
             ctx.setLineDash([]);
@@ -485,6 +859,12 @@
         ctx.restore();
     }
     root.CADMarkup = {
+        curved,
+        filled,
+        curvePoint,
+        curveTangent,
+        curvePoints,
+        curveExtrema,
         distance,
         segmentDistance,
         inside,
