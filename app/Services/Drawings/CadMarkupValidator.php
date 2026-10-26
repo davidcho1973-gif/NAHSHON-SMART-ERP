@@ -19,9 +19,10 @@ class CadMarkupValidator
         }
         $validated = Validator::make(['markups' => $markups], [
             'markups' => 'present|array|max:1000',
-            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail,dash,fillColor,fillOpacity,arc',
+            'markups.*' => 'required|array:id,kind,points,holes,color,opacity,width,size,pattern,text,locked,group,layer,label,symbol,rotation,textStyle,arrows,detail,dash,fillColor,fillOpacity,part,arc',
             'markups.*.id' => ['required', 'string', 'max:80', 'distinct:strict', 'regex:/^[a-zA-Z0-9_-]+$/'],
-            'markups.*.kind' => ['required', Rule::in(['area', 'ellipse', 'arc', 'curve', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail'])],
+            'markups.*.kind' => ['required', Rule::in(['area', 'ellipse', 'arc', 'curve', 'cloud', 'pen', 'highlight', 'callout', 'pin', 'text', 'route', 'detail', 'part'])],
+            'markups.*.part' => 'sometimes|array',
             'markups.*.arc' => 'sometimes|array:start,sweep,pie',
             'markups.*.arc.start' => 'required_with:markups.*.arc|numeric|between:-6.283185307179586,6.283185307179586',
             'markups.*.arc.sweep' => 'required_with:markups.*.arc|numeric|between:-6.283185307179586,6.283185307179586',
@@ -88,6 +89,19 @@ class CadMarkupValidator
                 $point = ['x' => (float) $point['x'], 'y' => (float) $point['y']];
             }
             unset($point);
+            if ($item['kind'] === 'part') {
+                $item['part'] = app(CadPartGeometry::class)->placement($item);
+                foreach ($item['part']['geometry']['items'] as $child) {
+                    foreach ([$child['points'], ...($child['holes'] ?? [])] as $ring) {
+                        $count += count($ring);
+                    }
+                }
+                if ($count > 50000) {
+                    $fail();
+                }
+            } elseif (isset($item['part'])) {
+                $fail();
+            }
             if ($item['kind'] === 'arc') {
                 if (! isset($item['arc']['start'], $item['arc']['sweep'], $item['arc']['pie']) || abs($item['arc']['sweep']) < 1e-6) {
                     $fail();

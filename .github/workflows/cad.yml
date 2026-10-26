@@ -8,6 +8,8 @@ on:
       - 'app/**/Cad*.php'
       - 'tests/Feature/CadDrawingTest.php'
       - 'tests/Feature/CadWorkflowTest.php'
+      - 'tests/Feature/CadPartLibraryTest.php'
+      - 'tests/js/cad-parts.test.mjs'
       - 'tests/Fixtures/cad-line.dxf'
       - 'tests/Fixtures/cad-presentation.*'
       - 'tests/cad-converter/**'
@@ -87,6 +89,7 @@ jobs:
           node --test tests/js/cad-history.test.mjs
           node --test tests/js/cad-markup.test.mjs
           node --test tests/js/cad-markup-geometry.test.mjs
+          node --test tests/js/cad-parts.test.mjs
           node --test tests/js/cad-markup-drafting.test.mjs
           node --test tests/js/cad-print.test.mjs
           node --test tests/js/cad-fidelity.test.mjs
@@ -104,7 +107,7 @@ jobs:
         run: |
           export CAD_TEST_CONVERTER_BINARY="$GITHUB_WORKSPACE/services/cad-converter/bin/Release/net8.0/Nahshon.CadConverter.dll"
           export CAD_TEST_DOTNET_BINARY="$(command -v dotnet)"
-          php vendor/bin/phpunit --filter 'CadDrawingTest|CadWorkflowTest'
+          php vendor/bin/phpunit --filter 'CadDrawingTest|CadWorkflowTest|CadPartLibraryTest'
       - name: Publish Linux server converter
         run: bash scripts/build-cad-converter.sh
       - uses: actions/upload-artifact@v4
