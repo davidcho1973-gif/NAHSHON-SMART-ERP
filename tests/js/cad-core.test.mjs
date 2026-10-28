@@ -12,6 +12,37 @@ vm.runInContext(
     box,
 );
 const C = box.CADCore;
+test('viewport raster reuses unchanged CAD pixels and refreshes on CAD edits, pan, layers and resize', () => {
+    let allocated = 0, paints = 0, copied = 0;
+    const buffer = {save(){},restore(){},setTransform(){},clearRect(){}};
+    const canvas = {width:0,height:0,getContext:()=>buffer};
+    const target = {drawImage(surface,x,y,w,h){assert.equal(surface,canvas);assert.equal(w,canvas.width/2);assert.equal(h,canvas.height/2);copied++;}};
+    const cache = C.createRasterCache(()=>{allocated++;return canvas;});
+    const doc = {}, key = [doc, 1, 'visible'];
+    const options = {width:2000,height:1000,dpr:2,key,reuse:true};
+    const paint = ctx => {assert.equal(ctx,buffer);paints++;};
+    cache.draw(target,options,paint);
+    for(let i=0;i<20;i++)cache.draw(target,options,paint);
+    assert.equal(paints,1);assert.equal(copied,21);assert.equal(allocated,1);
+    cache.draw(target,{...options,reuse:false},paint); // Geometry or style edited in place.
+    cache.draw(target,{...options,key:[doc,2,'visible']},paint); // Pan/zoom.
+    cache.draw(target,{...options,key:[doc,2,'hidden']},paint); // Layer visibility.
+    cache.draw(target,{...options,key:[{},2,'hidden']},paint); // Another drawing.
+    cache.draw(target,{...options,width:1600},paint);
+    assert.equal(paints,6);assert.equal(allocated,1);
+});
+test('failed and oversized viewport paints cannot reuse stale pixels or retain a huge canvas', () => {
+    let paints = 0;
+    const buffer = {save(){},restore(){},setTransform(){},clearRect(){}};
+    const canvas = {width:0,height:0,getContext:()=>buffer};
+    const target = {drawImage(){}};
+    const cache = C.createRasterCache(()=>canvas), options={width:100,height:100,dpr:1,key:['view'],reuse:true};
+    assert.throws(()=>cache.draw(target,options,()=>{throw Error('paint failed');}),/paint failed/);
+    cache.draw(target,options,()=>paints++);assert.equal(paints,1);
+    cache.draw(target,{...options,width:5000,height:5000},ctx=>{assert.equal(ctx,target);paints++;});
+    assert.equal(canvas.width*canvas.height,0);
+    cache.draw(target,options,()=>paints++);assert.equal(paints,3);
+});
 test('white canvas keeps CAD colors legible without changing dark or paper colors', () => {
     const luminance = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
         .map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)

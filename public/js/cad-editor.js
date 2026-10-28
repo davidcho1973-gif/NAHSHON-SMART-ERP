@@ -401,7 +401,8 @@
         try{const a=points[0],b=points[1]||hoverPoint,p=points.length>1?hoverPoint:{x:(a.x+b.x)/2,y:(a.y+b.y)/2};return C.newDimension(a,b,p,{measurement:unitSettings?{...unitSettings}:null,mode:$('dimension-mode').value,height:lengthValue('default-text-height')||2.5,color:0x67e8f9,layer:$('layer').value});}catch(_){return null;}
     }
 
-    function render() {
+    const underlayCache = C.createRasterCache(() => document.createElement('canvas'));
+    function render(options = {}) {
         const r = canvas.getBoundingClientRect(),
             dpr = printing ? 3 : window.devicePixelRatio || 1;
         const width = Math.floor(r.width * dpr), height = Math.floor(r.height * dpr);
@@ -440,8 +441,16 @@
         ctx.save();
         ctx.globalAlpha=doc?.workspace?.underlay?.opacity ?? 1;
         if(doc?.workspace?.underlay?.grayscale)ctx.filter="grayscale(1)";
-        const shown=[...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e),...(annotation?[annotation]:[])];
-        C.renderEntities(ctx,doc,shown,screen,scale,{paper:printing,selected,background:canvasBackground});
+        const paintUnderlay = target => {
+            const shown=[...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e),...(annotation?[annotation]:[])];
+            C.renderEntities(target,doc,shown,screen,scale,{paper:printing,selected,background:canvasBackground});
+        };
+        if (printing) paintUnderlay(ctx);
+        else underlayCache.draw(ctx, {width, height, dpr,
+            reuse: !!options.reuseUnderlay && markup?.mode()==='markup' && !gesture && !annotation,
+            key: [doc, doc?.entities, measurements, scale, origin.x, origin.y, dpr, canvasBackground,
+                JSON.stringify(doc?.layers || {}), JSON.stringify([...selected])],
+        }, paintUnderlay);
         ctx.restore();
         ctx.setLineDash([]);
         if(gesture?.kind==='draw'&&gesture.moved){
@@ -1507,7 +1516,7 @@
     });
     markup=window.createCADMarkupTools({canvas,document:()=>doc,canManage:()=>canAnnotate,busy:()=>busy||!!gesture,
         version:()=>aiVersion,sourceEdges,numericSettings,
-        scale:()=>scale,world,screen,snap,render,snapshot,status,clearSnap:()=>{snapMark=null;},
+        scale:()=>scale,world,screen,snap,render:()=>render({reuseUnderlay:true}),snapshot,status,clearSnap:()=>{snapMark=null;},
         record:()=>record, request:api, entities:()=>entities(),
         view:()=>({center:{x:(canvas.clientWidth/2-origin.x)/scale,y:(origin.y-canvas.clientHeight/2)/scale},scale}),
         setView:view=>{scale=view.scale;origin={x:canvas.clientWidth/2-view.center.x*scale,y:canvas.clientHeight/2+view.center.y*scale};render();},
