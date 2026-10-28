@@ -38,6 +38,7 @@ string Fixture(string name, bool conflicting)
 }
 try
 {
+    WorkingCopyTests.Run(directory, Assert);
     var safe=Fixture("identical",false);
     var warnings=new List<string>();
     var doc=DwgColorCompatibility.Read(safe,(sender,e)=>{Strict(sender,e);warnings.Add(e.Message);});

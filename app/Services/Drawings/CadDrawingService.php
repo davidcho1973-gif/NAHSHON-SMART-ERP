@@ -161,6 +161,7 @@ class CadDrawingService
         }
         $bytes = $file->get();
         $dwg = preg_match('/^AC10[0-9]{2}/', $bytes) === 1;
+        abort_if($dwg && config('cad.isolated_conversions'), 409, 'DWG는 전용 변환 작업으로 올려 주세요. 편집 화면을 새로 열면 자동 적용됩니다.');
         $reference = app(CadReferenceService::class)->inspect($bytes, $file->getMimeType(), $referenceInput);
         if ($sourceSheet) {
             app(DrawingStudioService::class)->access($user, $sourceSheet);

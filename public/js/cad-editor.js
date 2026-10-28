@@ -20,6 +20,7 @@
         cap = {},
         busy = false;
     let activeIO=null,ioSequence=0,listSequence=0,uploadAllowed=false,capabilitiesReady=false;
+    let conversions=null;
     let aiVersion=0,aiHashCache=null,aiSession=null,aiTimer=null,aiBusy=false,aiConfig=null,aiPreview=null;
     const aiCommands=new Map(),aiProcessed=new Map(),aiApplying=new Set();
     const query = new URLSearchParams(location.search);
@@ -400,7 +401,8 @@
         try{const a=points[0],b=points[1]||hoverPoint,p=points.length>1?hoverPoint:{x:(a.x+b.x)/2,y:(a.y+b.y)/2};return C.newDimension(a,b,p,{measurement:unitSettings?{...unitSettings}:null,mode:$('dimension-mode').value,height:lengthValue('default-text-height')||2.5,color:0x67e8f9,layer:$('layer').value});}catch(_){return null;}
     }
 
-    function render() {
+    const underlayCache = C.createRasterCache(() => document.createElement('canvas'));
+    function render(options = {}) {
         const r = canvas.getBoundingClientRect(),
             dpr = printing ? 3 : window.devicePixelRatio || 1;
         const width = Math.floor(r.width * dpr), height = Math.floor(r.height * dpr);
@@ -439,8 +441,16 @@
         ctx.save();
         ctx.globalAlpha=doc?.workspace?.underlay?.opacity ?? 1;
         if(doc?.workspace?.underlay?.grayscale)ctx.filter="grayscale(1)";
-        const shown=[...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e),...(annotation?[annotation]:[])];
-        C.renderEntities(ctx,doc,shown,screen,scale,{paper:printing,selected,background:canvasBackground});
+        const paintUnderlay = target => {
+            const shown=[...entities(),...measurements.map(e=>gesture?.preview?.get(e.id)||e),...(annotation?[annotation]:[])];
+            C.renderEntities(target,doc,shown,screen,scale,{paper:printing,selected,background:canvasBackground});
+        };
+        if (printing) paintUnderlay(ctx);
+        else underlayCache.draw(ctx, {width, height, dpr,
+            reuse: !!options.reuseUnderlay && markup?.mode()==='markup' && !gesture && !annotation,
+            key: [doc, doc?.entities, measurements, scale, origin.x, origin.y, dpr, canvasBackground,
+                JSON.stringify(doc?.layers || {}), JSON.stringify([...selected])],
+        }, paintUnderlay);
         ctx.restore();
         ctx.setLineDash([]);
         if(gesture?.kind==='draw'&&gesture.moved){
@@ -1017,6 +1027,7 @@
             return;
         }
         try {
+            if(cap.isolatedConversions&&conversions){await conversions.exportDwg(record);return;}
             const r = await fetch(
                 "/admin-api/cad/" +
                     record.id +
@@ -1074,6 +1085,11 @@
             token=startIO('upload',file.name+' · 업로드 및 변환 중…');if(!token)return;
             const form=new FormData();form.append('file',file);form.append('title',file.name);form.append('site_id',site);
             if(reference)for(const key of ['page','width','height'])form.append('reference['+key+']',reference[key]);
+            const isDwg=/^AC10[0-9]{2}$/.test(await file.slice(0,6).text());
+            if(cap.isolatedConversions&&isDwg&&conversions){
+                form.append('requestKey',crypto.randomUUID());await conversions.submit(form);
+                finishIO(token);token=null;return;
+            }
             const created=await api('',{method:'POST',body:form});
             await loadDrawing(created.id,null,token);
             finishIO(token);token=null;
@@ -1500,7 +1516,7 @@
     });
     markup=window.createCADMarkupTools({canvas,document:()=>doc,canManage:()=>canAnnotate,busy:()=>busy||!!gesture,
         version:()=>aiVersion,sourceEdges,numericSettings,
-        scale:()=>scale,world,screen,snap,render,snapshot,status,clearSnap:()=>{snapMark=null;},
+        scale:()=>scale,world,screen,snap,render:()=>render({reuseUnderlay:true}),snapshot,status,clearSnap:()=>{snapMark=null;},
         record:()=>record, request:api, entities:()=>entities(),
         view:()=>({center:{x:(canvas.clientWidth/2-origin.x)/scale,y:(origin.y-canvas.clientHeight/2)/scale},scale}),
         setView:view=>{scale=view.scale;origin={x:canvas.clientWidth/2-view.center.x*scale,y:canvas.clientHeight/2+view.center.y*scale};render();},
@@ -1565,6 +1581,8 @@
     packets=window.createCADPackets?.({state:()=>({record,busy,pending:!!gesture||markup.pending()}),request:api,status});
     document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='p'){event.preventDefault();printWorkbench?.open();}});
     new ResizeObserver(render).observe($("viewport"));
+    conversions=window.createCADConversions?.({request:api,status,siteId:()=>$('sites').value,
+        openDrawing:async id=>{await list();await open(id);}});
     Promise.all([
         inClaim ? api('/claim-context?lineId='+claimContext.lineId).then(context=>{
             claimValid=!!context.canManage&&!context.recordId&&Number(context.line.contractId)===claimContext.contractId&&Number(context.line.siteId)===claimContext.siteId&&Number(context.draftRevision)===claimContext.draftRevision;
@@ -1574,6 +1592,7 @@
         }) : Promise.resolve(),
         api("/capabilities").then((j) => {
             cap = j;
+            conversions?.enable(j.isolatedConversions);
             showUploadLimit();
             $("capability").textContent =
                 j.message ||

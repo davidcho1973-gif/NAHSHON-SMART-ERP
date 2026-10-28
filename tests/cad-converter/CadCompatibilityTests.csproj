@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="../../services/cad-converter/CadConverter.csproj" />
     <Compile Include="../../services/cad-converter/DwgColorCompatibility.cs" Link="DwgColorCompatibility.cs" />
+    <Compile Include="../../services/cad-converter/WorkingCopy2D.cs" Link="WorkingCopy2D.cs" />
     <Content Include="../Fixtures/cad-presentation.dwg" Link="cad-presentation.dwg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

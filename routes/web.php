@@ -72,6 +72,7 @@ Route::get('/manager-invitation/{token}', [ManagerInvitationController::class, '
 Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::class, 'verify'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.verify');
 Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
 use App\Http\Controllers\AssistantWorkspaceController;
+use App\Http\Controllers\CadConversionController;
 use App\Http\Controllers\CadDrawingController;
 use App\Http\Controllers\CadWorkflowController;
 use App\Http\Controllers\ClaimEvidenceFileController;
@@ -357,6 +358,15 @@ Route::middleware('auth')->group(function (): void {
     });
     require __DIR__.'/cad_parts.php';
 
+    Route::prefix('admin-api/cad/conversions')->controller(CadConversionController::class)->group(function (): void {
+        Route::get('/', 'index');
+        Route::post('/', 'store')->middleware('throttle:10,1');
+        Route::get('/{conversion}', 'show')->whereUuid('conversion');
+        Route::post('/{conversion}/retry', 'retry')->whereUuid('conversion')->middleware('throttle:5,1');
+        Route::get('/{conversion}/original', 'original')->whereUuid('conversion');
+        Route::get('/{conversion}/download', 'download')->whereUuid('conversion');
+    });
+    Route::post('admin-api/cad/{drawing}/export-dwg', [CadConversionController::class, 'export'])->middleware('throttle:10,1');
     Route::prefix('admin-api/cad')->controller(CadDrawingController::class)->group(function (): void {
         Route::get('/', 'drawings');
         Route::get('/capabilities', 'capabilities');

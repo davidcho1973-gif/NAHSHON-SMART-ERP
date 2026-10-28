@@ -30,6 +30,16 @@ return [
     */
 
     'connections' => [
+        // Same database transaction as cad_conversions; never consumed by ERP's
+        // default/documents workers. Only the isolated cad:work command consumes it.
+        'cad-conversion' => [
+            'driver' => 'database',
+            'connection' => null,
+            'table' => 'jobs',
+            'queue' => 'cad-conversion',
+            'retry_after' => 900,
+            'after_commit' => false,
+        ],
 
         'meeting-analysis' => [
             'driver' => 'database',

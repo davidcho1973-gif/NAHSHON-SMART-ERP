@@ -1508,6 +1508,36 @@
         return result;
     }
 
+    // One bounded viewport bitmap, never a copy of the CAD object graph. A full
+    // CAD render invalidates it; overlay-only changes may reuse matching pixels.
+    function createRasterCache(createCanvas) {
+        let surface = null, previous = null;
+        return {
+            draw(ctx, {width, height, dpr, key, reuse}, paint) {
+                if (width <= 0 || height <= 0 || width * height > 8000000) {
+                    if (surface) surface.width = surface.height = 0;
+                    previous = null; paint(ctx); return;
+                }
+                surface ||= createCanvas();
+                const matches = reuse && previous && surface.width === width && surface.height === height &&
+                    previous.length === key.length && previous.every((v, i) => v === key[i]);
+                if (!matches) {
+                    previous = null;
+                    if (surface.width !== width) surface.width = width;
+                    if (surface.height !== height) surface.height = height;
+                    const buffer = surface.getContext('2d');
+                    buffer.save();
+                    try {
+                        buffer.setTransform(1, 0, 0, 1, 0, 0); buffer.clearRect(0, 0, width, height);
+                        buffer.setTransform(dpr, 0, 0, dpr, 0, 0); paint(buffer);
+                    } finally { buffer.restore(); }
+                    previous = key.slice();
+                }
+                ctx.drawImage(surface, 0, 0, width / dpr, height / dpr);
+            },
+        };
+    }
+
     // The editor and paper export use the same native CAD rendering path.
     function renderEntities(ctx, doc, shown, screen, scale, options = {}) {
         if(doc?.reference){g.CADReference?.draw(ctx,doc,screen);shown=shown.filter(e=>!doc.entities.some(original=>original.id===e.id));}
@@ -1616,7 +1646,7 @@
         editHatch, hatchForPolyline, findPolylineFill, explodeBlock,
         allows, planarXY,
         parseLengthInput, pointAtLength, numericDrawing, guideSnap, inferDirection, parallelGuide,
-        canvasColor,
+        canvasColor, createRasterCache,
         renderEntities,
         quantities, aiGeometry, aiContext, applyAIActions, utf8Size,
         uid, copyEntities, drawingUnit, lengthUnits, measurementSettings, lengthInputScale, formatLength, newDimension, dimensionLayout, dimensionParts, textLines, textBox, snapPoints,
