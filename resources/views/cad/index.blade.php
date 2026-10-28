@@ -27,6 +27,7 @@
 </script>
 <script defer src="{{ asset('js/cad-move-tools.js') }}?v={{ filemtime(public_path('js/cad-move-tools.js')) }}"></script>
 <script defer src="{{ asset('js/cad-sketch-tools.js') }}?v={{ filemtime(public_path('js/cad-sketch-tools.js')) }}"></script>
+<script defer src="{{ asset('js/cad-conversions.js') }}?v={{ filemtime(public_path('js/cad-conversions.js')) }}"></script>
 <script defer src="{{ asset('js/cad-editor.js') }}?v={{ filemtime(public_path('js/cad-editor.js')) }}">
 </script>
 </head>
@@ -49,9 +50,14 @@
 <button id="original">업로드 원본</button>
 <button id="dxf">CAD만 DXF</button>
 <button id="dwg">CAD만 DWG</button>
+<button id="cad-conversion-toggle" type="button" hidden aria-expanded="false" aria-controls="cad-conversions">변환 작업</button>
 <span id="dirty">
 </span>
 <button id="ai-toggle" type="button" aria-expanded="false" aria-controls="ai-panel">AI 연결</button></header>
+<section id="cad-conversions" hidden aria-label="CAD 변환 작업">
+<p>DWG 원본을 보존하고 2D 평면 작업본을 자동 생성합니다. 큰 등고선은 편집 가능한 크기로 나뉩니다. 3D 객체·Civil 전용 정보의 제외 내역을 확인하세요.</p>
+<div id="cad-conversion-list" aria-live="polite"></div>
+</section>
 <section id="claim-context" hidden>
 <strong id="claim-context-label">
 </strong>

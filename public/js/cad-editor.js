@@ -20,6 +20,7 @@
         cap = {},
         busy = false;
     let activeIO=null,ioSequence=0,listSequence=0,uploadAllowed=false,capabilitiesReady=false;
+    let conversions=null;
     let aiVersion=0,aiHashCache=null,aiSession=null,aiTimer=null,aiBusy=false,aiConfig=null,aiPreview=null;
     const aiCommands=new Map(),aiProcessed=new Map(),aiApplying=new Set();
     const query = new URLSearchParams(location.search);
@@ -1017,6 +1018,7 @@
             return;
         }
         try {
+            if(cap.isolatedConversions&&conversions){await conversions.exportDwg(record);return;}
             const r = await fetch(
                 "/admin-api/cad/" +
                     record.id +
@@ -1074,6 +1076,11 @@
             token=startIO('upload',file.name+' · 업로드 및 변환 중…');if(!token)return;
             const form=new FormData();form.append('file',file);form.append('title',file.name);form.append('site_id',site);
             if(reference)for(const key of ['page','width','height'])form.append('reference['+key+']',reference[key]);
+            const isDwg=/^AC10[0-9]{2}$/.test(await file.slice(0,6).text());
+            if(cap.isolatedConversions&&isDwg&&conversions){
+                form.append('requestKey',crypto.randomUUID());await conversions.submit(form);
+                finishIO(token);token=null;return;
+            }
             const created=await api('',{method:'POST',body:form});
             await loadDrawing(created.id,null,token);
             finishIO(token);token=null;
@@ -1565,6 +1572,8 @@
     packets=window.createCADPackets?.({state:()=>({record,busy,pending:!!gesture||markup.pending()}),request:api,status});
     document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='p'){event.preventDefault();printWorkbench?.open();}});
     new ResizeObserver(render).observe($("viewport"));
+    conversions=window.createCADConversions?.({request:api,status,siteId:()=>$('sites').value,
+        openDrawing:async id=>{await list();await open(id);}});
     Promise.all([
         inClaim ? api('/claim-context?lineId='+claimContext.lineId).then(context=>{
             claimValid=!!context.canManage&&!context.recordId&&Number(context.line.contractId)===claimContext.contractId&&Number(context.line.siteId)===claimContext.siteId&&Number(context.draftRevision)===claimContext.draftRevision;
@@ -1574,6 +1583,7 @@
         }) : Promise.resolve(),
         api("/capabilities").then((j) => {
             cap = j;
+            conversions?.enable(j.isolatedConversions);
             showUploadLimit();
             $("capability").textContent =
                 j.message ||

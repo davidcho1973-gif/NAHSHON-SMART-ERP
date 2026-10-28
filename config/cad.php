@@ -9,4 +9,9 @@ return [
     'converter_timeout' => 60,
     // Actual heap is also limited by current container headroom. This is not a file-size bound.
     'converter_heap_mib' => env('CAD_CONVERTER_HEAP_MIB', 256),
+    // Enable only after the dedicated cad:work cluster has passed its health check.
+    'isolated_conversions' => env('CAD_ISOLATED_CONVERSIONS', false),
+    'worker_heap_mib' => env('CAD_WORKER_HEAP_MIB', 3072),
+    'worker_min_memory_mib' => 4096,
+    'worker_timeout' => 600,
 ];

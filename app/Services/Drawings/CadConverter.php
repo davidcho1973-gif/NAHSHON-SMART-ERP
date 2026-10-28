@@ -38,6 +38,58 @@ class CadConverter
         return str_ends_with(strtolower($binary), '.dll') ? [config('cad.dotnet_binary'), $binary] : [$binary];
     }
 
+    public function prepare2D(string $input, string $outputDirectory): array
+    {
+        abort_unless(app()->runningInConsole() && config('cad.worker_active') === true, 503, '2D 작업본은 전용 변환 서버에서만 생성합니다.');
+        $budget = app(CadConversionBudget::class);
+        $heap = $budget->heapBytes();
+        abort_if($heap < 512 * 1048576, 503, '전용 변환 서버의 여유 메모리가 부족합니다.');
+        abort_unless($this->capabilities()['dwgRead'], 503, 'DWG 변환 엔진을 서버에 설정해야 합니다.');
+        $process = new Process([...$this->command(config('cad.converter_binary')), 'prepare-2d', '--input', $input, '--output', $outputDirectory]);
+        $process->setEnv(['CAD_CONVERTER_MAX_BYTES' => (string) CadFileLimits::drawingBytes()] + $budget->environment($heap));
+        $process->setTimeout(config('cad.worker_timeout', 600));
+        try {
+            $process->start();
+            while ($process->isRunning()) {
+                if ($budget->pressured()) {
+                    $process->stop(0, 9);
+                    abort(422, $this->memoryMessage());
+                }
+                $process->checkTimeout();
+                usleep(50000);
+            }
+        } catch (ProcessTimedOutException) {
+            abort(422, '전용 서버의 변환 시간이 초과되었습니다. 원본은 보존했습니다.');
+        }
+        if (! $process->isSuccessful()) {
+            $failure = $this->conversionFailure($process->getErrorOutput());
+            Log::warning('CAD isolated conversion failed', ['reason' => $failure['reason'], 'exit_code' => $process->getExitCode()]);
+            abort(422, $failure['message']);
+        }
+        $report = json_decode($process->getOutput(), true);
+        abort_unless(is_array($report) && ($report['mode'] ?? null) === '2d-working-copy' &&
+            is_array($report['parts'] ?? null) && count($report['parts']) >= 1 && count($report['parts']) <= 32 &&
+            is_array($report['warnings'] ?? null) && count($report['warnings']) <= 100 &&
+            is_array($report['excluded'] ?? null) && is_array($report['projected'] ?? null) && is_int($report['units'] ?? null),
+            422, '2D 작업본 검증 결과가 올바르지 않습니다.');
+        $files = [];
+        foreach ($report['parts'] as $part) {
+            abort_unless(is_array($part) && is_string($part['file'] ?? null) && preg_match('/^part-[0-9]{2}\.dxf$/D', $part['file']) &&
+                ! isset($files[$part['file']]) && is_string($part['label'] ?? null) && mb_strlen($part['label']) <= 30 &&
+                is_int($part['entities'] ?? null) && $part['entities'] > 0 && is_string($part['sha256'] ?? null),
+                422, '작업본 경로·객체 정보가 올바르지 않습니다.');
+            $files[$part['file']] = true;
+            $path = $outputDirectory.'/'.$part['file'];
+            abort_unless(is_file($path) && ! is_link($path) && filesize($path) > 0 && filesize($path) <= CadFileLimits::drawingBytes()
+                && filesize($path) === ($part['bytes'] ?? null) && hash_equals(hash_file('sha256', $path), $part['sha256']), 422, '2D 작업본의 크기·무결성 검증에 실패했습니다.');
+        }
+        foreach ($report['warnings'] as $warning) {
+            abort_unless(is_string($warning) && mb_strlen($warning) <= 2000, 422, '작업본 검증 안내가 올바르지 않습니다.');
+        }
+
+        return $report;
+    }
+
     public function convert(string $bytes, string $from, string $to): array
     {
         abort_if(strlen($bytes) > CadFileLimits::drawingBytes(), 422, '변환할 도면은 최대 '.CadFileLimits::label().'까지 지원합니다.');

@@ -44,6 +44,13 @@ try
         Console.WriteLine(JsonSerializer.Serialize(new { version = 1, engine = "ACadSharp 3.8.0", dwgRead = true, dwgWrite = true, maxBytes }));
         return 0;
     }
+    // Explicit derived-copy command; the strict round-trip converter below
+    // continues refusing lossy conversions and is used for DWG export.
+    if (args is ["prepare-2d", "--input", var workingInput, "--output", var workingDirectory])
+    {
+        Console.WriteLine(JsonSerializer.Serialize(WorkingCopy2D.Prepare(workingInput, workingDirectory, maxBytes)));
+        return 0;
+    }
     if (args.Length != 5 || args[0] != "convert" || args[1] != "--input" || args[3] != "--output")
         throw new ArgumentException("Usage: convert --input /absolute/input.dwg --output /absolute/output.dxf");
     var input = Path.GetFullPath(args[2]);

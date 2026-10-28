@@ -32,7 +32,8 @@ class CadDrawingController extends Controller
     {
         $this->cad->gate($request->user());
 
-        return response()->json($this->converter->capabilities() + ['limits' => CadFileLimits::capabilities()]);
+        return response()->json($this->converter->capabilities() + ['limits' => CadFileLimits::capabilities(),
+            'isolatedConversions' => (bool) config('cad.isolated_conversions')]);
     }
 
     public function claimContext(Request $request, CadClaimDraftService $claims)
@@ -192,6 +193,7 @@ class CadDrawingController extends Controller
         $bytes = $this->cad->read($drawing, $revision)['dxf'];
         $warnings = [];
         if ($format === 'dwg') {
+            abort_if(config('cad.isolated_conversions'), 409, 'DWG 내보내기는 전용 변환 작업을 사용하세요.');
             $result = $this->converter->convert($bytes, 'dxf', 'dwg');
             $bytes = $result['bytes'];
             abort_unless(preg_match('/^AC10[0-9]{2}/', $bytes) === 1, 503, '변환 엔진이 올바른 DWG를 생성하지 못했습니다.');
